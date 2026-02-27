@@ -1,0 +1,29 @@
+[
+  {
+    "label": "Działka elektro SN — podstawowy test",
+    "request": {
+      "parcel_id": "061802_2.0004.109",
+      "infra_type": "elektro_SN",
+      "years_unauthorized": 10
+    }
+  },
+  {
+    "label": "Działka elektro WN z współrzędnymi",
+    "request": {
+      "parcel_id": "061802_2.0004.109",
+      "infra_type": "elektro_WN",
+      "lon": 23.4521,
+      "lat": 50.5234,
+      "years_unauthorized": 8
+    }
+  },
+  {
+    "label": "Działka gaz średnioprężny",
+    "request": {
+      "parcel_id": "061802_2.0004.109",
+      "infra_type": "gaz_srednie",
+      "years_unauthorized": 10,
+      "has_building_permit": false
+    }
+  }
+]

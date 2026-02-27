@@ -1,0 +1,467 @@
+[
+  {
+    "label": "Działka elektro SN — podstawowy test",
+    "status_code": 200,
+    "data": {
+      "parcel_id": "061802_2.0004.109",
+      "infra_type": "elektro_SN",
+      "terrain": {
+        "parcel_id": "061802_2.0004.109",
+        "area_m2": 139912.5,
+        "area_ha": 13.9912,
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                23.4552914639476,
+                50.3564769267551
+              ],
+              [
+                23.4490885040348,
+                50.3583482467398
+              ],
+              [
+                23.4483044696059,
+                50.3572427238068
+              ],
+              [
+                23.4471485534898,
+                50.3575470532817
+              ],
+              [
+                23.4465605219033,
+                50.3567279037085
+              ],
+              [
+                23.4486964782275,
+                50.3560485538408
+              ],
+              [
+                23.4486159350845,
+                50.355941003213
+              ],
+              [
+                23.448480738339,
+                50.3557111000431
+              ],
+              [
+                23.4509786159569,
+                50.3549347064082
+              ],
+              [
+                23.4522206555503,
+                50.3545022678272
+              ],
+              [
+                23.4534894917017,
+                50.3540594228193
+              ],
+              [
+                23.4541121361037,
+                50.3548946135629
+              ],
+              [
+                23.4552914639476,
+                50.3564769267551
+              ]
+            ]
+          ]
+        },
+        "voivodeship": "lubelskie",
+        "county": "powiat tomaszowski",
+        "commune": "Bełżec",
+        "region": "Święcie-Kolonia",
+        "egib": {
+          "uzytek": null,
+          "klasa": null
+        },
+        "centroid": {
+          "lon": 23.450637,
+          "lat": 50.35607
+        },
+        "source": "ULDK/GUGiK",
+        "ok": true
+      },
+      "planning": {
+        "mpzp": {
+          "has_mpzp": false,
+          "przeznaczenie": null,
+          "symbol": null,
+          "uchwala": null,
+          "source": null,
+          "ok": false
+        },
+        "plan_ogolny": {
+          "status": null,
+          "zone": null,
+          "ok": false
+        },
+        "studium": {
+          "przeznaczenie": null,
+          "ok": false
+        }
+      },
+      "infrastructure": {
+        "energie": {
+          "type": "elektro_SN",
+          "length_m": null,
+          "strefa_m": 15,
+          "detected": false,
+          "ok": false
+        },
+        "media": {
+          "gaz": false,
+          "woda": false,
+          "kanal": false,
+          "cieplo": false
+        },
+        "swiatlowod": false,
+        "droga": {
+          "access": true,
+          "type": "track",
+          "name": "",
+          "osm_highway": "track"
+        }
+      },
+      "valuation": {
+        "price_m2": 180.0,
+        "price_source": "RCN/GUS",
+        "pas_m2": 750.0,
+        "property_value": 25184250.0,
+        "formula": "F4",
+        "track_a": {
+          "wsp": 85909.09,
+          "wbk": 46428.71,
+          "obn": 1259212.5,
+          "total": 1391550.3,
+          "years_unauthorized": 10
+        },
+        "track_b": {
+          "total": 2170818.47,
+          "multiplier": 1.56
+        },
+        "coefficients": {
+          "S": 0.2,
+          "k": 0.5,
+          "R": 0.055,
+          "u": 0.06
+        }
+      },
+      "manual_inputs": {
+        "has_building_permit": null,
+        "building_permit_year": null
+      }
+    }
+  },
+  {
+    "label": "Działka elektro WN z współrzędnymi",
+    "status_code": 200,
+    "data": {
+      "parcel_id": "061802_2.0004.109",
+      "infra_type": "elektro_WN",
+      "terrain": {
+        "parcel_id": "061802_2.0004.109",
+        "area_m2": 139912.5,
+        "area_ha": 13.9912,
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                23.4552914639476,
+                50.3564769267551
+              ],
+              [
+                23.4490885040348,
+                50.3583482467398
+              ],
+              [
+                23.4483044696059,
+                50.3572427238068
+              ],
+              [
+                23.4471485534898,
+                50.3575470532817
+              ],
+              [
+                23.4465605219033,
+                50.3567279037085
+              ],
+              [
+                23.4486964782275,
+                50.3560485538408
+              ],
+              [
+                23.4486159350845,
+                50.355941003213
+              ],
+              [
+                23.448480738339,
+                50.3557111000431
+              ],
+              [
+                23.4509786159569,
+                50.3549347064082
+              ],
+              [
+                23.4522206555503,
+                50.3545022678272
+              ],
+              [
+                23.4534894917017,
+                50.3540594228193
+              ],
+              [
+                23.4541121361037,
+                50.3548946135629
+              ],
+              [
+                23.4552914639476,
+                50.3564769267551
+              ]
+            ]
+          ]
+        },
+        "voivodeship": "lubelskie",
+        "county": "powiat tomaszowski",
+        "commune": "Bełżec",
+        "region": "Święcie-Kolonia",
+        "egib": {
+          "uzytek": null,
+          "klasa": null
+        },
+        "centroid": {
+          "lon": 23.450637,
+          "lat": 50.35607
+        },
+        "source": "ULDK/GUGiK",
+        "ok": true
+      },
+      "planning": {
+        "mpzp": {
+          "has_mpzp": false,
+          "przeznaczenie": null,
+          "symbol": null,
+          "uchwala": null,
+          "source": null,
+          "ok": false
+        },
+        "plan_ogolny": {
+          "status": null,
+          "zone": null,
+          "ok": false
+        },
+        "studium": {
+          "przeznaczenie": null,
+          "ok": false
+        }
+      },
+      "infrastructure": {
+        "energie": {
+          "type": "elektro_WN",
+          "length_m": null,
+          "strefa_m": 30,
+          "detected": false,
+          "ok": false
+        },
+        "media": {
+          "gaz": false,
+          "woda": false,
+          "kanal": false,
+          "cieplo": false
+        },
+        "swiatlowod": false,
+        "droga": {
+          "access": true,
+          "type": "track",
+          "name": "",
+          "osm_highway": "track"
+        }
+      },
+      "valuation": {
+        "price_m2": 180.0,
+        "price_source": "RCN/GUS",
+        "pas_m2": 1500.0,
+        "property_value": 25184250.0,
+        "formula": "F4",
+        "track_a": {
+          "wsp": 211090.91,
+          "wbk": 93636.3,
+          "obn": 1838450.25,
+          "total": 2143177.46,
+          "years_unauthorized": 8
+        },
+        "track_b": {
+          "total": 3343356.83,
+          "multiplier": 1.56
+        },
+        "coefficients": {
+          "S": 0.25,
+          "k": 0.65,
+          "R": 0.055,
+          "u": 0.06
+        }
+      },
+      "manual_inputs": {
+        "has_building_permit": null,
+        "building_permit_year": null
+      }
+    }
+  },
+  {
+    "label": "Działka gaz średnioprężny",
+    "status_code": 200,
+    "data": {
+      "parcel_id": "061802_2.0004.109",
+      "infra_type": "gaz_srednie",
+      "terrain": {
+        "parcel_id": "061802_2.0004.109",
+        "area_m2": 139912.5,
+        "area_ha": 13.9912,
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                23.4552914639476,
+                50.3564769267551
+              ],
+              [
+                23.4490885040348,
+                50.3583482467398
+              ],
+              [
+                23.4483044696059,
+                50.3572427238068
+              ],
+              [
+                23.4471485534898,
+                50.3575470532817
+              ],
+              [
+                23.4465605219033,
+                50.3567279037085
+              ],
+              [
+                23.4486964782275,
+                50.3560485538408
+              ],
+              [
+                23.4486159350845,
+                50.355941003213
+              ],
+              [
+                23.448480738339,
+                50.3557111000431
+              ],
+              [
+                23.4509786159569,
+                50.3549347064082
+              ],
+              [
+                23.4522206555503,
+                50.3545022678272
+              ],
+              [
+                23.4534894917017,
+                50.3540594228193
+              ],
+              [
+                23.4541121361037,
+                50.3548946135629
+              ],
+              [
+                23.4552914639476,
+                50.3564769267551
+              ]
+            ]
+          ]
+        },
+        "voivodeship": "lubelskie",
+        "county": "powiat tomaszowski",
+        "commune": "Bełżec",
+        "region": "Święcie-Kolonia",
+        "egib": {
+          "uzytek": null,
+          "klasa": null
+        },
+        "centroid": {
+          "lon": 23.450637,
+          "lat": 50.35607
+        },
+        "source": "ULDK/GUGiK",
+        "ok": true
+      },
+      "planning": {
+        "mpzp": {
+          "has_mpzp": false,
+          "przeznaczenie": null,
+          "symbol": null,
+          "uchwala": null,
+          "source": null,
+          "ok": false
+        },
+        "plan_ogolny": {
+          "status": null,
+          "zone": null,
+          "ok": false
+        },
+        "studium": {
+          "przeznaczenie": null,
+          "ok": false
+        }
+      },
+      "infrastructure": {
+        "energie": {
+          "type": "gaz_srednie",
+          "length_m": null,
+          "strefa_m": 15,
+          "detected": false,
+          "ok": false
+        },
+        "media": {
+          "gaz": false,
+          "woda": false,
+          "kanal": false,
+          "cieplo": false
+        },
+        "swiatlowod": false,
+        "droga": {
+          "access": true,
+          "type": "track",
+          "name": "",
+          "osm_highway": "track"
+        }
+      },
+      "valuation": {
+        "price_m2": 180.0,
+        "price_source": "RCN/GUS",
+        "pas_m2": 750.0,
+        "property_value": 25184250.0,
+        "formula": "F4",
+        "track_a": {
+          "wsp": 94500.0,
+          "wbk": 51071.58,
+          "obn": 2014740.0,
+          "total": 2160311.58,
+          "years_unauthorized": 10
+        },
+        "track_b": {
+          "total": 3370086.07,
+          "multiplier": 1.56
+        },
+        "coefficients": {
+          "S": 0.25,
+          "k": 0.55,
+          "R": 0.055,
+          "u": 0.06
+        }
+      },
+      "manual_inputs": {
+        "has_building_permit": false,
+        "building_permit_year": null
+      }
+    }
+  }
+]
