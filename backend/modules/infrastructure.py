@@ -60,6 +60,7 @@ out tags 1;
 
 
 async def fetch_infrastructure(
+    parcel_id: Optional[str],
     lon: float,
     lat: float,
     parcel_geom: Optional[Dict] = None,
@@ -69,12 +70,26 @@ async def fetch_infrastructure(
     Pobiera dane infrastrukturalne dla działki.
     """
     from backend.integrations.gesut import GESUTClient
+    from backend.integrations.uldk import ULDKClient
 
     gesut = GESUTClient()
+    uldk = ULDKClient()
 
-    # BBOX wokół centroidu
-    delta = 0.003  # ~300m
-    bbox = (lon - delta, lat - delta, lon + delta, lat + delta)
+    # 1. Uzyskaj BBOX w układzie EPSG:2180 (wymagany przez GESUT WMS)
+    bbox_2180 = None
+    if parcel_id:
+        bbox_2180 = uldk.get_parcel_bbox(parcel_id, srid="2180")
+
+    if not bbox_2180:
+        # Fallback: przybliżona konwersja lon/lat -> 2180
+        # E ≈ (LON - 15) * 85000 + bonus
+        # N ≈ (LAT - 49.0) * 111000 + bonus
+        # Dla centroidu:
+        e = (lon - 15.0) * 85000 * 0.77 + 250000 # bardzo zgrubne
+        n = (lat - 49.0) * 111120 + 150000
+        delta = 200 # 200m
+        bbox_2180 = (e - delta, n - delta, e + delta, n + delta)
+        logger.warning(f"Using estimated BBOX 2180: {bbox_2180}")
 
     result = {
         "energie": {
@@ -94,7 +109,7 @@ async def fetch_infrastructure(
         "droga": {"access": False, "type": None, "name": None},
     }
 
-    # --- GESUT: energia elektryczna ---
+    # --- GESUT: kluczowa warstwa (elektro/gaz/woda zależnie od infra_type) ---
     try:
         layer_key = "elektro"
         if infra_type.startswith("gaz"):
@@ -104,31 +119,34 @@ async def fetch_infrastructure(
         elif infra_type == "teleko":
             layer_key = "telekom"
 
-        infra_data = await gesut.get_infrastructure_in_bbox(layer_key, bbox)
-        if infra_data and infra_data.get("length_m", 0) > 0:
+        infra_data = await gesut.get_infrastructure_in_bbox(layer_key, bbox_2180)
+        if infra_data and infra_data.get("line_length_m", 0) > 0:
             result["energie"] = {
                 "type": infra_type,
-                "length_m": round(infra_data.get("length_m", 0), 1),
+                "length_m": round(infra_data.get("line_length_m", 0), 1),
                 "strefa_m": STREFY_OCHRONNE.get(infra_type, 10),
                 "detected": True,
                 "ok": True,
             }
     except Exception as e:
-        logger.warning(f"GESUT energie error: {e}")
+        logger.warning(f"GESUT primary layer error: {e}")
 
     # --- GESUT: media (gaz, woda, kanalizacja, ciepło) ---
     for media_key, gesut_layer in [("gaz", "gaz"), ("woda", "woda"), ("kanal", "kanal"), ("cieplo", "cieplo")]:
         try:
-            data = await gesut.get_infrastructure_in_bbox(gesut_layer, bbox)
-            if data and data.get("length_m", 0) > 0:
+            # Nie sprawdzaj ponownie jeśli to był główny typ
+            if result["media"].get(media_key) is True: continue
+            
+            data = await gesut.get_infrastructure_in_bbox(gesut_layer, bbox_2180)
+            if data and data.get("line_length_m", 0) > 0:
                 result["media"][media_key] = True
         except Exception as e:
             logger.debug(f"GESUT {gesut_layer} error: {e}")
 
     # --- GESUT: światłowód ---
     try:
-        data = await gesut.get_infrastructure_in_bbox("telekom", bbox)
-        if data and data.get("length_m", 0) > 0:
+        data = await gesut.get_infrastructure_in_bbox("telekom", bbox_2180)
+        if data and data.get("line_length_m", 0) > 0:
             result["swiatlowod"] = True
     except Exception as e:
         logger.debug(f"GESUT teleko error: {e}")

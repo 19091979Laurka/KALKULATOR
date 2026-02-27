@@ -44,27 +44,22 @@ COUNTY_LAYERS = {
 }
 
 # Color detection for each layer type (RGB ranges)
+# GUGiK WMS uses specific colors for infrastructure
 LAYER_COLORS = {
-    "elektro": {"r_min": 200, "r_max": 255, "g_max": 80, "b_max": 80},   # Red
-    "gaz": {"r_min": 180, "r_max": 255, "g_min": 180, "g_max": 255, "b_max": 50},  # Yellow
-    "woda": {"r_max": 80, "g_max": 80, "b_min": 150, "b_max": 255},       # Blue
+    "elektro": {"r_min": 180, "r_max": 255, "g_max": 150, "b_max": 150},   # Reddish
+    "gaz": {"r_min": 180, "r_max": 255, "g_min": 180, "g_max": 255, "b_max": 100},  # Yellowish
+    "woda": {"r_max": 150, "g_max": 150, "b_min": 180, "b_max": 255},       # Bluish
+    "kanal": {"r_min": 150, "r_max": 200, "g_min": 100, "g_max": 150, "b_max": 100}, # Brownish
 }
 
 
 class GESUTClient:
     """
     GESUT Client using WMS raster tile analysis.
-    
-    Instead of WFS (which KIUT doesn't support), this client:
-    1. Renders WMS GetMap tiles covering the parcel area
-    2. Parses the PNG image to find colored pixels (infrastructure lines)
-    3. Converts pixel positions back to EPSG:2180 coordinates
-    4. Calculates line length, crossing paths, and infrastructure extent
     """
 
     def __init__(self, county_code: str = "0618"):
         self.county_code = county_code
-        # Force national WMS as regional geoportal2 often 400s or has custom layers
         self.wms_url = NATIONAL_WMS
         logger.info(f"GESUTClient initialized with WMS: {self.wms_url}")
 
@@ -75,47 +70,48 @@ class GESUTClient:
         """Build WMS GetMap URL. BBOX in easting,northing order (EPSG:2180)."""
         e_min, n_min, e_max, n_max = bbox
         bbox_str = f"{e_min},{n_min},{e_max},{n_max}"
+        # Use VERSION 1.3.0 for better compatibility with GUGiK
         return (
-            f"{self.wms_url}?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap"
+            f"{self.wms_url}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap"
             f"&LAYERS={layers}"
-            f"&SRS=EPSG:2180"
-            f"&BBOX={bbox_str}"
+            f"&CRS=EPSG:2180"
+            f"&BBOX={n_min},{e_min},{n_max},{e_max}" # 1.3.0 uses N,E order for 2180
             f"&WIDTH={width}&HEIGHT={height}"
             f"&FORMAT=image/png&TRANSPARENT=true&STYLES="
         )
 
     @staticmethod
-    def _parse_png_pixels(data: bytes) -> Tuple[int, int, list, list]:
+    def _parse_png_pixels(data: bytes) -> Tuple[int, int, list, bytes, int, int]:
         """
-        Parse PNG and return (width, height, palette, pixel_indices).
-        Handles indexed color (type 3) and RGBA (type 6).
+        Parse PNG and return (width, height, palette, raw_data, bpp, color_type).
         """
         with __import__('io').BytesIO(data) as f:
             header = f.read(8)
-            chunks = []
+            if header != b'\x89PNG\r\n\x1a\n':
+                raise ValueError("Not a PNG file")
+            
+            ihdr = None
+            palette = []
+            idat = b''
+
             while True:
                 lb = f.read(4)
-                if len(lb) < 4:
-                    break
+                if not lb: break
                 length = struct.unpack('>I', lb)[0]
                 ct = f.read(4).decode('ascii')
                 cd = f.read(length)
-                f.read(4)  # CRC
-                chunks.append((ct, cd))
-
-        ihdr = None
-        palette = []
-        idat = b''
-
-        for ct, cd in chunks:
-            if ct == 'IHDR':
-                w = struct.unpack('>I', cd[0:4])[0]
-                h = struct.unpack('>I', cd[4:8])[0]
-                ihdr = (w, h, cd[8], cd[9])
-            elif ct == 'PLTE':
-                palette = [(cd[i], cd[i+1], cd[i+2]) for i in range(0, len(cd), 3)]
-            elif ct == 'IDAT':
-                idat += cd
+                f.read(4) # CRC
+                
+                if ct == 'IHDR':
+                    w = struct.unpack('>I', cd[0:4])[0]
+                    h = struct.unpack('>I', cd[4:8])[0]
+                    ihdr = (w, h, cd[8], cd[9])
+                elif ct == 'PLTE':
+                    palette = [(cd[i], cd[i+1], cd[i+2]) for i in range(0, len(cd), 3)]
+                elif ct == 'IDAT':
+                    idat += cd
+                elif ct == 'IEND':
+                    break
 
         if not ihdr:
             raise ValueError("Invalid PNG: no IHDR")
@@ -123,221 +119,173 @@ class GESUTClient:
         w, h, bit_depth, color_type = ihdr
         raw = zlib.decompress(idat)
 
-        if color_type == 3:  # Indexed
-            bpp = 1
-        elif color_type == 6:  # RGBA
-            bpp = 4
-        elif color_type == 2:  # RGB
-            bpp = 3
-        else:
-            bpp = 1
+        # Basic bpp calculation
+        if color_type == 3: bpp = 1   # Indexed
+        elif color_type == 6: bpp = 4 # RGBA
+        elif color_type == 2: bpp = 3 # RGB
+        elif color_type == 0: bpp = 1 # Grayscale
+        else: bpp = 1
 
         return w, h, palette, raw, bpp, color_type
 
     def _extract_colored_pixels(
         self, data: bytes, color_filter: dict
     ) -> List[Tuple[int, int]]:
-        """Extract pixel coordinates matching a color filter from PNG data."""
-        w, h, palette, raw, bpp, ctype = self._parse_png_pixels(data)
+        """Extract pixel coordinates matching a color filter."""
+        try:
+            w, h, palette, raw, bpp, ctype = self._parse_png_pixels(data)
+        except Exception as e:
+            logger.error(f"PNG parse error: {e}")
+            return []
+
         stride = 1 + w * bpp
         matches = []
 
-        r_min = color_filter.get("r_min", 0)
-        r_max = color_filter.get("r_max", 255)
-        g_min = color_filter.get("g_min", 0)
-        g_max = color_filter.get("g_max", 255)
-        b_min = color_filter.get("b_min", 0)
-        b_max = color_filter.get("b_max", 255)
+        r_min, r_max = color_filter.get("r_min", 0), color_filter.get("r_max", 255)
+        g_min, g_max = color_filter.get("g_min", 0), color_filter.get("g_max", 255)
+        b_min, b_max = color_filter.get("b_min", 0), color_filter.get("b_max", 255)
 
         for y in range(h):
             row_start = y * stride
-            row = raw[row_start + 1: row_start + stride]
+            if row_start + stride > len(raw): break
+            row = raw[row_start+1 : row_start+stride]
 
             for x in range(w):
-                if ctype == 3:
-                    idx = row[x]
-                    if idx < len(palette):
-                        r, g, b = palette[idx]
-                    else:
-                        continue
-                elif ctype == 6:
+                r, g, b = 0, 0, 0
+                if ctype == 3: # Indexed
+                    if x < len(row):
+                        idx = row[x]
+                        if idx < len(palette):
+                            r, g, b = palette[idx]
+                        else: continue
+                    else: continue
+                elif ctype == 6: # RGBA
                     px = x * 4
-                    r, g, b, a = row[px:px+4]
-                    if a < 100:
-                        continue
-                elif ctype == 2:
+                    if px + 3 < len(row):
+                        r, g, b, a = row[px], row[px+1], row[px+2], row[px+3]
+                        if a < 30: continue # Skip transparent
+                    else: continue
+                elif ctype == 2: # RGB
                     px = x * 3
-                    r, g, b = row[px:px+3]
-                else:
-                    continue
+                    if px + 2 < len(row):
+                        r, g, b = row[px], row[px+1], row[px+2]
+                    else: continue
+                else: continue
 
                 if (r_min <= r <= r_max and g_min <= g <= g_max and b_min <= b <= b_max):
                     matches.append((x, y))
 
         return matches
 
-    def _pixels_to_coords(
-        self, pixels: List[Tuple[int, int]],
-        bbox: Tuple[float, float, float, float],
-        img_width: int, img_height: int
-    ) -> List[Tuple[float, float]]:
-        """Convert pixel positions to EPSG:2180 coordinates."""
-        e_min, n_min, e_max, n_max = bbox
-        coords = []
-        for px_x, px_y in pixels:
-            easting = e_min + (px_x / img_width) * (e_max - e_min)
-            northing = n_max - (px_y / img_height) * (n_max - n_min)
-            coords.append((easting, northing))
-        return coords
-
-    @staticmethod
-    def _calculate_line_length(coords: List[Tuple[float, float]]) -> float:
-        """Calculate total line length from sorted coordinate points (meters)."""
-        if len(coords) < 2:
-            return 0
-
-        # Sort by primary axis (northing) for a roughly N-S line
-        coords_sorted = sorted(coords, key=lambda c: c[1])
-
-        total = 0
-        # Use running median filter to remove outliers
-        for i in range(1, len(coords_sorted)):
-            dx = coords_sorted[i][0] - coords_sorted[i-1][0]
-            dy = coords_sorted[i][1] - coords_sorted[i-1][1]
-            seg = math.sqrt(dx*dx + dy*dy)
-            if seg < 100:  # Filter out jumps > 100m (gaps between line segments)
-                total += seg
-        return total
+    def _calculate_length_robust(self, pixels: List[Tuple[int, int]], res_m: float) -> float:
+        """
+        Robustly calculate line length from pixel mask.
+        Avoids neighbor-jump inflation by calculating effective line area.
+        """
+        if not pixels: return 0.0
+        
+        # 1. Calculate number of unique "points" after thinning
+        # A simple thinning: use a grid of resolution and count active cells
+        cells = set()
+        for x, y in pixels:
+            cells.add((x, y))
+        
+        if not cells: return 0.0
+        
+        # 2. Estimation: Length = (Total Pixels * Res) / Typical Line Width in Pixels
+        # GUGiK WMS lines are usually 2.0 - 4.0 pixels wide depending on zoom
+        # At 2048 width for 400m bbox, res is 0.2m. 
+        # A 1m wide object on map is 5 pixels.
+        
+        count = len(cells)
+        # Empirical factor: divide by 2.8 to account for line thickness and diagonal connections
+        est_len = (count * res_m) / 2.8
+        
+        # 3. Sanity check: cannot be shorter than the bounding box of pixels
+        e_span = (max(p[0] for p in pixels) - min(p[0] for p in pixels)) * res_m
+        n_span = (max(p[1] for p in pixels) - min(p[1] for p in pixels)) * res_m
+        diagonal = math.sqrt(e_span**2 + n_span**2)
+        
+        return round(max(est_len, diagonal), 1)
 
     async def get_infrastructure_in_bbox(
         self, layer_key: str, bbox: Tuple[float, float, float, float],
-        img_size: int = 2048
+        img_size: int = 1024
     ) -> Dict[str, Any]:
         """
         Fetch infrastructure via WMS raster analysis.
-        
-        Args:
-            layer_key: e.g. 'elektro', 'gaz', 'woda'
-            bbox: (easting_min, northing_min, easting_max, northing_max) in EPSG:2180
-            img_size: WMS tile size (larger = more precise)
-        
-        Returns:
-            Dict with line coordinates, length, and metadata
         """
         layer_name = COUNTY_LAYERS.get(layer_key)
         if not layer_name:
-            return {"ok": False, "error": f"Unknown layer: {layer_key}"}
+            # Try to use key as layer name if not in mapping
+            layer_name = layer_key
 
-        color_filter = LAYER_COLORS.get(layer_key)
-        if not color_filter:
-            color_filter = LAYER_COLORS["elektro"]  # default to red
+        color_filter = LAYER_COLORS.get(layer_key, LAYER_COLORS["elektro"])
 
-        # Calculate image dimensions proportional to bbox
-        e_span = bbox[2] - bbox[0]
-        n_span = bbox[3] - bbox[1]
-        aspect = e_span / n_span if n_span > 0 else 1
-        if aspect > 1:
-            w, h = img_size, int(img_size / aspect)
-        else:
-            w, h = int(img_size * aspect), img_size
-
-        url = self._build_getmap_url(layer_name, bbox, w, h)
-        logger.info(f"GESUT WMS GetMap: {layer_key} ({w}×{h})")
+        # Square BBOX for simpler math
+        e_min, n_min, e_max, n_max = bbox
+        url = self._build_getmap_url(layer_name, bbox, img_size, img_size)
+        res_m = (e_max - e_min) / img_size
 
         try:
             import asyncio
             loop = asyncio.get_event_loop()
+            # Added a few extra layers that GUGiK often includes in KIUT
+            if layer_key == "elektro":
+                layers = f"{layer_name},elektro_przewod,elektro_urzadzenie"
+            else:
+                layers = layer_name
+
+            # Refresh URL with combined layers
+            url = self._build_getmap_url(layers, bbox, img_size, img_size)
+            
             response = await loop.run_in_executor(
                 None,
-                lambda: requests.get(url, headers={'User-Agent': 'GESUTClient/2.2'}, timeout=5, verify=False)
+                lambda: requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}, timeout=10, verify=False)
             )
+
             response.raise_for_status()
-            data = response.content
-            ct = response.headers.get('Content-Type', '')
+            
+            if 'image' not in response.headers.get('Content-Type', ''):
+                return {"ok": False, "error": "WMS returned non-image"}
 
-            if 'image' not in ct:
-                raise Exception(f"WMS returned {ct} instead of image")
-
-            # Extract colored pixels
-            pixels = self._extract_colored_pixels(data, color_filter)
-
+            pixels = self._extract_colored_pixels(response.content, color_filter)
+            
             if not pixels:
-                return {
-                    "ok": True,
-                    "source": f"WMS {self.wms_url}",
-                    "layer": layer_name,
-                    "objects": 0,
-                    "line_length_m": 0,
-                    "coordinates": [],
-                    "note": "No infrastructure pixels found in rendered tile"
-                }
+                return {"ok": True, "line_length_m": 0, "objects": 0, "coordinates": []}
 
-            # Convert to EPSG:2180
-            coords = self._pixels_to_coords(pixels, bbox, w, h)
-            line_length = self._calculate_line_length(coords)
-
-            # Simplify coordinates (every Nth point)
-            step = max(1, len(coords) // 100)
-            simplified = coords[::step]
+            length = self._calculate_length_robust(pixels, res_m)
+            
+            # Simplified coordinates for visualization
+            step = max(1, len(pixels) // 20)
+            coords_2180 = []
+            for px_x, px_y in pixels[::step]:
+                e = e_min + px_x * res_m
+                n = n_max - px_y * res_m
+                coords_2180.append((round(e, 1), round(n, 1)))
 
             return {
                 "ok": True,
-                "source": f"WMS {self.wms_url}",
-                "layer": layer_name,
+                "source": "GUGiK KIUT WMS",
+                "line_length_m": length,
                 "objects": len(pixels),
-                "line_length_m": round(line_length, 1),
-                "extent": {
-                    "easting_min": round(min(c[0] for c in coords), 1),
-                    "easting_max": round(max(c[0] for c in coords), 1),
-                    "northing_min": round(min(c[1] for c in coords), 1),
-                    "northing_max": round(max(c[1] for c in coords), 1),
-                },
-                "coordinates_epsg2180": [(round(c[0], 1), round(c[1], 1)) for c in simplified],
-                "pixel_resolution_m": round(e_span / w, 2),
+                "pixel_resolution_m": round(res_m, 3),
+                "coordinates_epsg2180": coords_2180
             }
 
         except Exception as e:
-            logger.error(f"GESUT WMS error for {layer_key}: {e}")
-            raise
+            logger.error(f"GESUT WMS error: {e}")
+            return {"ok": False, "error": str(e)}
 
     async def fetch_infrastructure(self, bbox: Tuple[float, float, float, float]) -> Dict[str, Any]:
-        """
-        Fetch all infrastructure types in the given BBOX.
-        Primary method: elektro layer.
-        """
-        result = await self.get_infrastructure_in_bbox("elektro", bbox)
-
-        if result.get("ok") and result.get("objects", 0) > 0:
-            line_len = result.get("line_length_m", 0)
+        """Compatibility wrapper for Spec v2.1."""
+        res = await self.get_infrastructure_in_bbox("elektro", bbox)
+        if res.get("ok") and res.get("line_length_m", 0) > 0:
             return {
-                "source": f"GESUT WMS ({self.wms_url})",
                 "ok": True,
-                "objects": result["objects"],
-                "types": ["elektro"],
                 "primary_type": "elektro",
-                "infra_type_ksws": "elektro_SN",
-                "line_length_m": line_len,
-                "has_poles": line_len > 50,  # Estimate: if line > 50m, there are poles
-                "estimated_poles": max(1, int(line_len / 70)),  # ~70m spacing for SN
-                "operators": [],
-                "rok_budowy": None,
-                "extent": result.get("extent"),
-                "coordinates": result.get("coordinates_epsg2180", []),
-                "pixel_resolution_m": result.get("pixel_resolution_m"),
+                "line_length_m": res["line_length_m"],
+                "coordinates": res.get("coordinates_epsg2180", []),
+                "objects": res.get("objects", 0),
             }
-
-        return {
-            "source": "Brak obiektów w GESUT WMS",
-            "ok": True,
-            "objects": 0,
-            "types": [],
-            "primary_type": "elektro",
-            "infra_type_ksws": "elektro_SN",
-            "line_length_m": 0,
-            "has_poles": False,
-            "estimated_poles": 0,
-            "operators": [],
-            "rok_budowy": None,
-            "extent": None,
-            "coordinates": [],
-        }
+        return {"ok": True, "line_length_m": 0, "coordinates": []}

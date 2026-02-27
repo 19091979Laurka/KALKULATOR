@@ -114,19 +114,30 @@ class GUSClient:
         Hardcoded regional averages (v2.1 strategy) for when API fails.
         Values based on 2024/2025 market estimates.
         """
-        voivodeship_code = teryt[:2]
-        
-        # Voivodeship base prices (building land)
-        base_prices = {
-            "14": 450, # Mazowieckie (Warszawa)
-            "12": 350, # Małopolskie (Kraków)
-            "02": 320, # Dolnośląskie (Wrocław)
-            "30": 300, # Wielkopolskie (Poznań)
-            "22": 280, # Pomorskie (Gdańsk)
+        voivodeship_base_prices = {
+            "14": 450, # Mazowieckie
+            "12": 350, # Małopolskie
+            "02": 320, # Dolnośląskie
+            "30": 300, # Wielkopolskie
+            "22": 280, # Pomorskie
+            "24": 260, # Śląskie
+            "10": 240, # Łódzkie
+            "32": 220, # Zachodniopomorskie
+            "04": 210, # Kujawsko-pomorskie
+            "06": 200, # Lubelskie
+            "18": 190, # Podkarpackie
+            "20": 185, # Podlaskie
+            "16": 180, # Opolskie
+            "08": 180, # Lubuskie
+            "26": 175, # Świętokrzyskie
+            "28": 170, # Warmińsko-mazurskie
             "default": 180
         }
         
-        price = base_prices.get(voivodeship_code, base_prices["default"])
+        voivodeship_code = teryt[:2]
+        price = voivodeship_base_prices.get(voivodeship_code, voivodeship_base_prices["default"])
+
+
         
         if not is_building:
             price = price / 10 # Rough conversion to arable land price

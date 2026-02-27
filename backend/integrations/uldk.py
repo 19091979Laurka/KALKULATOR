@@ -1,5 +1,5 @@
 import requests
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple, Any
 import logging
 
 try:
@@ -95,44 +95,69 @@ class ULDKClient:
             logger.error(f"ULDK GetParcelByXY Error: {e}")
             return None
     
+    def get_parcel_bbox(self, parcel_id: str, srid: str = "2180") -> Optional[Tuple[float, float, float, float]]:
+        """
+        Pobierz BBOX działki (ULDK nie ma bezpośredniego GetParcelBBox, obliczamy z geometrii).
+        """
+        params = {
+            'request': 'GetParcelById',
+            'id': parcel_id,
+            'result': 'geom_wkt',
+            'srid': srid
+        }
+        try:
+            response = requests.get(self.BASE_URL, params=params, timeout=10)
+            if response.status_code == 200:
+                parsed = self._parse_response(response.text, parcel_id)
+                if parsed and parsed.get("geometry"):
+                    geom = parsed["geometry"]
+                    coords = geom.get("coordinates", [[]])[0]
+                    if coords:
+                        xs = [p[0] for p in coords]
+                        ys = [p[1] for p in coords]
+                        return (min(xs), min(ys), max(xs), max(ys))
+        except Exception as e:
+            logger.warning(f"ULDK get_parcel_bbox calculation error: {e}")
+        return None
+
+
     def _parse_response(self, wkt_response: str, parcel_id: Optional[str] = None) -> Dict:
         """
         Parser odpowiedzi WKT -> GeoJSON
         """
-        lines = wkt_response.strip().split('\n')
+        lines = [l.strip() for l in wkt_response.strip().split('\n') if l.strip()]
         if not lines:
             return None
             
-        # ULDK response format:
-        # Line 0: Status (0=OK)
-        # Line 1+: Data or Headers
-        
         if lines[0] != '0':
-            logger.error(f"ULDK API Error: {lines[0]}")
+            logger.error(f"ULDK API Error status: {lines[0]}")
             return None
             
-        # Używamy kontrolowanych nagłówków zgodnych z 'result' param
-        requested_headers = ['geom_wkt', 'teryt', 'voivodeship', 'county', 'commune', 'region', 'parcel']
-        
-        # Znajdź linię z danymi (zawiera | i albo nasz teryt albo POLYGON)
+        # Find the line that looks like data
         data_line = None
         for line in lines[1:]:
-            if '|' in line:
-                if (parcel_id and parcel_id[:6] in line) or 'POLYGON' in line:
-                    data_line = line
-                    break
+            if 'POLYGON' in line or 'MULTIPOLYGON' in line or '|' in line:
+                data_line = line
+                break
         
         if not data_line:
-            # Fallback: weź pierwszą linię po statusie jeśli ma rurę
-            if len(lines) > 1 and '|' in lines[1]:
-                data_line = lines[1]
-            else:
-                return None
+            return None
             
-        data_values = data_line.split('|')
-        result = dict(zip(requested_headers, data_values))
-        
+        result = {}
+        if '|' in data_line:
+            data_values = data_line.split('|')
+            # Assuming standard order for multi-column requests
+            headers = ['geom_wkt', 'teryt', 'voivodeship', 'county', 'commune', 'region', 'parcel']
+            result = dict(zip(headers, data_values))
+        else:
+            # Single column or no separator
+            if 'POLYGON' in data_line:
+                result['geom_wkt'] = data_line
+            else:
+                result['teryt'] = data_line # fallback
+
         if 'geom_wkt' in result:
+
             wkt = result['geom_wkt']
             # Usuń prefiks SRID=...; jeśli istnieje
             if ';' in wkt:
@@ -149,6 +174,8 @@ class ULDKClient:
                         clean_wkt = wkt.replace('POLYGON', '').strip()
                         if clean_wkt.startswith('((') and clean_wkt.endswith('))'):
                             coords_str = clean_wkt[2:-2]
+                            # Clean potential Multipolygon indicators or inner rings
+                            coords_str = coords_str.replace('),(', ',')
                             points = coords_str.split(',')
                             coords = []
                             for p in points:
@@ -156,8 +183,11 @@ class ULDKClient:
                                 if len(parts) >= 2:
                                     # GUGiK zwraca Lon Lat lub Lat Lon w zależności od SRID
                                     # Dla 4326 to zazwyczaj Lon Lat
-                                    lon, lat = parts[0], parts[1]
-                                    coords.append([float(lon), float(lat)])
+                                    try:
+                                        lon, lat = parts[0], parts[1]
+                                        coords.append([float(lon), float(lat)])
+                                    except (ValueError, IndexError):
+                                        continue
                             result['geometry'] = {
                                 "type": "Polygon",
                                 "coordinates": [coords]

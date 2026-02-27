@@ -29,15 +29,9 @@ FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 # ── Modele żądania / odpowiedzi ───────────────────────────────────────────────
 
 class AnalyzeRequest(BaseModel):
-    parcel_id: str                      # np. "061802_2.0004.109"
-    infra_type: str = "elektro_SN"      # typ infrastruktury
-    lon: Optional[float] = None         # opcjonalnie: współrzędne
-    lat: Optional[float] = None
-    years_unauthorized: int = 10        # lata bezumownego korzystania
-    # Pola manualne (formalnoprawne)
-    has_building_permit: Optional[bool] = None
-    building_permit_year: Optional[int] = None
-
+    parcel_ids: str                     # np. "061802_2.0004.109" lub "109, 110"
+    infra_type: str = "elektro_SN"      # typ infrastruktury (domyślny)
+    years_unauthorized: int = 10        # lata bezumownego korzystania (domyślny)
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
@@ -58,62 +52,59 @@ async def health():
 @app.post("/api/analyze")
 async def analyze(req: AnalyzeRequest):
     """
-    Główny endpoint analizy działki.
-    Pobiera dane z ULDK, GESUT, WFS planowania, RCN/GUS i oblicza odszkodowanie.
+    Główny endpoint analizy działek (Spec v3.0 - Architecture: Only Logic).
+    Zwraca Property_Master_Record dla każdej działki.
     """
-    # 1. Cechy terenu
-    terrain = await fetch_terrain(req.parcel_id, req.lon, req.lat)
+    from backend.modules.property import PropertyAggregator
+    from backend.modules.calculator import calculate_valuation
+    
+    aggregator = PropertyAggregator()
+    ids = [i.strip() for i in req.parcel_ids.replace("\n", ",").split(",") if i.strip()]
+    results = []
 
-    # Ustal centroid do dalszych zapytań
-    centroid = terrain.get("centroid", {})
-    lon = centroid.get("lon") or req.lon
-    lat = centroid.get("lat") or req.lat
+    for pid in ids:
+        try:
+            # 1. Agregacja danych (14 punktów) -> Master JSON Record
+            master_record = await aggregator.generate_master_record(pid, req.infra_type)
+            
+            # 2. Silnik wyceny KSWS (korzysta z Master Record)
+            # Adaptacja: przekazujemy dane z master_record
+            geom = master_record["geometry"]
+            infra = master_record["infrastructure"]["power"]
+            
+            valuation = await calculate_valuation(
+                lon=geom["centroid_ll"][0],
+                lat=geom["centroid_ll"][1],
+                area_m2=geom["area_m2"],
+                infra_type=req.infra_type,
+                infra_length_m=infra["line_length_m"] or 0.0,
+                strefa_m=infra["buffer_zone_m"] or 10,
+                teryt=pid.replace("_", "").replace(".", "")[:6],
+                years_unauthorized=req.years_unauthorized,
+            )
 
-    if not lon or not lat:
+            # 3. Złożenie finalnej odpowiedzi
+            res = {
+                "parcel_id": pid,
+                "master_record": master_record,
+                "valuation": valuation
+            }
+            results.append(res)
+        except Exception as e:
+            logger.error(f"Błąd analizy działki {pid}: {e}")
+
+    if not results:
         raise HTTPException(
-            status_code=400,
-            detail="Nie można ustalić współrzędnych działki. Podaj lon/lat lub poprawny parcel_id."
+            status_code=404,
+            detail="Nie znaleziono żadnej z podanych działek lub błąd agregacji danych."
         )
 
-    area_m2 = terrain.get("area_m2") or 1000.0
-
-    # Pobierz TERYT z parcel_id (pierwsze 6 znaków bez separatorów)
-    teryt = req.parcel_id.replace("_", "").replace(".", "")[:6] if req.parcel_id else None
-
-    # 2-4: Pobierz pozostałe dane równolegle
-    planning_task = fetch_planning(lon, lat)
-    infra_task = fetch_infrastructure(lon, lat, terrain.get("geometry"), req.infra_type)
-
-    planning, infra = await asyncio.gather(planning_task, infra_task)
-
-    # Wyciągnij dane infrastruktury do kalkulatora
-    energie = infra.get("energie", {})
-    infra_length = energie.get("length_m") or 50.0  # domyślnie 50m jeśli brak danych GESUT
-    strefa_m = energie.get("strefa_m", 10)
-
-    # 5. Wycena
-    valuation = await calculate_valuation(
-        lon=lon,
-        lat=lat,
-        area_m2=area_m2,
-        infra_type=req.infra_type,
-        infra_length_m=infra_length,
-        strefa_m=strefa_m,
-        teryt=teryt,
-        years_unauthorized=req.years_unauthorized,
-    )
-
     return {
-        "parcel_id": req.parcel_id,
-        "infra_type": req.infra_type,
-        "terrain": terrain,
-        "planning": planning,
-        "infrastructure": infra,
-        "valuation": valuation,
-        "manual_inputs": {
-            "has_building_permit": req.has_building_permit,
-            "building_permit_year": req.building_permit_year,
+        "summary": {
+            "count": len(results),
+            "timestamp": "2026-02-27T11:34:00Z"
         },
+        "parcels": results
     }
 
 

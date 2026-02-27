@@ -1,367 +1,369 @@
 <!DOCTYPE html>
 <html lang="pl">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kalkulator Roszczeń Przesyłowych</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    body { background: #f8f9fa; }
-    .card-result { display: none; }
-    .section-header { background: #0d6efd; color: white; padding: 8px 16px; border-radius: 6px; margin-bottom: 12px; font-weight: 600; }
-    .value-box { background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 12px 20px; }
-    .track-a { background: #d1e7dd; border: 1px solid #198754; }
-    .track-b { background: #cff4fc; border: 1px solid #0dcaf0; }
-    .badge-ok { background: #198754; }
-    .badge-brak { background: #6c757d; }
-    #spinner { display: none; }
-    .infra-icon { font-size: 1.3em; }
+    :root {
+      --primary: #0d6efd;
+      --secondary: #6c757d;
+      --success: #198754;
+      --info: #0dcaf0;
+      --warning: #ffc107;
+      --danger: #dc3545;
+      --light: #f8f9fa;
+      --dark: #212529;
+      --glass: rgba(255, 255, 255, 0.9);
+    }
+
+    body {
+      background: #f0f2f5;
+      font-family: 'Inter', sans-serif;
+      color: #333;
+    }
+
+    .container {
+      max-width: 900px;
+    }
+
+    .card {
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      background: white;
+      border-bottom: 1px solid #eee;
+      padding: 16px 24px;
+      font-weight: 600;
+    }
+
+    .section-header {
+      background: var(--primary);
+      color: white;
+      padding: 10px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .value-box {
+      background: #fff;
+      border-left: 4px solid var(--warning);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    }
+
+    .track-a {
+      border-left-color: var(--success);
+      background: #f8fff9;
+    }
+
+    .track-b {
+      border-left-color: var(--info);
+      background: #f0faff;
+    }
+
+    .badge-ok {
+      background: var(--success);
+    }
+
+    .badge-brak {
+      background: var(--secondary);
+    }
+
+    #spinner {
+      display: none;
+    }
+
+    .infra-icon {
+      font-size: 1.5rem;
+      margin-bottom: 8px;
+    }
+
+    .btn-primary {
+      padding: 12px 24px;
+      font-weight: 600;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+    }
+
+    .parcel-item {
+      border: 1px solid #eee;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 16px;
+      background: white;
+      transition: all 0.2s;
+    }
+
+    .parcel-item:hover {
+      border-color: var(--primary);
+    }
+
+    .summary-card {
+      background: linear-gradient(135deg, #0d6efd 0%, #0043a8 100%);
+      color: white;
+      padding: 24px;
+      border-radius: 12px;
+      margin-bottom: 30px;
+    }
+
+    .summary-val {
+      font-size: 2rem;
+      font-weight: 700;
+    }
   </style>
 </head>
+
 <body>
-<div class="container py-4">
+  <div class="container py-5">
 
-  <h2 class="mb-1">Kalkulator Roszczeń Odszkodowawczych</h2>
-  <p class="text-muted mb-4">Służebności przesyłu — automatyczna analiza na podstawie danych GIS</p>
-
-  <!-- Formularz -->
-  <div class="card mb-4">
-    <div class="card-body">
-      <div class="row g-3">
-        <div class="col-md-5">
-          <label class="form-label fw-semibold">ID Działki <small class="text-muted">(TERYT.OBREB.NR)</small></label>
-          <input type="text" id="parcelId" class="form-control" placeholder="np. 061802_2.0004.109" value="061802_2.0004.109">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label fw-semibold">Typ infrastruktury</label>
-          <select id="infraType" class="form-select">
-            <optgroup label="Energia elektryczna">
-              <option value="elektro_WN">Linia WN (110kV+)</option>
-              <option value="elektro_SN" selected>Linia SN (15–30kV)</option>
-              <option value="elektro_nN">Linia nN (&lt;1kV)</option>
-            </optgroup>
-            <optgroup label="Gaz">
-              <option value="gaz_wysokie">Gaz wysokoprężny (&gt;1.6MPa)</option>
-              <option value="gaz_srednie">Gaz średnioprężny</option>
-              <option value="gaz_niskie">Gaz niskoprężny</option>
-            </optgroup>
-            <optgroup label="Inne">
-              <option value="wod_kan">Wodociąg / kanalizacja</option>
-              <option value="teleko">Telekomunikacja / światłowód</option>
-            </optgroup>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label fw-semibold">Lata bezumownego korzystania</label>
-          <input type="number" id="yearsUnauth" class="form-control" value="10" min="1" max="10">
-        </div>
-      </div>
-
-      <!-- Opcjonalne pola manualne -->
-      <div class="row g-3 mt-1">
-        <div class="col-md-4">
-          <label class="form-label text-muted">Pozwolenie na budowę</label>
-          <select id="buildingPermit" class="form-select form-select-sm">
-            <option value="">— nieznane —</option>
-            <option value="true">Tak</option>
-            <option value="false">Nie</option>
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label text-muted">Rok pozwolenia</label>
-          <input type="number" id="buildingPermitYear" class="form-control form-control-sm" placeholder="np. 2015">
-        </div>
-      </div>
-
-      <div class="mt-3">
-        <button class="btn btn-primary px-4" onclick="runAnalysis()">
-          <span id="spinner" class="spinner-border spinner-border-sm me-2"></span>
-          Analizuj działkę
-        </button>
-      </div>
-      <div id="errorBox" class="alert alert-danger mt-3 d-none"></div>
-    </div>
-  </div>
-
-  <!-- Wyniki -->
-  <div id="results" class="card-result">
-
-    <!-- Nagłówek działki -->
-    <div class="d-flex align-items-center mb-3 gap-3">
-      <div>
-        <h5 class="mb-0" id="resParcelId"></h5>
-        <span class="text-muted" id="resLocation"></span>
-      </div>
+    <div class="text-center mb-5">
+      <h1 class="fw-bold mb-2">Kalkulator Roszczeń Przesyłowych</h1>
+      <p class="text-muted">Wprowadź dane działek, aby obliczyć szacunkowe odszkodowanie</p>
     </div>
 
-    <div class="row g-4">
-
-      <!-- Cechy terenu -->
-      <div class="col-md-6">
-        <div class="section-header">Cechy terenu</div>
-        <table class="table table-sm table-borderless">
-          <tbody>
-            <tr><td>Powierzchnia</td><td id="tArea" class="fw-semibold"></td></tr>
-            <tr><td>Współrzędne centroidu</td><td id="tCoords"></td></tr>
-            <tr><td>Województwo</td><td id="tVoiv"></td></tr>
-            <tr><td>Powiat</td><td id="tCounty"></td></tr>
-            <tr><td>Gmina</td><td id="tCommune"></td></tr>
-            <tr><td>Obręb</td><td id="tRegion"></td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Ograniczenia formalnoprawne -->
-      <div class="col-md-6">
-        <div class="section-header">Ograniczenia formalnoprawne</div>
-        <table class="table table-sm table-borderless">
-          <tbody>
-            <tr>
-              <td>MPZP</td>
-              <td id="pMpzp"></td>
-            </tr>
-            <tr>
-              <td>Przeznaczenie MPZP</td>
-              <td id="pMpzpPrzezn" class="fw-semibold"></td>
-            </tr>
-            <tr>
-              <td>Plan ogólny gminy</td>
-              <td id="pPlanOgolny"></td>
-            </tr>
-            <tr>
-              <td>Studium</td>
-              <td id="pStudium"></td>
-            </tr>
-            <tr>
-              <td>Pozwolenie na budowę</td>
-              <td id="pBuildingPermit"></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Infrastruktura -->
-      <div class="col-12">
-        <div class="section-header">Infrastruktura</div>
+    <!-- Formularz -->
+    <div class="card">
+      <div class="card-body p-4">
         <div class="row g-3">
-          <div class="col-md-3">
-            <div class="card h-100">
-              <div class="card-body text-center">
-                <div class="infra-icon">⚡</div>
-                <div class="fw-semibold" id="iInfraType"></div>
-                <div class="text-muted small" id="iInfraLength"></div>
-                <div class="text-muted small" id="iInfraStrefa"></div>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-3">
-            <div class="card h-100">
-              <div class="card-body text-center">
-                <div class="infra-icon">🛣️</div>
-                <div class="fw-semibold">Dostęp do drogi</div>
-                <div id="iDroga"></div>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-3">
-            <div class="card h-100">
-              <div class="card-body">
-                <div class="fw-semibold mb-1">Uzbrojenie terenu</div>
-                <div id="iMedia"></div>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-3">
-            <div class="card h-100">
-              <div class="card-body text-center">
-                <div class="infra-icon">🌐</div>
-                <div class="fw-semibold">Światłowód</div>
-                <div id="iSwiatlowod"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Wycena -->
-      <div class="col-12">
-        <div class="section-header">Wycena odszkodowawcza</div>
-        <div class="row g-3">
-          <div class="col-md-4">
-            <div class="value-box">
-              <div class="small text-muted">Cena gruntu (1m²)</div>
-              <div class="h4 mb-0" id="vPrice"></div>
-              <div class="small text-muted" id="vPriceSource"></div>
-            </div>
-          </div>
-          <div class="col-md-4">
-            <div class="value-box">
-              <div class="small text-muted">Pas służebności</div>
-              <div class="h4 mb-0" id="vPas"></div>
-              <div class="small text-muted">długość × strefa</div>
-            </div>
-          </div>
-          <div class="col-md-4">
-            <div class="value-box">
-              <div class="small text-muted">Formuła KSWS</div>
-              <div class="h4 mb-0" id="vFormula"></div>
-              <div class="small text-muted" id="vCoeffs"></div>
-            </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Identyfikatory działek <small class="text-muted">(możesz podać kilka,
+                oddziel przecinkiem lub nową linią)</small></label>
+            <textarea id="parcelIds" class="form-control" rows="3"
+              placeholder="np. 061802_2.0004.109, 061802_2.0004.110">061802_2.0004.109</textarea>
           </div>
           <div class="col-md-6">
-            <div class="value-box track-a rounded p-3">
-              <div class="fw-bold text-success mb-2">TOR A — Żądanie sądowe</div>
-              <table class="table table-sm mb-0">
-                <tr><td>Służebność przesyłu (WSP)</td><td class="fw-semibold" id="vWsp"></td></tr>
-                <tr><td>Bezumowne korzystanie (Wbk)</td><td class="fw-semibold" id="vWbk"></td></tr>
-                <tr><td>Obniżenie wartości (Obn)</td><td class="fw-semibold" id="vObn"></td></tr>
-                <tr class="table-success"><td><strong>RAZEM TOR A</strong></td><td><strong id="vTrackA"></strong></td></tr>
-              </table>
-            </div>
+            <label class="form-label fw-semibold">Powiat <small class="text-muted">(opcjonalnie)</small></label>
+            <input type="text" id="county" class="form-control" placeholder="np. lubelski">
           </div>
           <div class="col-md-6">
-            <div class="value-box track-b rounded p-3">
-              <div class="fw-bold text-info mb-2">TOR B — Negocjacje</div>
-              <div class="small text-muted mb-2">Tor A × 1.56 (TK P 10/16 × zakłócenia)</div>
-              <div class="h3 mt-3" id="vTrackB"></div>
+            <label class="form-label fw-semibold">Gmina <small class="text-muted">(opcjonalnie)</small></label>
+            <input type="text" id="municipality" class="form-control" placeholder="np. Wólka">
+          </div>
+        </div>
+
+        <div class="mt-4">
+          <button class="btn btn-primary w-100" onclick="runAnalysis()">
+            <span id="spinner" class="spinner-border spinner-border-sm me-2"></span>
+            Rozpocznij analizę zbiorczą
+          </button>
+        </div>
+        <div id="errorBox" class="alert alert-danger mt-3 d-none"></div>
+      </div>
+    </div>
+
+    <!-- Wyniki Sumaryczne -->
+    <div id="summaryResults" style="display: none;">
+      <div class="summary-card">
+        <div class="row align-items-center">
+          <div class="col-md-7">
+            <h4 class="mb-1">Podsumowanie analizy</h4>
+            <p class="mb-0 opacity-75" id="summaryCount"></p>
+          </div>
+          <div class="col-md-5 text-md-end mt-3 mt-md-0">
+            <div class="small opacity-75">Łączne roszczenie (Tor B)</div>
+            <div class="summary-val" id="summaryTotalB">0.00 zł</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lista Działek -->
+    <div id="resultsList"></div>
+
+  </div>
+
+  <!-- Template dla pojedynczej działki -->
+  <template id="parcelTemplate">
+    <div class="card mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <span class="badge bg-primary me-2">Działka</span>
+          <span class="resParcelId"></span>
+        </div>
+        <div class="text-muted small resLocation"></div>
+      </div>
+      <div class="card-body">
+        <div class="row g-4">
+          <!-- Cechy terenu -->
+          <div class="col-md-6">
+            <div class="section-header">Cechy terenu</div>
+            <table class="table table-sm table-borderless mb-0">
+              <tbody>
+                <tr>
+                  <td>Powierzchnia</td>
+                  <td class="fw-semibold tArea"></td>
+                </tr>
+                <tr>
+                  <td>Centroid</td>
+                  <td class="tCoords small"></td>
+                </tr>
+                <tr>
+                  <td>Lokalizacja</td>
+                  <td class="tFullLoc small"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Infrastruktura i MPZP -->
+          <div class="col-md-6">
+            <div class="section-header">Analiza GIS</div>
+            <table class="table table-sm table-borderless mb-0">
+              <tbody>
+                <tr>
+                  <td>MPZP</td>
+                  <td class="pMpzp"></td>
+                </tr>
+                <tr>
+                  <td>Infrastruktura</td>
+                  <td class="iInfraType fw-semibold"></td>
+                </tr>
+                <tr>
+                  <td>Strefa / Długość</td>
+                  <td class="iInfraDetails small"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Wycena -->
+          <div class="col-12">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <div class="value-box">
+                  <div class="small text-muted">Cena gruntu</div>
+                  <div class="h5 mb-0 vPrice"></div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="value-box track-a">
+                  <div class="small text-muted">Tor A (Sądowy)</div>
+                  <div class="h5 mb-0 vTrackA"></div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="value-box track-b">
+                  <div class="small text-muted">Tor B (Negocjacje)</div>
+                  <div class="h5 mb-0 vTrackB"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-
     </div>
-  </div>
+  </template>
 
-</div>
+  <script>
+    const fmt = (n) => n != null ? n.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' zł' : '—';
+    const fmtM2 = (n) => n != null ? n.toLocaleString('pl-PL') + ' m²' : '—';
+    const badge = (v, labelTrue, labelFalse) =>
+      v === true ? `<span class="badge bg-success">${labelTrue}</span>` :
+        v === false ? `<span class="badge bg-secondary">${labelFalse}</span>` :
+          `<span class="badge bg-secondary">brak danych</span>`;
 
-<script>
-const fmt = (n) => n != null ? n.toLocaleString('pl-PL', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' zł' : '—';
-const fmtM2 = (n) => n != null ? n.toLocaleString('pl-PL') + ' m²' : '—';
-const badge = (v, labelTrue, labelFalse) =>
-  v === true ? `<span class="badge badge-ok">${labelTrue}</span>` :
-  v === false ? `<span class="badge badge-brak">${labelFalse}</span>` :
-  `<span class="badge bg-secondary">brak danych</span>`;
+    async function runAnalysis() {
+      const parcelIds = document.getElementById('parcelIds').value.trim();
+      if (!parcelIds) { showError('Podaj przynajmniej jeden ID działki.'); return; }
 
-async function runAnalysis() {
-  const parcelId = document.getElementById('parcelId').value.trim();
-  if (!parcelId) { showError('Podaj ID działki.'); return; }
+      const btn = document.querySelector('button');
+      const spinner = document.getElementById('spinner');
+      const errBox = document.getElementById('errorBox');
+      errBox.classList.add('d-none');
+      spinner.style.display = 'inline-block';
+      btn.disabled = true;
 
-  const btn = document.querySelector('button');
-  const spinner = document.getElementById('spinner');
-  const errBox = document.getElementById('errorBox');
-  errBox.classList.add('d-none');
-  spinner.style.display = 'inline-block';
-  btn.disabled = true;
+      const body = {
+        parcel_ids: parcelIds,
+        county: document.getElementById('county').value,
+        municipality: document.getElementById('municipality').value
+      };
 
-  const body = {
-    parcel_id: parcelId,
-    infra_type: document.getElementById('infraType').value,
-    years_unauthorized: parseInt(document.getElementById('yearsUnauth').value) || 10,
-  };
-  const bp = document.getElementById('buildingPermit').value;
-  if (bp !== '') body.has_building_permit = bp === 'true';
-  const bpy = document.getElementById('buildingPermitYear').value;
-  if (bpy) body.building_permit_year = parseInt(bpy);
+      try {
+        const resp = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        if (!resp.ok) { showError(data.detail || 'Błąd serwera'); return; }
+        renderAllResults(data);
+      } catch (e) {
+        showError('Błąd połączenia: ' + e.message);
+      } finally {
+        spinner.style.display = 'none';
+        btn.disabled = false;
+      }
+    }
 
-  try {
-    const resp = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(body),
-    });
-    const data = await resp.json();
-    if (!resp.ok) { showError(data.detail || 'Błąd serwera'); return; }
-    renderResults(data);
-  } catch (e) {
-    showError('Błąd połączenia: ' + e.message);
-  } finally {
-    spinner.style.display = 'none';
-    btn.disabled = false;
-  }
-}
+    function showError(msg) {
+      const box = document.getElementById('errorBox');
+      box.textContent = msg;
+      box.classList.remove('d-none');
+    }
 
-function showError(msg) {
-  const box = document.getElementById('errorBox');
-  box.textContent = msg;
-  box.classList.remove('d-none');
-}
+    function renderAllResults(data) {
+      document.getElementById('summaryResults').style.display = 'block';
+      document.getElementById('summaryCount').textContent = `Wykonano analizę dla ${data.summary.count} działek.`;
+      document.getElementById('summaryTotalB').textContent = fmt(data.summary.total_track_b);
 
-function renderResults(d) {
-  document.getElementById('results').style.display = 'block';
-  const t = d.terrain || {};
-  const p = d.planning || {};
-  const i = d.infrastructure || {};
-  const v = d.valuation || {};
-  const mi = d.manual_inputs || {};
+      const container = document.getElementById('resultsList');
+      container.innerHTML = '';
 
-  // Nagłówek
-  document.getElementById('resParcelId').textContent = d.parcel_id;
-  const loc = [t.commune, t.county, t.voivodeship].filter(Boolean).join(', ');
-  document.getElementById('resLocation').textContent = loc || '';
+      const template = document.getElementById('parcelTemplate');
 
-  // Cechy terenu
-  document.getElementById('tArea').textContent = t.area_m2 ? `${t.area_m2.toLocaleString('pl-PL')} m² (${t.area_ha} ha)` : '—';
-  const c = t.centroid || {};
-  document.getElementById('tCoords').textContent = c.lon ? `${c.lat?.toFixed(5)}, ${c.lon?.toFixed(5)}` : '—';
-  document.getElementById('tVoiv').textContent = t.voivodeship || '—';
-  document.getElementById('tCounty').textContent = t.county || '—';
-  document.getElementById('tCommune').textContent = t.commune || '—';
-  document.getElementById('tRegion').textContent = t.region || '—';
+      data.parcels.forEach(p => {
+        const clone = template.content.cloneNode(true);
+        const m = p.master_record || {};
+        const t = m.parcel_metadata || {};
+        const g = m.geometry || {};
+        const pl = m.planning || {};
+        const inf = m.infrastructure || {};
+        const v = p.valuation || {};
 
-  // Planowanie
-  const mpzp = p.mpzp || {};
-  document.getElementById('pMpzp').innerHTML = badge(mpzp.has_mpzp, 'Tak', 'Brak MPZP');
-  document.getElementById('pMpzpPrzezn').textContent = mpzp.przeznaczenie || (mpzp.has_mpzp ? 'nieznane' : '—');
-  const po = p.plan_ogolny || {};
-  document.getElementById('pPlanOgolny').textContent = po.zone || (po.status ? po.status : '—');
-  const st = p.studium || {};
-  document.getElementById('pStudium').textContent = st.przeznaczenie || '—';
-  document.getElementById('pBuildingPermit').innerHTML = mi.has_building_permit != null
-    ? badge(mi.has_building_permit, 'Tak', 'Nie')
-    : '<span class="text-muted">nie podano</span>';
+        clone.querySelector('.resParcelId').textContent = p.parcel_id;
+        const loc = [t.commune, t.county].filter(Boolean).join(', ');
+        clone.querySelector('.resLocation').textContent = loc;
 
-  // Infrastruktura — energie
-  const en = i.energie || {};
-  document.getElementById('iInfraType').textContent = en.type || d.infra_type;
-  document.getElementById('iInfraLength').textContent = en.length_m ? `Długość: ${en.length_m} m` : 'brak danych GESUT';
-  document.getElementById('iInfraStrefa').textContent = `Strefa: ±${en.strefa_m || '—'} m`;
+        clone.querySelector('.tArea').textContent = g.area_m2 ? `${g.area_m2.toLocaleString('pl-PL')} m²` : '—';
+        const c = g.centroid_ll || [];
+        clone.querySelector('.tCoords').textContent = c.length === 2 ? `${c[1]?.toFixed(5)}, ${c[0]?.toFixed(5)}` : '—';
+        clone.querySelector('.tFullLoc').textContent = [t.region, t.commune, t.county].filter(Boolean).join(', ');
 
-  // Droga
-  const dr = i.droga || {};
-  document.getElementById('iDroga').innerHTML = dr.access
-    ? `<span class="badge badge-ok">${dr.type?.replace(/_/g, ' ') || 'tak'}</span>${dr.name ? ' ' + dr.name : ''}`
-    : badge(false, '', 'Brak dostępu');
+        clone.querySelector('.pMpzp').innerHTML = badge(pl.mpzp_active, 'Jest', 'Brak');
 
-  // Media
-  const media = i.media || {};
-  const mediaList = [
-    ['Gaz', media.gaz], ['Woda', media.woda],
-    ['Kanalizacja', media.kanal], ['Ciepło', media.cieplo],
-  ].map(([n, v]) =>
-    `<span class="badge ${v ? 'badge-ok' : 'bg-secondary'} me-1">${n}</span>`
-  ).join('');
-  document.getElementById('iMedia').innerHTML = mediaList || '—';
+        const en = inf.power || {};
+        clone.querySelector('.iInfraType').textContent = en.voltage || '—';
+        clone.querySelector('.iInfraDetails').textContent = `±${en.buffer_zone_m || 10}m / ${en.line_length_m || 0}m`;
 
-  // Światłowód
-  document.getElementById('iSwiatlowod').innerHTML = badge(i.swiatlowod, 'Tak', 'Nie');
+        // Add raw data display for verification
+        const priceM2 = v.price_m2 || 0;
+        clone.querySelector('.vPrice').innerHTML = `<strong>${priceM2} zł/m²</strong><br><small class="text-muted">Źródło: ${v.price_source || 'BDL'}</small>`;
+        clone.querySelector('.vTrackA').textContent = fmt(v.track_a?.total);
+        clone.querySelector('.vTrackB').textContent = fmt(v.track_b?.total);
 
-  // Wycena
-  document.getElementById('vPrice').textContent = v.price_m2 != null ? v.price_m2.toLocaleString('pl-PL', {maximumFractionDigits: 0}) + ' zł/m²' : '—';
-  document.getElementById('vPriceSource').textContent = v.price_source || '';
-  document.getElementById('vPas').textContent = v.pas_m2 != null ? fmtM2(v.pas_m2) : '—';
-  document.getElementById('vFormula').textContent = v.formula || '—';
-  const co = v.coefficients || {};
-  document.getElementById('vCoeffs').textContent = co.S != null ? `S=${co.S} k=${co.k} R=${co.R}` : '';
 
-  const ta = v.track_a || {};
-  document.getElementById('vWsp').textContent = ta.wsp != null ? fmt(ta.wsp) : '—';
-  document.getElementById('vWbk').textContent = ta.wbk != null ? fmt(ta.wbk) : '—';
-  document.getElementById('vObn').textContent = ta.obn != null ? fmt(ta.obn) : '—';
-  document.getElementById('vTrackA').textContent = ta.total != null ? fmt(ta.total) : '—';
-
-  const tb = v.track_b || {};
-  document.getElementById('vTrackB').textContent = tb.total != null ? fmt(tb.total) : '—';
-}
-</script>
+        container.appendChild(clone);
+      });
+    }
+  </script>
 </body>
+
 </html>

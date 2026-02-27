@@ -1,29 +1,22 @@
 [
   {
-    "label": "Działka elektro SN — podstawowy test",
+    "label": "Jedna działka — podstawowy test",
     "request": {
-      "parcel_id": "061802_2.0004.109",
-      "infra_type": "elektro_SN",
-      "years_unauthorized": 10
+      "parcel_ids": "061802_2.0004.109"
     }
   },
   {
-    "label": "Działka elektro WN z współrzędnymi",
+    "label": "Wiele działek",
     "request": {
-      "parcel_id": "061802_2.0004.109",
-      "infra_type": "elektro_WN",
-      "lon": 23.4521,
-      "lat": 50.5234,
-      "years_unauthorized": 8
+      "parcel_ids": "061802_2.0004.109, 141201_1.0001.50"
     }
   },
   {
-    "label": "Działka gaz średnioprężny",
+    "label": "Działki z opcjonalnymi polami",
     "request": {
-      "parcel_id": "061802_2.0004.109",
-      "infra_type": "gaz_srednie",
-      "years_unauthorized": 10,
-      "has_building_permit": false
+      "parcel_ids": "061802_2.0004.109",
+      "county": "lubelski",
+      "municipality": "Wólka"
     }
   }
 ]

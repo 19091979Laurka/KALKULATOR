@@ -12,8 +12,11 @@ class RCNClient:
     Free access to transaction locations and basic data as of 13.02.2026.
     Level 1 data source.
     """
-    # WFS service for RCN (National Integration of Real Estate Prices)
-    WFS_URL = "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaCenNieruchomosci"
+    WFS_URL = "https://mapy.geoportal.gov.pl/wss/service/rcn"
+    HEADERS = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+
     
     async def get_transactions(self, lon: float, lat: float, radius_km: float = 5.0, land_type: str = "budowlana") -> List[Dict[str, Any]]:
         """
@@ -25,25 +28,27 @@ class RCNClient:
         d_lon = radius_km / 68.0
         bbox = f"{lon-d_lon},{lat-d_lat},{lon+d_lon},{lat+d_lat}"
         
-        params = {
-            "service": "WFS",
-            "version": "1.1.0",
-            "request": "GetFeature",
-            "typeName": "transakcje", # Corrected for integracja.gugik.gov.pl
-            "outputFormat": "json",
-            "srsName": "EPSG:4326",
-            "bbox": f"{bbox},EPSG:4326"
-        }
-        
         try:
-            # Note: Using requests synchronously for now as per project pattern, 
-            # or wrap in run_in_executor if needed.
+            params = {
+                "service": "WFS",
+                "version": "1.1.0",
+                "request": "GetFeature",
+                "typeName": "ms:dzialki", 
+                "outputFormat": "application/json", # Try JSON first
+                "srsName": "EPSG:4326",
+                "bbox": f"{bbox},EPSG:4326"
+            }
             import asyncio
             loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(None, lambda: requests.get(self.WFS_URL, params=params, timeout=15))
+            response = await loop.run_in_executor(None, lambda: requests.get(self.WFS_URL, params=params, headers=self.HEADERS, timeout=15))
             
             if response.status_code == 200:
-                data = response.json()
+                try:
+                    data = response.json()
+                except:
+                    logger.debug("RCN response not JSON")
+                    return []
+                    
                 features = data.get("features", [])
                 
                 # Filter by date (last 24 months)
@@ -83,6 +88,7 @@ class RCNClient:
             logger.error(f"RCN WFS Error: {e}")
             
         return []
+
 
     def calculate_median(self, transactions: List[Dict[str, Any]]) -> Optional[Decimal]:
         if not transactions:
