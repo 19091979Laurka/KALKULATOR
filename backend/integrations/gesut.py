@@ -35,33 +35,41 @@ NATIONAL_WMS = "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbroje
 # Layer mapping for national KIUT WMS (more standardized)
 COUNTY_LAYERS = {
     "elektro": "przewod_elektroenergetyczny",
+    "elektro_wn": "przewod_elektroenergetyczny_W", # Some counties use suffixes
+    "elektro_sn": "przewod_elektroenergetyczny_S",
+    "elektro_nn": "przewod_elektroenergetyczny_N",
     "gaz": "przewod_gazowy",
     "woda": "przewod_wodociagowy",
     "kanal": "przewod_kanalizacyjny",
     "telekom": "przewod_telekomunikacyjny",
     "cieplo": "przewod_cieplowniczy",
-    "urzadzenia": "urzadzenie_techniczne",
+    "urzadzenia": "przewod_urzadzenia",
+    "urzadzenia_linia": "przewod_urzadzenia",
 }
 
 # Color detection for each layer type (RGB ranges)
 # GUGiK WMS uses specific colors for infrastructure
+# Elektro: Red (WN/SN often same color, but sometimes linestyles differ)
 LAYER_COLORS = {
-    "elektro": {"r_min": 180, "r_max": 255, "g_max": 150, "b_max": 150},   # Reddish
-    "gaz": {"r_min": 180, "r_max": 255, "g_min": 180, "g_max": 255, "b_max": 100},  # Yellowish
-    "woda": {"r_max": 150, "g_max": 150, "b_min": 180, "b_max": 255},       # Bluish
-    "kanal": {"r_min": 150, "r_max": 200, "g_min": 100, "g_max": 150, "b_max": 100}, # Brownish
+    "elektro": {"r_min": 150, "g_max": 150, "b_max": 150}, # Looser red
+    "gaz": {"r_min": 150, "g_min": 150, "b_max": 150}, # Yellow
+    "woda": {"r_max": 150, "g_max": 150, "b_min": 150}, # Blue
+    "kanal": {"r_min": 100, "r_max": 200, "g_min": 50, "g_max": 160, "b_max": 120}, # Brown/Orange
+    "urzadzenia": {"r_max": 200, "g_max": 200, "b_max": 200}, # Catch dark symbols
 }
 
 
 class GESUTClient:
     """
-    GESUT Client using WMS raster tile analysis.
+    GESUT Client using WMS raster tile analysis and GetFeatureInfo.
     """
 
-    def __init__(self, county_code: str = "0618"):
+    def __init__(self, county_code: Optional[str] = None):
         self.county_code = county_code
-        self.wms_url = NATIONAL_WMS
-        logger.info(f"GESUTClient initialized with WMS: {self.wms_url}")
+        self.wms_url = COUNTY_WMS_ENDPOINTS.get(county_code) if county_code else NATIONAL_WMS
+        if not self.wms_url:
+            self.wms_url = NATIONAL_WMS
+        logger.info(f"GESUTClient initialized with WMS: {self.wms_url} for county: {county_code}")
 
     def _build_getmap_url(
         self, layers: str, bbox: Tuple[float, float, float, float],
@@ -69,7 +77,6 @@ class GESUTClient:
     ) -> str:
         """Build WMS GetMap URL. BBOX in easting,northing order (EPSG:2180)."""
         e_min, n_min, e_max, n_max = bbox
-        bbox_str = f"{e_min},{n_min},{e_max},{n_max}"
         # Use VERSION 1.3.0 for better compatibility with GUGiK
         return (
             f"{self.wms_url}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap"
@@ -170,6 +177,16 @@ class GESUTClient:
                     if px + 2 < len(row):
                         r, g, b = row[px], row[px+1], row[px+2]
                     else: continue
+                elif ctype == 0: # Grayscale
+                    if x < len(row):
+                        r = g = b = row[x]
+                    else: continue
+                elif ctype == 4: # Grayscale + Alpha
+                    px = x * 2
+                    if px + 1 < len(row):
+                        r = g = b = row[px]
+                        if row[px+1] < 30: continue
+                    else: continue
                 else: continue
 
                 if (r_min <= r <= r_max and g_min <= g <= g_max and b_min <= b <= b_max):
@@ -241,7 +258,7 @@ class GESUTClient:
             
             response = await loop.run_in_executor(
                 None,
-                lambda: requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}, timeout=10, verify=False)
+                lambda: requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}, timeout=10)
             )
 
             response.raise_for_status()
@@ -250,6 +267,7 @@ class GESUTClient:
                 return {"ok": False, "error": "WMS returned non-image"}
 
             pixels = self._extract_colored_pixels(response.content, color_filter)
+            logger.info(f"GESUT: {layer_name} found {len(pixels)} pixels in BBOX")
             
             if not pixels:
                 return {"ok": True, "line_length_m": 0, "objects": 0, "coordinates": []}
@@ -277,15 +295,67 @@ class GESUTClient:
             logger.error(f"GESUT WMS error: {e}")
             return {"ok": False, "error": str(e)}
 
+    async def get_feature_info(self, layers: str, bbox: Tuple[float, float, float, float], x: int, y: int, width: int = 100, height: int = 100) -> Optional[str]:
+        """Try to get feature information (attributes)."""
+        e_min, n_min, e_max, n_max = bbox
+        url = (
+            f"{self.wms_url}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo"
+            f"&LAYERS={layers}&QUERY_LAYERS={layers}"
+            f"&BBOX={n_min},{e_min},{n_max},{e_max}"
+            f"&WIDTH={width}&HEIGHT={height}&I={x}&J={y}"
+            f"&CRS=EPSG:2180&INFO_FORMAT=text/html"
+        )
+        try:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, lambda: requests.get(url, timeout=5))
+            if response.status_code == 200:
+                return response.text
+        except Exception:
+            pass
+        return None
+
     async def fetch_infrastructure(self, bbox: Tuple[float, float, float, float]) -> Dict[str, Any]:
-        """Compatibility wrapper for Spec v2.1."""
+        """Compatibility wrapper for Spec v2.1 with enhanced detection."""
+        # 1. Step 1: Detect power lines
         res = await self.get_infrastructure_in_bbox("elektro", bbox)
+        
+        details = {"voltage": "unknown", "circuit_nr": None, "poles_count": 0, "device_coords": []}
+        
         if res.get("ok") and res.get("line_length_m", 0) > 0:
+            # Try to refine voltage via specific layers ONLY if using county WMS
+            if self.wms_url != NATIONAL_WMS:
+                voltage_layers = {"WN": "przewod_elektroenergetyczny_W", "SN": "przewod_elektroenergetyczny_S", "nN": "przewod_elektroenergetyczny_N"}
+                max_len = 0
+                for v, layer in voltage_layers.items():
+                    v_res = await self.get_infrastructure_in_bbox(layer, bbox, img_size=512)
+                    if v_res.get("ok") and v_res.get("line_length_m", 0) > max_len:
+                        max_len = v_res["line_length_m"]
+                        details["voltage"] = v
+            
+            # Try to find poles
+            poles_layers = ["urzadzenia", "urzadzenia_linia"]
+            all_device_coords = []
+            for lyr in poles_layers:
+                dev_res = await self.get_infrastructure_in_bbox(lyr, bbox, img_size=512)
+                if dev_res.get("ok"):
+                    all_device_coords.extend(dev_res.get("coordinates_epsg2180", []))
+            
+            if all_device_coords:
+                # Deduplicate close points roughly
+                details["poles_count"] = len(all_device_coords) // 5 # empirical avg pixels per pole icon
+                details["device_coords"] = all_device_coords
+
             return {
                 "ok": True,
                 "primary_type": "elektro",
                 "line_length_m": res["line_length_m"],
                 "coordinates": res.get("coordinates_epsg2180", []),
                 "objects": res.get("objects", 0),
+                "voltage": details["voltage"],
+                "circuit_nr": details["circuit_nr"],
+                "poles_count": details["poles_count"],
+                "device_coords": details["device_coords"],
+                "source": res.get("source")
             }
         return {"ok": True, "line_length_m": 0, "coordinates": []}

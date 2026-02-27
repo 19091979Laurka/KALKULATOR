@@ -35,11 +35,32 @@ class KIEGClient:
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(None, lambda: requests.get(self.WFS_URL, params=params, timeout=15))
             if response.status_code == 200:
-                data = response.json()
-                return data.get("features", [])
+                content_type = response.headers.get("Content-Type", "")
+                if "json" in content_type:
+                    data = response.json()
+                    return data.get("features", [])
+                else:
+                    try:
+                        # Fallback: simple GML parsing for ms:* features
+                        root = ET.fromstring(response.content)
+                        features = []
+                        # Standard WFS features are in members
+                        for member in root.findall('.//{http://www.opengis.net/gml/3.2}featureMember'):
+                            for item in member:
+                                props = {}
+                                for child in item:
+                                    tag = child.tag.split('}')[-1]
+                                    if tag != 'geom' and tag != 'geometry':
+                                        props[tag] = child.text
+                                features.append({"properties": props})
+                        return features
+                    except ET.ParseError as pe:
+                        logger.error(f"KIEG WFS XML Parse Error: {pe}. Response start: {response.text[:200]}")
+                        return []
         except Exception as e:
             logger.error(f"KIEG WFS Error (layer={type_name}): {e}")
         return []
+
 
     async def get_buildings(self, bbox_2180: tuple) -> List[Dict[str, Any]]:
         """Pobiera obrysy budynków."""

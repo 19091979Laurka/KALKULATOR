@@ -11,11 +11,18 @@ logger = logging.getLogger(__name__)
 _uldk = ULDKClient()
 
 
-async def fetch_terrain(parcel_id: str, lon: Optional[float] = None, lat: Optional[float] = None) -> Dict[str, Any]:
+async def fetch_terrain(
+    parcel_id: str, 
+    lon: Optional[float] = None, 
+    lat: Optional[float] = None,
+    county: Optional[str] = None,
+    municipality: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Pobiera cechy terenu dla działki.
-    parcel_id: format TERYT.OBREB.NR np. "061802_2.0004.109"
+    parcel_id: TERYT ID lub numer działki.
     """
+
     result = {
         "parcel_id": parcel_id,
         "area_m2": None,
@@ -35,8 +42,33 @@ async def fetch_terrain(parcel_id: str, lon: Optional[float] = None, lat: Option
     }
 
     try:
+        # 1. Próba bezpośrednia (TERYT ID)
         raw = _uldk.get_parcel_by_id(parcel_id)
+        
+        # 2. Jeśli nie znaleziono, a mamy dane adresowe -> szukamy po numerze
+        if not raw and (municipality or county):
+            # Próbujemy różnych kombinacji nazwy jednostki + numeru
+            candidates = []
+            if municipality:
+                candidates.append(f"{municipality} {parcel_id}")
+            if county and municipality:
+                candidates.append(f"{county} {municipality} {parcel_id}")
+            if county:
+                candidates.append(f"{county} {parcel_id}")
+
+            for query in candidates:
+                try:
+                    logger.info(f"Trying ULDK search: {query}")
+                    raw = _uldk.get_parcel_by_id_or_nr(query)
+                    if raw:
+                        logger.info(f"Found parcel via: {query}")
+                        break
+                except Exception as ex:
+                    logger.debug(f"Search candidate failed ({query}): {ex}")
+
+
         if raw:
+            result["parcel_id"] = raw.get("teryt") or parcel_id
             result["geometry"] = raw.get("geometry")
             result["voivodeship"] = raw.get("voivodeship")
             result["county"] = raw.get("county")
@@ -54,6 +86,7 @@ async def fetch_terrain(parcel_id: str, lon: Optional[float] = None, lat: Option
                     result["centroid"] = centroid
 
             result["ok"] = True
+
     except Exception as e:
         logger.error(f"terrain.fetch_terrain error: {e}")
 

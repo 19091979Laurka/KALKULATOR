@@ -36,13 +36,29 @@ class ULDKClient:
             'srid': '4326'
         }
         try:
-            print(f"DEBUG: ULDK Fetching {parcel_id} from {self.BASE_URL}")
             response = requests.get(self.BASE_URL, params=params, timeout=15)
-            print(f"DEBUG: ULDK Status {response.status_code}, Length: {len(response.text)}")
             response.raise_for_status()
             return self._parse_response(response.text, parcel_id)
         except Exception as e:
             logger.error(f"ULDK GetParcelById Error: {e}")
+            return None
+
+    def get_parcel_by_id_or_nr(self, search_str: str) -> Optional[Dict]:
+        """
+        Pobierz działkę po ID lub nazwie jednostki + numerze (np. 'Baboszewo 74/4')
+        """
+        params = {
+            'request': 'GetParcelByIdOrNr',
+            'id': search_str,
+            'result': 'geom_wkt,teryt,voivodeship,county,commune,region,parcel',
+            'srid': '4326'
+        }
+        try:
+            response = requests.get(self.BASE_URL, params=params, timeout=15)
+            response.raise_for_status()
+            return self._parse_response(response.text, None)
+        except Exception as e:
+            logger.error(f"ULDK GetParcelByIdOrNr Error: {e}")
             return None
 
     async def fetch_parcel_geometry(self, nr_dzialki: str, woj: str = "", pow: str = "", gmi: str = "", obreb_nr: str = "") -> Dict:
@@ -129,7 +145,7 @@ class ULDKClient:
         if not lines:
             return None
             
-        if lines[0] != '0':
+        if lines[0] not in ('0', '1'):
             logger.error(f"ULDK API Error status: {lines[0]}")
             return None
             

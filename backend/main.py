@@ -2,21 +2,17 @@
 KALKULATOR — Kalkulator Roszczeń Odszkodowawczych Przesyłowych
 FastAPI backend: API + serwowanie frontend/index.html
 """
-import asyncio
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend.modules.terrain import fetch_terrain
-from backend.modules.planning import fetch_planning
-from backend.modules.infrastructure import fetch_infrastructure
-from backend.modules.calculator import calculate_valuation
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,8 +26,11 @@ FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
 class AnalyzeRequest(BaseModel):
     parcel_ids: str                     # np. "061802_2.0004.109" lub "109, 110"
-    infra_type: str = "elektro_SN"      # typ infrastruktury (domyślny)
-    years_unauthorized: int = 10        # lata bezumownego korzystania (domyślny)
+    county: Optional[str] = None        # np. "płoński"
+    municipality: Optional[str] = None  # np. "Baboszewo"
+    infra_type: str = "elektro_SN"
+    years_unauthorized: int = 10
+
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
@@ -56,7 +55,6 @@ async def analyze(req: AnalyzeRequest):
     Zwraca Property_Master_Record dla każdej działki.
     """
     from backend.modules.property import PropertyAggregator
-    from backend.modules.calculator import calculate_valuation
     
     aggregator = PropertyAggregator()
     ids = [i.strip() for i in req.parcel_ids.replace("\n", ",").split(",") if i.strip()]
@@ -65,29 +63,17 @@ async def analyze(req: AnalyzeRequest):
     for pid in ids:
         try:
             # 1. Agregacja danych (14 punktów) -> Master JSON Record
-            master_record = await aggregator.generate_master_record(pid, req.infra_type)
-            
-            # 2. Silnik wyceny KSWS (korzysta z Master Record)
-            # Adaptacja: przekazujemy dane z master_record
-            geom = master_record["geometry"]
-            infra = master_record["infrastructure"]["power"]
-            
-            valuation = await calculate_valuation(
-                lon=geom["centroid_ll"][0],
-                lat=geom["centroid_ll"][1],
-                area_m2=geom["area_m2"],
-                infra_type=req.infra_type,
-                infra_length_m=infra["line_length_m"] or 0.0,
-                strefa_m=infra["buffer_zone_m"] or 10,
-                teryt=pid.replace("_", "").replace(".", "")[:6],
-                years_unauthorized=req.years_unauthorized,
+            master_record = await aggregator.generate_master_record(
+                pid, 
+                req.infra_type,
+                county=req.county,
+                municipality=req.municipality
             )
 
-            # 3. Złożenie finalnej odpowiedzi
+            # 2. Złożenie finalnej odpowiedzi (BEZ WYCENY)
             res = {
                 "parcel_id": pid,
-                "master_record": master_record,
-                "valuation": valuation
+                "master_record": master_record
             }
             results.append(res)
         except Exception as e:
@@ -102,7 +88,7 @@ async def analyze(req: AnalyzeRequest):
     return {
         "summary": {
             "count": len(results),
-            "timestamp": "2026-02-27T11:34:00Z"
+            "timestamp": datetime.now(timezone.utc).isoformat()
         },
         "parcels": results
     }

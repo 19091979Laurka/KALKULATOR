@@ -4,9 +4,10 @@ Moduł: Ograniczenia formalnoprawne
 - Plan ogólny gminy
 - Studium uwarunkowań i kierunków zagospodarowania przestrzennego
 """
+import asyncio
 import logging
 import requests
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -67,10 +68,11 @@ async def fetch_planning(lon: float, lat: float) -> Dict[str, Any]:
     }
 
     bbox = _make_bbox(lon, lat)
+    loop = asyncio.get_event_loop()
 
     # --- MPZP ---
     try:
-        features = _wfs_get_features(PLANNING_WFS, "mpzp:pzp_obszar", bbox)
+        features = await loop.run_in_executor(None, lambda: _wfs_get_features(PLANNING_WFS, "mpzp:pzp_obszar", bbox))
         if features:
             props = features[0].get("properties", {})
             result["mpzp"] = {
@@ -86,7 +88,7 @@ async def fetch_planning(lon: float, lat: float) -> Dict[str, Any]:
 
     # --- Plan ogólny gminy ---
     try:
-        features = _wfs_get_features(PLAN_OGOLNY_WFS, "po:plan_ogolny", bbox)
+        features = await loop.run_in_executor(None, lambda: _wfs_get_features(PLAN_OGOLNY_WFS, "po:plan_ogolny", bbox))
         if features:
             props = features[0].get("properties", {})
             result["plan_ogolny"] = {
@@ -99,7 +101,7 @@ async def fetch_planning(lon: float, lat: float) -> Dict[str, Any]:
 
     # --- Studium ---
     try:
-        features = _wfs_get_features(PLANNING_WFS, "mpzp:studium_obszar", bbox)
+        features = await loop.run_in_executor(None, lambda: _wfs_get_features(PLANNING_WFS, "mpzp:studium_obszar", bbox))
         if features:
             props = features[0].get("properties", {})
             result["studium"] = {
