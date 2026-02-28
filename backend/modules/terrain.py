@@ -5,10 +5,27 @@ Moduł: Cechy terenu
 """
 import logging
 from typing import Dict, Any, Optional
+import math
+import requests
 from backend.integrations.uldk import ULDKClient
 
 logger = logging.getLogger(__name__)
 _uldk = ULDKClient()
+
+def _resolve_with_nominatim(address: str) -> Optional[Dict]:
+    """Próba znalezienia działki przez geokodowanie adresu w Nominatim i odwrotne szukanie w ULDK."""
+    try:
+        url = "https://nominatim.openstreetmap.org/search"
+        params = {'q': address, 'format': 'json', 'limit': 1}
+        headers = {'User-Agent': 'kalkulator/1.0'}
+        r = requests.get(url, params=params, headers=headers, timeout=10)
+        data = r.json()
+        if data:
+            lat, lon = float(data[0]['lat']), float(data[0]['lon'])
+            return _uldk.search_by_coords(lon, lat)
+    except Exception as e:
+        logger.warning(f"Nominatim lookup failed: {e}")
+    return None
 
 
 async def fetch_terrain(
@@ -47,24 +64,41 @@ async def fetch_terrain(
         
         # 2. Jeśli nie znaleziono, a mamy dane adresowe -> szukamy po numerze
         if not raw and (municipality or county):
-            # Próbujemy różnych kombinacji nazwy jednostki + numeru
             candidates = []
-            if municipality:
-                candidates.append(f"{municipality} {parcel_id}")
-            if county and municipality:
-                candidates.append(f"{county} {municipality} {parcel_id}")
-            if county:
-                candidates.append(f"{county} {parcel_id}")
+            
+            # Najpierw spróbujmy mądrzej z geokodowaniem Nominatim dla dokładnych fraz (np "Cieszkowo Kolonia")
+            address_query = f"{municipality}, {county}" if county else f"{municipality}"
+            raw = _resolve_with_nominatim(address_query)
+            
+            if raw:
+                # Jeśli trafiliśmy gdzieś w obręb, wydobądźmy ID obrębu i połączmy z numerem działki
+                teryt = raw.get("teryt")
+                if teryt:
+                    obreb = teryt.rsplit('.', 1)[0]
+                    target_id = f"{obreb}.{parcel_id}"
+                    logger.info(f"Nominatim mapped to obreb: {obreb}, testing target: {target_id}")
+                    raw_target = _uldk.get_parcel_by_id(target_id)
+                    if raw_target:
+                        raw = raw_target
+                    else:
+                        # Może ułamek z '/' był zapisany URL-encode albo myślnikiem, ale powiedzmy że target_id to first guess
+                        raw = None # fallback into full text search 
 
-            for query in candidates:
-                try:
-                    logger.info(f"Trying ULDK search: {query}")
-                    raw = _uldk.get_parcel_by_id_or_nr(query)
-                    if raw:
-                        logger.info(f"Found parcel via: {query}")
-                        break
-                except Exception as ex:
-                    logger.debug(f"Search candidate failed ({query}): {ex}")
+            # Jesli nadal nic, robimy fallback na stare candidates
+            if not raw:
+                if municipality: candidates.append(f"{municipality} {parcel_id}")
+                if county and municipality: candidates.append(f"{county} {municipality} {parcel_id}")
+                if county: candidates.append(f"{county} {parcel_id}")
+    
+                for query in candidates:
+                    try:
+                        logger.info(f"Trying ULDK search: {query}")
+                        raw = _uldk.get_parcel_by_id_or_nr(query)
+                        if raw:
+                            logger.info(f"Found parcel via: {query}")
+                            break
+                    except Exception as ex:
+                        logger.debug(f"Search candidate failed ({query}): {ex}")
 
 
         if raw:
@@ -75,12 +109,17 @@ async def fetch_terrain(
             result["commune"] = raw.get("commune")
             result["region"] = raw.get("region")
 
-            # Oblicz powierzchnię z geometrii GeoJSON
+            # Oblicz dokładne parametry kształtu i powierzchni
             geom = raw.get("geometry")
             if geom:
-                area_m2 = _calc_area_m2(geom)
-                result["area_m2"] = round(area_m2, 1)
-                result["area_ha"] = round(area_m2 / 10000, 4)
+                shape_metrics = _calc_shape_metrics(geom)
+                result["area_m2"] = shape_metrics["area"]
+                result["area_ha"] = round(shape_metrics["area"] / 10000, 4)
+                result["perimeter_m"] = shape_metrics["perimeter"]
+                result["shape_coef"] = shape_metrics["shape_coef"]
+                result["shape_class"] = shape_metrics["shape_class"]
+                result["segments"] = shape_metrics["segments"]
+                
                 centroid = _calc_centroid(geom)
                 if centroid:
                     result["centroid"] = centroid
@@ -105,24 +144,61 @@ async def fetch_terrain(
     return result
 
 
-def _calc_area_m2(geojson: Dict) -> float:
-    """Przybliżone pole w m² dla Polski (EPSG:4326)."""
+def _calc_shape_metrics(geojson: Dict) -> Dict:
+    """Dokładne obliczenia geometryczne (metry, wzór Surveyor, geodezyjne odległości)."""
+    empty = {"area": 0.0, "perimeter": 0.0, "shape_coef": 0.0, "shape_class": "brak", "segments": []}
     try:
         coords = geojson.get("coordinates", [[]])[0]
         if not coords or len(coords) < 3:
-            return 0.0
-        # Shoelace formula na stopniach → przeliczenie na m²
-        n = len(coords)
-        area_deg = 0.0
-        for i in range(n):
-            j = (i + 1) % n
-            area_deg += coords[i][0] * coords[j][1]
-            area_deg -= coords[j][0] * coords[i][1]
-        area_deg = abs(area_deg) / 2.0
-        # Dla Polski ~52°N: 1°lat = 111120m, 1°lon = 68500m
-        return area_deg * 111120.0 * 68500.0
-    except Exception:
-        return 0.0
+            return empty
+            
+        avg_lat = sum(p[1] for p in coords) / len(coords)
+        cos_lat = math.cos(math.radians(avg_lat))
+        
+        area_m2 = 0.0
+        perimeter_m = 0.0
+        distances = []
+        
+        local_coords = []
+        for lon, lat in coords:
+            x = math.radians(lon) * 6371000 * cos_lat
+            y = math.radians(lat) * 6371000
+            local_coords.append((x, y))
+            
+        for i in range(len(local_coords) - 1):
+            x1, y1 = local_coords[i]
+            x2, y2 = local_coords[i+1]
+            area_m2 += x1 * y2 - x2 * y1
+            dist = math.hypot(x2 - x1, y2 - y1)
+            perimeter_m += dist
+            distances.append({
+                "from": f"A{i}",
+                "to": f"A{i+1}",
+                "lat": round(coords[i][1], 8),
+                "lon": round(coords[i][0], 8),
+                "distance_m": round(dist, 2)
+            })
+            
+        area_m2 = abs(area_m2) / 2.0
+        
+        dzialki360_shape = 0
+        if area_m2 > 0 and perimeter_m > 0:
+            dzialki360_shape = round((4 * math.pi * area_m2) / (perimeter_m * perimeter_m), 2)
+            
+        shape_class = "średni"
+        if dzialki360_shape > 0.8: shape_class = "korzystny"
+        elif dzialki360_shape < 0.5: shape_class = "niekorzystny"
+        
+        return {
+            "area": round(area_m2, 2),
+            "perimeter": round(perimeter_m, 2),
+            "shape_coef": dzialki360_shape,
+            "shape_class": shape_class,
+            "segments": distances
+        }
+    except Exception as e:
+        logger.error(f"Shape metrics calc error: {e}")
+        return empty
 
 
 def _calc_centroid(geojson: Dict) -> Optional[Dict[str, float]]:

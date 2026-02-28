@@ -86,6 +86,10 @@ class PropertyAggregator:
 
             "geometry": {
                 "area_m2": terrain.get("area_m2"),
+                "perimeter_m": terrain.get("perimeter_m"),
+                "shape_coef": terrain.get("shape_coef"),
+                "shape_class": terrain.get("shape_class"),
+                "segments": terrain.get("segments", []),
                 "geojson_ll": terrain.get("geometry"),
                 "bbox_2180": list(bbox_2180) if bbox_2180 else None,
                 "centroid_ll": [lon, lat]
