@@ -22,8 +22,9 @@ FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
 class AnalyzeRequest(BaseModel):
     parcel_ids: str
-    county: Optional[str] = None
-    municipality: Optional[str] = None
+    obreb: Optional[str] = None        # obręb ewidencyjny (np. "Cieszkowo Kolonia") — wymagany dla GetParcelByIdOrNr
+    county: Optional[str] = None       # powiat — pomocniczo
+    municipality: Optional[str] = None # gmina — pomocniczo (NIE jest obrebem!)
     infra_type_pref: str = "elektro_SN"
 
 @app.get("/")
@@ -46,10 +47,11 @@ async def analyze(req: AnalyzeRequest):
         try:
             # Agregacja z zachowaniem statusu REAL/TEST/ERROR
             master_record = await aggregator.generate_master_record(
-                pid, 
+                pid,
                 req.infra_type_pref,
+                obreb=req.obreb,
                 county=req.county,
-                municipality=req.municipality
+                municipality=req.municipality,
             )
             
             results.append({

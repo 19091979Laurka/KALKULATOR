@@ -1,0 +1,41 @@
+# ZASADY WSPÓŁPRACY AI — PROJEKT KALKULATOR (v3.0)
+
+## GŁÓWNA ZASADA: ZERO DOMYSŁÓW (REAL DATA ONLY)
+1. **ZAKAZ SYNTETYCZNYCH DANYCH:** AI nie ma prawa zmyślać powierzchni, wymiarów ani współrzędnych "dla testów". Jeśli API nie zwraca danych, system ma zwrócić błąd lub status "BRAK".
+2. **JAWNOŚĆ STATUSU:** Każdy wynik musi informować o swoim pochodzeniu (REAL / TEST / ERROR).
+3. **BŁĄD ZAMIAST DOMYSŁU:** Lepiej zwrócić błąd niż "bezpieczne przybliżenie" (np. 1000m2).
+
+## KRYTYCZNE ZASADY TECHNICZNE (GIS / GUGiK)
+
+### WMS 1.3.0 - Kolejność BBOX (EPSG:2180)
+- Kolejność osi: E,N,E,N (Easting, Northing)
+- BŁĄD: N,E,N,E — skutkuje pustymi kafelkami
+- POPRAWNIE: `&BBOX=E_min,N_min,E_max,N_max`
+
+### Raster vs Wektor (Zasada 7.B)
+- WMS to tylko obrazek — wyciąganie długości linii z pikseli to szacunek, nie pomiar
+- ZAKAZ liczenia długości z pikseli
+- Jeśli brak wektora WFS/GML → `line_length_m: 0.0` + info "Brak danych wektorowych"
+
+### Obsługa błędów GUGiK (Zasada 7.C)
+- Serwery GUGiK zwracają HTTP 200 nawet przy błędzie
+- ZAWSZE weryfikuj Content-Type — jeśli nie `image/png`, parsuj XML `<ServiceExceptionReport>`
+
+### Integracja ULDK (Działki) — formaty wejściowe
+- GetParcelByIdOrNr wymaga: "NAZWA_OBREBU NR_DZIALKI" (np. "Cieszkowo Kolonia 74/4")
+- BŁĄD: "Baboszewo 74/4" — Baboszewo to GMINA, nie OBRĘB ewidencyjny → ULDK zwróci brak wyników
+- Pełny TERYT (np. "140601_2.0004.74/4") → GetParcelById — zawsze najbardziej wiarygodny
+- Pole `obreb` w żądaniu API jest kluczowe gdy nie ma pełnego TERYT
+- Jeśli działka nie istnieje w ULDK — zwróć błąd, nie twórz jej w pamięci
+
+## LISTA GRZECHÓW AI (DO UNIKNIĘCIA)
+- Mówienie "działa" bez sprawdzenia realnej odpowiedzi z serwera
+- Używanie "magic numbers" (np. mnożnik 2.8 do długości linii)
+- Ukrywanie błędów API za domyślnymi wartościami
+- Usuwanie plików bez sprawdzenia czy są importowane przez inne moduły
+
+## ARCHITEKTURA
+- Backend: FastAPI Python 3.13
+- `backend/modules/property.py` — główny agregator danych
+- `backend/integrations/` — klienty API: uldk, uldk_fixed, gesut, kieg, gunb, rcn_gugik, gus_fixed, pit
+- Frontend: `frontend-react/` — ArchitectUI React 19 + Vite 7 + Bootstrap 5

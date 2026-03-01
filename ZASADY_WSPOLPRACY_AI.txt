@@ -1,0 +1,37 @@
+# ZASADY WSPÓŁPRACY AI - PROJEKT KALKULATOR (v3.0)
+
+Ten plik jest JEDYNYM źródłem prawdy dla Agenta AI. Wszystkie inne pliki instrukcji są nieważne.
+
+## 🚨 GŁÓWNA ZASADA: ZERO DOMYSŁÓW (REAL DATA ONLY)
+1. **ZAKAZ SYNTETYCZNYCH DANYCH:** AI nie ma prawa zmyślać powierzchni, wymiarów ani współrzędnych "dla testów". Jeśli API nie zwraca danych, system m_a_ zwrócić błąd lub status "BRAK".
+2. **JAWNOŚĆ STATUSU:** Każdy wynik musi informować o swoim pochodzeniu (REAL / TEST / ERROR).
+3. **BŁĄD ZAMIAST DOMYSŁU:** Lepiej zwrócić błąd niż "bezpieczne przybliżenie" (np. 1000m2).
+
+## 🛠 KRYTYCZNE ZASADY TECHNICZNE (GIS / GUGiK)
+
+### 1. WMS 1.3.0 - Kolejność BBOX (EPSG:2180)
+- **Kolejność Osi:** Dla układu 1992 (EPSG:2180) w wersji WMS 1.3.0 kolejność to **E,N,E,N** (Easting, Northing).
+- **BŁĄD:** N,E,N,E (kolejność geograficzna) skutkuje pustymi kafelkami.
+- **POPRAWNIE:** `&BBOX=E_min,N_min,E_max,N_max`.
+
+### 2. Raster vs Wektor (Zasada 7.B)
+- **WMS to tylko obrazek:** Wyciąganie długości linii (np. kabla energetycznego) z pikseli to tylko **szacunek**, a nie pomiar.
+- **ZAKAZ LICZENIA DŁUGOŚCI Z PIKSELI:** W Spec v3.0 usuwamy algorytmy "liczenia kroków po pikselach". Jeśli nie ma wektora WFS/GML, długość ma wynosić 0.0 z dopiskiem "Brak danych wektorowych".
+
+### 3. Obsługa błędów GUGiK (Zasada 7.C)
+- **Problem HTTP 200:** Serwery GUGiK często zwracają kod 200 nawet przy błędzie (zamiast obrazka wysyłają XML z błędem).
+- **WERYFIKACJA:** Każde zapytanie musi sprawdzać `Content-Type`. Jeśli nie jest to `image/png`, należy sparsować XML `<ServiceExceptionReport>`.
+
+### 4. Integracja ULDK (Działki)
+- **NAZWA + NUMER:** Przy wyszukiwaniu po nazwie (np. "Baboszewo 74/4") system musi najpierw pobrać TERYT jednostki, a potem zapytać o działkę.
+- **STATUS:** Jeśli działka nie istnieje w ULDK, Agent nie ma prawa jej "utworzyć" w pamięci.
+
+---
+
+## 🚫 LISTA GRZECHÓW AI (DO UNIKNIĘCIA)
+- Mówienie "działa", gdy testy nie sprawdziły realnej odpowiedzi z serwera (np. sprawdziły tylko status 200).
+- Używanie "magic numbers" (np. mnożnik 2.8 do długości linii).
+- Ukrywanie błędów API za domyślnymi wartościami (fallbackami).
+
+Data ostatniej aktualizacji: 2026-02-28
+Wszystkie przyszłe modyfikacje muszą być zgodne z tymi punktami.

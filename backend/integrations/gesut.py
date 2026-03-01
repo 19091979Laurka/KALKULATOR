@@ -11,7 +11,6 @@ ZASADY:
 import logging
 import requests
 from typing import Dict, Any, List, Optional, Tuple
-from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -175,8 +174,6 @@ class GESUTClient:
                 }
 
             # Get feature info for attributes
-            e_mid = (bbox[0] + bbox[2]) / 2
-            n_mid = (bbox[1] + bbox[3]) / 2
             feature_info = await self._get_feature_info(layers, bbox, 256, 256)
             
             # Determine if infrastructure is detected
@@ -282,24 +279,44 @@ class GESUTClient:
         
         return "nieznane"
 
+    # Mapowanie klucza medium na warstwę WMS KIUT
+    _LAYER_MAP = {
+        "elektro": "przewod_elektroenergetyczny",
+        "gaz":     "przewod_gazowy",
+        "woda":    "przewod_wodociagowy",
+        "kanal":   "przewod_kanalizacyjny",
+        "cieplo":  "przewod_cieplowniczy",
+    }
+
     async def get_infrastructure_in_bbox(self, layer_key: str, bbox: Tuple) -> Dict[str, Any]:
         """
-        Check infrastructure presence in bounding box.
-        
+        Sprawdź obecność konkretnego medium w BBOX.
+
         Args:
-            layer_key: Layer identifier (unused in this implementation)
-            bbox: Bounding box coordinates
-        
+            layer_key: Klucz medium: "elektro", "gaz", "woda", "kanal", "cieplo"
+            bbox: Bounding box w EPSG:2180
+
         Returns:
-            Dict with infrastructure detection results
+            Dict z wynikiem detekcji dla wybranej warstwy
         """
-        # Input validation
         if not layer_key or not isinstance(layer_key, str):
-            return {
-                "ok": False,
-                "error": "Invalid layer_key. Expected non-empty string",
-                "status": "ERROR"
-            }
-        
-        # This replaces the pixel-counting logic with a simple presence check
-        return await self.fetch_infrastructure(bbox)
+            return {"ok": False, "error": "Invalid layer_key", "status": "ERROR"}
+
+        layer = self._LAYER_MAP.get(layer_key)
+        if not layer:
+            return {"ok": False, "error": f"Unknown layer_key: {layer_key!r}", "status": "ERROR"}
+
+        if not await self.validate_service():
+            return {"ok": False, "error": f"WMS service unavailable", "status": "ERROR"}
+
+        try:
+            url = self._build_getmap_url(layer, bbox, 256, 256)
+            r = requests.get(url, timeout=15, headers={"User-Agent": "Kalkulator-KIUT/3.0"})
+            if r.status_code != 200:
+                return {"ok": False, "error": f"WMS status {r.status_code}", "status": "ERROR"}
+            detected = len(r.content) > 5000
+            return {"ok": True, "status": "REAL", "detected": detected, "layer": layer}
+        except requests.exceptions.Timeout:
+            return {"ok": False, "error": "Timeout", "status": "TIMEOUT"}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "status": "ERROR"}

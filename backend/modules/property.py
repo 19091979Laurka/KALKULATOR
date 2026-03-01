@@ -8,7 +8,6 @@ from typing import Dict, Any, Optional
 
 from backend.integrations.uldk import ULDKClient
 from backend.integrations.kieg import KIEGClient
-from backend.integrations.gesut import GESUTClient
 from backend.integrations.gunb import GUNBClient
 from backend.integrations.rcn_gugik import GUGikRCNClient
 from backend.integrations.gus_fixed import GUSClientFixed
@@ -27,18 +26,19 @@ class PropertyAggregator:
         self.gus = GUSClientFixed()
 
     async def generate_master_record(
-        self, 
-        parcel_id: str, 
+        self,
+        parcel_id: str,
         infra_type_pref: str = "elektro_SN",
+        obreb: Optional[str] = None,
         county: Optional[str] = None,
-        municipality: Optional[str] = None
+        municipality: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Główna logika agregacji 14 punktów danych.
         ZASADA 2: Jawność statusu danych.
         """
         # 1. Start: Podstawowa geometria (ULDK)
-        terrain = await fetch_terrain(parcel_id, county=county, municipality=municipality)
+        terrain = await fetch_terrain(parcel_id, obreb=obreb, county=county, municipality=municipality)
         
         # Jeśli nawet podstawowa geometria nie pochodzi z ULDK, przerywamy (Zasada 6)
         if not terrain.get("ok") or terrain.get("status") != "REAL":
