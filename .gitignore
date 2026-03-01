@@ -6,3 +6,7 @@ venv/
 debug_apis.py
 test_uldk.py
 test_results.json
+
+# React frontend (ArchitectUI)
+frontend-react/node_modules
+frontend-react/build
