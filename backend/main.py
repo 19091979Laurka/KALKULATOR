@@ -1,107 +1,85 @@
 """
 KALKULATOR — Kalkulator Roszczeń Odszkodowawczych Przesyłowych
-FastAPI backend: API + serwowanie frontend/index.html
+Spec v3.0 (Strict Real Data Policy)
 """
 import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
-
+from typing import Optional, List
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-
 from backend.modules.terrain import fetch_terrain
+from backend.modules.property import PropertyAggregator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Kalkulator Roszczeń Przesyłowych", version="1.0.0")
+app = FastAPI(title="Kalkulator Roszczeń (Spec 3.0)", version="3.0.0")
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
-
-# ── Modele żądania / odpowiedzi ───────────────────────────────────────────────
-
 class AnalyzeRequest(BaseModel):
-    parcel_ids: str                     # np. "061802_2.0004.109" lub "109, 110"
-    county: Optional[str] = None        # np. "płoński"
-    municipality: Optional[str] = None  # np. "Baboszewo"
-    infra_type: str = "elektro_SN"
-    years_unauthorized: int = 10
-
-
-# ── Endpoints ─────────────────────────────────────────────────────────────────
+    parcel_ids: str
+    county: Optional[str] = None
+    municipality: Optional[str] = None
+    infra_type_pref: str = "elektro_SN"
 
 @app.get("/")
 async def index():
-    """Serwuje stronę główną."""
     html_file = FRONTEND_DIR / "index.html"
-    if html_file.exists():
-        return FileResponse(html_file)
-    return {"message": "KALKULATOR API — brak frontend/index.html"}
-
-
-@app.get("/health")
-async def health():
-    return {"status": "ok", "service": "kalkulator"}
-
+    if html_file.exists(): return FileResponse(html_file)
+    return {"message": "KALKULATOR API v3.0 — BRAK FRONTENDU"}
 
 @app.post("/api/analyze")
 async def analyze(req: AnalyzeRequest):
     """
-    Główny endpoint analizy działek (Spec v3.0 - Architecture: Only Logic).
-    Zwraca Property_Master_Record dla każdej działki.
+    Główny endpoint analizy dzialek.
+    Zapewnia jawność pochodzenia danych (Rule 2).
     """
-    from backend.modules.property import PropertyAggregator
-    
     aggregator = PropertyAggregator()
     ids = [i.strip() for i in req.parcel_ids.replace("\n", ",").split(",") if i.strip()]
     results = []
 
     for pid in ids:
         try:
-            # 1. Agregacja danych (14 punktów) -> Master JSON Record
+            # Agregacja z zachowaniem statusu REAL/TEST/ERROR
             master_record = await aggregator.generate_master_record(
                 pid, 
-                req.infra_type,
+                req.infra_type_pref,
                 county=req.county,
                 municipality=req.municipality
             )
-
-            # 2. Złożenie finalnej odpowiedzi (BEZ WYCENY)
-            res = {
+            
+            results.append({
                 "parcel_id": pid,
+                "data_status": master_record.get("status", "REAL"),
                 "master_record": master_record
-            }
-            results.append(res)
+            })
         except Exception as e:
-            logger.error(f"Błąd analizy działki {pid}: {e}")
-
-    if not results:
-        raise HTTPException(
-            status_code=404,
-            detail="Nie znaleziono żadnej z podanych działek lub błąd agregacji danych."
-        )
+            logger.error(f"Błąd analizy {pid}: {e}")
+            results.append({
+                "parcel_id": pid,
+                "data_status": "ERROR",
+                "error": str(e)
+            })
 
     return {
         "summary": {
             "count": len(results),
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "policy": "STRICT REAL DATA ONLY (Spec 3.0)"
         },
         "parcels": results
     }
 
-
 @app.get("/api/parcel/{parcel_id}")
-async def get_parcel(parcel_id: str):
-    """Pobierz tylko dane geometryczne działki (podgląd przed analizą)."""
+async def get_parcel_preview(parcel_id: str):
+    """Szybki podgląd tylko z ULDK (Rule 6)."""
     terrain = await fetch_terrain(parcel_id)
     return terrain
 
-
-# ── Uruchomienie lokalne ───────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8080))

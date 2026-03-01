@@ -1,0 +1,28 @@
+// Fixed Header
+
+.fixed-footer {
+  .app-footer {
+    position: fixed;
+    width: 100%;
+    bottom: 0;
+    left: 0;
+    z-index: 7;
+
+    .app-footer__inner {
+      margin-left: $app-sidebar-width;
+      box-shadow: 0 -2px 15px rgba(shade-color($primary, 50%), .05);
+    }
+  }
+
+  .app-main .app-main__outer {
+    padding-bottom: $app-header-height;
+  }
+
+  &.closed-sidebar {
+    .app-footer {
+      .app-footer__inner {
+        margin-left: $app-sidebar-width-collapsed !important;
+      }
+    }
+  }
+}

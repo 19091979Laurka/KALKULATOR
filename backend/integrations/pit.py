@@ -22,13 +22,12 @@ class PITClient:
             "buffer": 50 # metrów
         }
         try:
-            # Wersja REST API / WFS
-            # mockowany wynik dla stabilności logicznej
+            # Rule 1 & 3: Returning ERROR instead of mock data
             return {
-                "fiber_ready": True,
-                "node_distance_m": 45.0,
-                "operators": ["Orange", "Nexera"],
-                "ok": True
+                "fiber_ready": False,
+                "node_distance_m": None,
+                "status": "ERROR",
+                "message": "UKE PIT API integration inactive"
             }
         except Exception as e:
             logger.debug(f"PIT API Error: {e}")

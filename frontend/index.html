@@ -1,1150 +1,525 @@
 <!DOCTYPE html>
 <html lang="pl">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GEO-ANALYZE | Inteligentna Analiza Nieruchomości</title>
-
-  <!-- SEO -->
-  <meta name="description"
-    content="Zaawansowane narzędzie do automatycznej analizy działek i infrastruktury przesyłowej. Pobierz dane z ULDK, GUGiK i innych rejestrów w kilka sekund.">
-
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
-    rel="stylesheet">
-
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-
-  <!-- Icons -->
+  <title>Kalkulator Roszczeń | Dashboard</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
+    /* ColorHunt: https://colorhunt.co/palette/15133c73777dec994bf1eee9 */
     :root {
-      --primary: #FF6C4B;
-      --primary-dark: #E55A3D;
-      --primary-light: #FF8F76;
-      --secondary: #0F172A;
-      --bg-white: #FFFFFF;
-      --bg-light: #F8F9FA;
-      --text-dark: #1A1A1A;
-      --text-muted: #64748B;
-      --border: #E2E8F0;
-      --success: #28C76F;
-      --warning: #FF9F43;
-      --danger: #EA5455;
-      --shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
-      --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.02);
-      --radius: 12px;
-      --radius-lg: 24px;
+      --navy: #15133C;
+      --grey: #73777D;
+      --accent: #EC994B;
+      --cream: #F1EEE9;
+      --sidebar-bg: var(--navy);
+      --sidebar-width: 260px;
+      --topbar-bg: var(--cream);
+      --topbar-border: #e0ddd8;
+      --primary: var(--accent);
+      --primary-hover: #d9863a;
+      --body-bg: var(--cream);
+      --card-bg: #fff;
+      --text: var(--navy);
+      --text-muted: var(--grey);
+      --border: #e0ddd8;
+      --success: #2d8a5e;
+      --danger: #c0392b;
+      --shadow: 0 0.13rem 0.27rem rgba(21,19,60,.06);
+      --shadow-card: 0 0 0.87rem 0 rgba(21,19,60,.08);
     }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--body-bg); color: var(--text); min-height: 100vh; font-size: 0.9375rem; }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      background-color: var(--bg-white);
-      color: var(--text-dark);
-      line-height: 1.6;
-      overflow-x: hidden;
-    }
-
-    h1,
-    h2,
-    h3,
-    h4,
-    .font-heading {
-      font-family: 'Outfit', sans-serif;
-      font-weight: 700;
-    }
-
-    /* Navbar */
-    nav {
-      height: 80px;
+    .app-wrapper { display: flex; flex-direction: column; min-height: 100vh; }
+    .topbar {
+      height: 56px;
+      background: var(--topbar-bg);
+      border-bottom: 1px solid var(--topbar-border);
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      padding: 0 5%;
-      background: rgba(255, 255, 255, 0.8);
-      backdrop-filter: blur(10px);
-      position: sticky;
-      top: 0;
-      z-index: 1000;
-      border-bottom: 1px solid var(--border);
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      flex-shrink: 0;
+      z-index: 102;
     }
+    .topbar-brand { font-size: 1.2rem; font-weight: 700; color: var(--navy); display: flex; align-items: center; gap: 8px; }
+    .topbar-brand i { color: var(--primary); }
+    .topbar-right { display: flex; align-items: center; gap: 0.5rem; }
+    .topbar-right .icon-btn { width: 38px; height: 38px; border-radius: 0.375rem; border: none; background: rgba(0,0,0,.04); color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .topbar-right .icon-btn:hover { background: rgba(0,0,0,.08); color: var(--text); }
+    .topbar-user { font-size: 0.8125rem; color: var(--text-muted); display: flex; align-items: center; gap: 8px; padding-left: 0.5rem; }
 
-    .logo {
-      font-size: 1.5rem;
-      color: var(--secondary);
+    .wrapper-with-sidebar { display: flex; flex: 1; min-height: 0; }
+    .sidebar {
+      width: var(--sidebar-width);
+      min-width: var(--sidebar-width);
+      background: var(--sidebar-bg);
+      color: #8c9aad;
+      position: fixed;
+      top: 56px; left: 0; bottom: 0;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar-brand {
+      padding: 1.5rem 1.5rem;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #fff;
+      border-bottom: 1px solid rgba(255,255,255,.08);
       display: flex;
       align-items: center;
       gap: 10px;
-      text-decoration: none;
     }
-
-    .logo span {
-      color: var(--primary);
-    }
-
-    .nav-links {
+    .sidebar-brand i { color: var(--primary); }
+    .sidebar-section { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: rgba(255,255,255,.35); padding: 1rem 1.5rem 0.5rem; }
+    .sidebar-nav { padding: 0 0.75rem 1rem; }
+    .sidebar-section.second { padding-top: 0.5rem; }
+    .sidebar-nav a {
       display: flex;
-      gap: 30px;
-      list-style: none;
-    }
-
-    .nav-links a {
-      text-decoration: none;
-      color: var(--text-muted);
-      font-weight: 500;
-      transition: color 0.2s;
-    }
-
-    .nav-links a:hover {
-      color: var(--primary);
-    }
-
-    .nav-actions {
-      display: flex;
-      gap: 15px;
-    }
-
-    .btn {
-      padding: 10px 24px;
-      border-radius: 8px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      font-size: 0.95rem;
-      border: none;
-      display: inline-flex;
       align-items: center;
-      justify-content: center;
-      gap: 8px;
+      gap: 12px;
+      padding: 0.65rem 1rem;
+      border-radius: 0.375rem;
+      color: #8c9aad;
+      text-decoration: none;
+      font-size: 0.9375rem;
+      transition: background .15s, color .15s;
     }
+    .sidebar-nav a:hover { background: rgba(255,255,255,.06); color: #fff; }
+    .sidebar-nav a.active { background: rgba(236,153,75,.2); color: var(--accent); }
+    .sidebar-nav a i { width: 20px; text-align: center; opacity: .9; font-size: 1rem; }
 
-    .btn-primary {
-      background-color: var(--primary);
-      color: white;
-      box-shadow: 0 4px 14px rgba(255, 108, 75, 0.39);
-    }
-
-    .btn-primary:hover {
-      background-color: var(--primary-dark);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(255, 108, 75, 0.23);
-    }
-
-    .btn-outline {
-      background-color: transparent;
-      border: 1px solid var(--border);
-      color: var(--secondary);
-    }
-
-    .btn-outline:hover {
-      background-color: var(--bg-light);
-      border-color: var(--secondary);
-    }
-
-    /* Hero Section */
-    .hero {
-      padding: 100px 5% 60px;
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      align-items: center;
-      gap: 50px;
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-
-    .hero-content h1 {
-      font-size: 4rem;
-      line-height: 1.1;
-      margin-bottom: 24px;
-      background: linear-gradient(135deg, var(--secondary) 0%, #475569 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .hero-content p {
-      font-size: 1.25rem;
-      color: var(--text-muted);
-      margin-bottom: 40px;
-      max-width: 600px;
-    }
-
-    .hero-actions {
+    .main {
+      flex: 1;
+      margin-left: var(--sidebar-width);
+      margin-top: 0;
       display: flex;
-      gap: 20px;
-      margin-bottom: 40px;
+      flex-direction: column;
+      min-height: calc(100vh - 56px);
     }
-
-    .hero-illustration {
-      position: relative;
-    }
-
-    .hero-illustration img {
-      width: 100%;
-      height: auto;
-      border-radius: var(--radius-lg);
+    .main-header {
+      background: var(--card-bg);
+      padding: 1rem 1.5rem 1rem 2rem;
+      border-bottom: 1px solid var(--border);
       box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem;
     }
+    .main-header-left {}
+    .main-header .breadcrumb { font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 4px; }
+    .main-header .breadcrumb a { color: var(--primary); text-decoration: none; }
+    .main-header .breadcrumb a:hover { text-decoration: underline; }
+    .main-header h1 { font-size: 1.5rem; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 10px; }
+    .main-header h1 i { color: var(--primary); font-size: 1.25rem; }
+    .main-header p { font-size: 0.875rem; color: var(--text-muted); margin-top: 4px; }
+    .main-header-right { display: flex; align-items: center; gap: 0.5rem; }
+    .main-header-right .icon-btn { width: 36px; height: 36px; border-radius: 0.375rem; border: none; background: var(--body-bg); color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .main-header-right .icon-btn:hover { background: var(--border); color: var(--text); }
+    .main-header-right .user-menu { font-size: 0.8125rem; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
 
-    /* Search Container (Floating) */
-    .search-section {
-      margin-top: -40px;
-      padding: 0 5%;
-      position: relative;
-      z-index: 10;
+    .main-content { padding: 1.5rem 2rem; flex: 1; }
+    .card {
+      background: var(--card-bg);
+      border-radius: 0.5rem;
+      box-shadow: var(--shadow-card);
+      border: 1px solid var(--border);
+      margin-bottom: 1.5rem;
     }
+    .card-header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 1rem;
+    }
+    .card-body { padding: 1.25rem; }
 
-    .search-card {
-      background: var(--bg-white);
-      padding: 30px;
-      border-radius: var(--radius-lg);
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.08);
+    .form-row {
       display: grid;
       grid-template-columns: 2fr 1fr 1fr auto;
-      gap: 20px;
-      align-items: flex-end;
-      max-width: 1200px;
-      margin: 0 auto;
+      gap: 1rem;
+      align-items: end;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+    .form-group label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
+    .form-group input {
+      padding: 0.5rem 0.75rem;
       border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      font-size: 0.9375rem;
     }
-
-    .input-group {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .input-group label {
-      font-size: 0.8rem;
-      font-weight: 700;
-      color: var(--text-dark);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .input-group input {
-      padding: 14px 18px;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      font-family: inherit;
-      font-size: 1rem;
-      transition: all 0.2s;
-      outline: none;
-      background: var(--bg-light);
-    }
-
-    .input-group input:focus {
-      border-color: var(--primary);
-      background: white;
-      box-shadow: 0 0 0 4px rgba(255, 108, 75, 0.1);
-    }
-
-    .btn-search {
-      height: 52px;
-      padding: 0 32px;
-    }
-
-    /* Trust Section */
-    .trust-section {
-      padding: 80px 5% 40px;
-      text-align: center;
-    }
-
-    .trust-section p {
-      text-transform: uppercase;
-      font-weight: 700;
-      font-size: 0.8rem;
-      letter-spacing: 0.1em;
-      color: var(--text-muted);
-      margin-bottom: 30px;
-    }
-
-    .logos {
-      display: flex;
-      justify-content: center;
-      gap: 60px;
-      flex-wrap: wrap;
-      opacity: 0.6;
-      filter: grayscale(1);
-      transition: opacity 0.3s;
-    }
-
-    .logos:hover {
-      opacity: 1;
-      filter: none;
-    }
-
-    .logos i {
-      font-size: 2.5rem;
-    }
-
-    /* Results Dashboard Style */
-    .results-section {
-      padding: 60px 5%;
-      background: var(--bg-light);
-      min-height: 600px;
-    }
-
-    .results-container {
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-
-    .results-header {
-      margin-bottom: 30px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .parcel-card {
-      background: white;
-      border-radius: var(--radius-lg);
-      overflow: hidden;
-      box-shadow: var(--shadow);
-      display: grid;
-      grid-template-columns: 1fr 1.5fr;
-      min-height: 600px;
-      border: 1px solid var(--border);
-    }
-
-    .map-container {
-      width: 100%;
-      height: 100%;
-      min-height: 400px;
-      background: #E2E8F0;
-    }
-
-    .data-content {
-      padding: 40px;
-      overflow-y: auto;
-    }
-
-    .data-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 30px;
-      margin-top: 24px;
-    }
-
-    .data-card {
-      background: var(--bg-light);
-      padding: 24px;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-    }
-
-    .data-card h3 {
-      font-size: 0.9rem;
-      color: var(--text-muted);
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .data-card h3 i {
-      color: var(--primary);
-    }
-
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 12px;
-      padding-bottom: 12px;
-      border-bottom: 1px dotted var(--border);
-    }
-
-    .info-row:last-child {
-      border: none;
-      margin-bottom: 0;
-      padding-bottom: 0;
-    }
-
-    .info-label {
-      font-size: 0.9rem;
-      color: var(--text-muted);
-    }
-
-    .info-value {
+    .form-group input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(236,153,75,.25); }
+    .btn {
+      padding: 0.5rem 1.25rem;
+      border-radius: 0.375rem;
       font-weight: 600;
-      color: var(--secondary);
-    }
-
-    .badge {
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 0.75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-
-    .badge-success {
-      background: rgba(40, 199, 111, 0.1);
-      color: var(--success);
-    }
-
-    .badge-gray {
-      background: #F1F5F9;
-      color: var(--text-muted);
-    }
-
-    /* Footer */
-    footer {
-      padding: 80px 5% 40px;
-      background: var(--secondary);
-      color: white;
-      text-align: center;
-    }
-
-    .footer-content {
-      max-width: 1200px;
-      margin: 0 auto;
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      text-align: left;
-      gap: 40px;
-      margin-bottom: 60px;
-    }
-
-    .footer-col h4 {
-      margin-bottom: 24px;
-      color: white;
-    }
-
-    .footer-col ul {
-      list-style: none;
-    }
-
-    .footer-col ul li {
-      margin-bottom: 12px;
-    }
-
-    .footer-col ul li a {
-      color: #94A3B8;
-      text-decoration: none;
-      transition: color 0.2s;
-    }
-
-    .footer-col ul li a:hover {
-      color: var(--primary);
-    }
-
-    .loader-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(255, 255, 255, 0.9);
-      display: none;
-      justify-content: center;
-      align-items: center;
-      z-index: 2000;
-      flex-direction: column;
-      gap: 20px;
-    }
-
-    .spinner {
-      width: 50px;
-      height: 50px;
-      border: 4px solid var(--bg-light);
-      border-top: 4px solid var(--primary);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      0% {
-        transform: rotate(0deg);
-      }
-
-      100% {
-        transform: rotate(360deg);
-      }
-    }
-
-    @media (max-width: 1024px) {
-      .hero {
-        grid-template-columns: 1fr;
-        text-align: center;
-      }
-
-      .hero-content p {
-        margin: 0 auto 40px;
-      }
-
-      .hero-actions {
-        justify-content: center;
-      }
-
-      .search-card {
-        grid-template-columns: 1fr 1fr;
-      }
-
-      .parcel-card {
-        grid-template-columns: 1fr;
-      }
-
-      .footer-content {
-        grid-template-columns: 1fr 1fr;
-      }
-    }
-
-    @media (max-width: 768px) {
-      .hero h1 {
-        font-size: 2.5rem;
-      }
-
-      .search-card {
-        grid-template-columns: 1fr;
-      }
-
-      .nav-links {
-        display: none;
-      }
-
-      .footer-content {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    /* Print Styles */
-    @media print {
-
-      nav,
-      .hero,
-      .search-section,
-      .trust-section,
-      #placeholder-section,
-      footer,
-      .nav-actions,
-      .hero-actions,
-      .btn-search {
-        display: none !important;
-      }
-
-      body {
-        background-color: white !important;
-        padding: 0 !important;
-      }
-
-      .results-section {
-        background-color: white !important;
-        padding: 0 !important;
-        margin: 0 !important;
-      }
-
-      .results-container {
-        max-width: 100% !important;
-        width: 100% !important;
-      }
-
-      .parcel-card {
-        box-shadow: none !important;
-        border: none !important;
-        display: block !important;
-      }
-
-      .map-container {
-        height: 500px !important;
-        page-break-after: always;
-        border: 1px solid var(--border);
-      }
-
-      .data-content {
-        padding: 0 !important;
-      }
-
-      .data-grid {
-        display: grid !important;
-        grid-template-columns: 1fr 1fr !important;
-        gap: 20px !important;
-        page-break-inside: avoid;
-      }
-
-      .data-card {
-        page-break-inside: avoid;
-        border: 1px solid #eee !important;
-        background: white !important;
-      }
-
-      .chapter-header {
-        display: block !important;
-        margin: 40px 0 20px 0 !important;
-        border-bottom: 2px solid var(--primary);
-        padding-bottom: 10px;
-        page-break-before: always;
-      }
-
-      .report-title-page {
-        display: flex !important;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-        text-align: center;
-        page-break-after: always;
-      }
-
-      .report-footer {
-        display: block !important;
-        position: fixed;
-        bottom: 0;
-        width: 100%;
-        text-align: center;
-        font-size: 0.8rem;
-        color: var(--text-muted);
-        border-top: 1px solid var(--border);
-        padding-top: 10px;
-      }
-    }
-
-    .chapter-header {
-      display: none;
-    }
-
-    .report-title-page {
-      display: none;
-    }
-
-    .report-footer {
-      display: none;
-    }
-
-    .utility-tag {
+      font-size: 0.9375rem;
+      cursor: pointer;
+      border: none;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      margin: 2px;
+      gap: 0.5rem;
+      transition: background .2s;
     }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline:hover { background: #f8f9fa; }
 
-    .utility-available {
-      background: rgba(40, 199, 111, 0.1);
-      color: var(--success);
-    }
-
-    .utility-none {
-      background: #F1F5F9;
-      color: var(--text-muted);
-    }
-
-    .summary-stats {
+    .stats-row {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 15px;
-      margin-bottom: 30px;
+      gap: 1.25rem;
+      margin-bottom: 1.5rem;
     }
-
-    .stat-box {
-      background: white;
-      padding: 20px;
-      border-radius: var(--radius);
+    .stat-card {
+      background: var(--card-bg);
+      border-radius: 0.5rem;
+      padding: 1.5rem;
       border: 1px solid var(--border);
-      text-align: center;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
     }
+    .stat-card .stat-value { font-size: 1.75rem; font-weight: 700; color: var(--text); display: block; }
+    .stat-card .stat-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-top: 6px; }
+    .stat-card .stat-icon { position: absolute; top: 1rem; right: 1rem; font-size: 1.5rem; opacity: .25; }
+    .stat-card.stat-navy { background: linear-gradient(135deg, #15133C 0%, #2a2550 100%); border: none; }
+    .stat-card.stat-navy .stat-value, .stat-card.stat-navy .stat-label, .stat-card.stat-navy .stat-icon { color: #fff; }
+    .stat-card.stat-navy .stat-icon { opacity: .4; }
+    .stat-card.stat-orange { background: linear-gradient(135deg, #EC994B 0%, #d9863a 100%); border: none; }
+    .stat-card.stat-orange .stat-value, .stat-card.stat-orange .stat-label, .stat-card.stat-orange .stat-icon { color: #fff; }
+    .stat-card.stat-orange .stat-icon { opacity: .4; }
+    .stat-card.stat-blue { background: linear-gradient(135deg, #5c6bc0 0%, #3949ab 100%); border: none; }
+    .stat-card.stat-blue .stat-value, .stat-card.stat-blue .stat-label, .stat-card.stat-blue .stat-icon { color: #fff; }
+    .stat-card.stat-blue .stat-icon { opacity: .4; }
+    .stat-card.stat-purple { background: linear-gradient(135deg, #6b5b95 0%, #4a3f6b 100%); border: none; }
+    .stat-card.stat-purple .stat-value, .stat-card.stat-purple .stat-label, .stat-card.stat-purple .stat-icon { color: #fff; }
+    .stat-card.stat-purple .stat-icon { opacity: .4; }
+    .stat-card.stat-green { background: linear-gradient(135deg, #3ac47d 0%, #2d9d5f 100%); border: none; }
+    .stat-card.stat-green .stat-value, .stat-card.stat-green .stat-label, .stat-card.stat-green .stat-icon { color: #fff; }
+    .stat-card.stat-green .stat-icon { opacity: .4; }
+    .stat-card.stat-red { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); border: none; }
+    .stat-card.stat-red .stat-value, .stat-card.stat-red .stat-label, .stat-card.stat-red .stat-icon { color: #fff; }
+    .stat-card.stat-red .stat-icon { opacity: .4; }
 
-    .stat-box .stat-val {
-      display: block;
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: var(--secondary);
+    .results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.5fr;
+      gap: 1.5rem;
+      min-height: 420px;
     }
+    .map-wrap { background: #e9ecef; border-radius: 0.375rem; min-height: 400px; }
+    .data-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-content: start; }
+    .data-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      padding: 1rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .data-card h4 { font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 6px; }
+    .data-card h4 i { color: var(--primary); }
+    .info-row { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid #f1f3f5; font-size: 0.875rem; }
+    .info-row:last-child { border: none; }
+    .info-label { color: var(--text-muted); }
+    .info-value { font-weight: 600; }
+    .badge { padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; font-weight: 600; }
+    .badge-success { background: rgba(58,196,125,.15); color: var(--success); }
+    .badge-secondary { background: #e9ecef; color: var(--text-muted); }
+    .utility-tag { display: inline-flex; align-items: center; gap: 4px; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.8125rem; margin: 2px; }
+    .utility-on { background: rgba(58,196,125,.12); color: var(--success); }
+    .utility-off { background: #f1f3f5; color: var(--text-muted); }
 
-    .stat-box .stat-label {
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      letter-spacing: 0.05em;
+    .card-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 1rem; }
+    .card-tabs .tab { padding: 0.75rem 1rem; font-size: 0.875rem; font-weight: 500; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .card-tabs .tab:hover { color: var(--text); }
+    .card-tabs .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+    #results-area { display: none; }
+    #placeholder-area { text-align: center; padding: 3rem 2rem; color: var(--text-muted); }
+    #placeholder-area i { font-size: 3rem; opacity: .3; margin-bottom: 1rem; display: block; }
+    #dashboard-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; margin-bottom: 1.5rem; }
+    .loader-overlay {
+      position: fixed; inset: 0; background: rgba(255,255,255,.9); display: none; justify-content: center; align-items: center; flex-direction: column; gap: 1rem; z-index: 2000;
+    }
+    .spinner { width: 40px; height: 40px; border: 3px solid #e9ecef; border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast {
+      position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(100px);
+      padding: 0.75rem 1.25rem; border-radius: 0.375rem; background: #333; color: #fff; font-size: 0.9375rem; z-index: 3000;
+      opacity: 0; visibility: hidden; transition: transform .25s, opacity .25s, visibility .25s;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; visibility: visible; }
+    .toast.error { background: var(--danger); }
+    .report-title-page, .report-footer { display: none; }
+    .chapter-header { display: none; }
+    @media (max-width: 992px) {
+      .form-row { grid-template-columns: 1fr 1fr; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .results-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); }
+      .main { margin-left: 0; }
+      .form-row { grid-template-columns: 1fr; }
+      .stats-row { grid-template-columns: 1fr; }
+      .data-cards { grid-template-columns: 1fr; }
     }
   </style>
-
 </head>
-
 <body>
-
-  <nav>
-    <a href="/" class="logo font-heading">GEO-<span>ANALYZE</span></a>
-    <ul class="nav-links">
-      <li><a href="#about">O narzędziu</a></li>
-      <li><a href="#features">Możliwości</a></li>
-      <li><a href="#docs">Dokumentacja</a></li>
-      <li><a href="#contact">Kontakt</a></li>
-    </ul>
-    <div class="nav-actions">
-      <button class="btn btn-outline">Zaloguj</button>
-      <button class="btn btn-primary" onclick="window.scrollTo({top: 400, behavior: 'smooth'})">Analizuj
-        działkę</button>
-    </div>
-  </nav>
-
-  <section class="hero">
-    <div class="hero-content">
-      <h1>Inteligentna analiza nieruchomości w sekundę.</h1>
-      <p>Automatyczne pobieranie danych z ULDK, GUGiK, e-Mapa i rejestrów krajowych. Wszystko w jednym, przejrzystym
-        Master JSON Record.</p>
-      <div class="hero-actions">
-        <button class="btn btn-primary" onclick="window.scrollTo({top: 400, behavior: 'smooth'})">Rozpocznij
-          teraz</button>
-        <button class="btn btn-outline"><i class="fa-solid fa-play"></i> Zobacz demo</button>
+  <div class="app-wrapper">
+    <header class="topbar">
+      <div class="topbar-brand"><i class="fa-solid fa-cube"></i> Architect</div>
+      <div class="topbar-right">
+        <button class="icon-btn" type="button" aria-label="Menu"><i class="fa-solid fa-bars"></i></button>
+        <button class="icon-btn" type="button" aria-label="Szukaj"><i class="fa-solid fa-search"></i></button>
+        <button class="icon-btn" type="button" aria-label="Kalendarz"><i class="fa-regular fa-calendar"></i></button>
+        <div class="topbar-user"><i class="fa-regular fa-user"></i> Użytkownik</div>
       </div>
-      <div class="trust-badge">
-        <i class="fa-solid fa-shield-halved" style="color: var(--success); margin-right: 8px;"></i>
-        <span style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted);">Oficjalne dane z rejestrów
-          państwowych</span>
-      </div>
-    </div>
-    <div class="hero-illustration">
-      <img src="hero.png" alt="GIS Analysis Illustration">
-    </div>
-  </section>
+    </header>
+    <div class="wrapper-with-sidebar">
+      <aside class="sidebar">
+        <div class="sidebar-brand"><i class="fa-solid fa-chart-pie"></i> Kalkulator</div>
+        <div class="sidebar-section">Menu</div>
+        <nav class="sidebar-nav">
+          <a href="#" class="active"><i class="fa-solid fa-rocket"></i> Dashboard Example</a>
+          <a href="#analyze"><i class="fa-solid fa-map-location-dot"></i> Analiza działki</a>
+        </nav>
+        <div class="sidebar-section second">Widgets</div>
+        <nav class="sidebar-nav">
+          <a href="#analyze"><i class="fa-solid fa-th-large"></i> Dashboard Boxes</a>
+        </nav>
+      </aside>
+      <main class="main">
+        <header class="main-header">
+          <div class="main-header-left">
+            <div class="breadcrumb"><a href="#">Home</a> / Dashboard</div>
+            <h1><i class="fa-solid fa-car"></i> Basic Dashboard</h1>
+            <p>This is an example dashboard created using build-in elements and components.</p>
+          </div>
+          <div class="main-header-right">
+            <button class="icon-btn" type="button" aria-label="Szukaj"><i class="fa-solid fa-search"></i></button>
+            <button class="icon-btn" type="button" aria-label="Powiadomienia"><i class="fa-regular fa-bell"></i></button>
+            <div class="user-menu"><i class="fa-regular fa-user"></i> Użytkownik</div>
+          </div>
+        </header>
+        <div class="main-content">
+          <div id="dashboard-stats">
+            <div class="stat-card stat-navy"><i class="fa-solid fa-cog stat-icon"></i><span class="stat-value" id="stat-area">—</span><span class="stat-label">Powierzchnia [m²]</span></div>
+            <div class="stat-card stat-orange"><i class="fa-solid fa-desktop stat-icon"></i><span class="stat-value" id="stat-usage">—</span><span class="stat-label">Główny użytek</span></div>
+            <div class="stat-card stat-green"><i class="fa-solid fa-graduation-cap stat-icon"></i><span class="stat-value" id="stat-lines">—</span><span class="stat-label">Ograniczenia</span></div>
+            <div class="stat-card stat-red"><i class="fa-solid fa-cog stat-icon"></i><span class="stat-value" id="stat-potential">—</span><span class="stat-label">Potencjał</span></div>
+          </div>
+          <div class="card" id="analyze">
+            <div class="card-header" style="display:flex;align-items:center;gap:8px"><i class="fa-solid fa-rocket" style="color:var(--primary)"></i> Raport działki</div>
+            <div class="card-tabs">
+              <span class="tab active" data-tab="1">Tab 1</span>
+              <span class="tab" data-tab="2">Tab 2</span>
+            </div>
+            <div class="card-body" id="tab-content-1">
+            <form class="form-row" onsubmit="runAnalysis(); return false;">
+              <div class="form-group">
+                <label>Identyfikator działki</label>
+                <input type="text" id="parcelId" placeholder="np. 142003_2.0001.74/1" value="142003_2.0001.74/1">
+              </div>
+              <div class="form-group">
+                <label>Powiat (opcjonalnie)</label>
+                <input type="text" id="county" placeholder="np. płoński">
+              </div>
+              <div class="form-group">
+                <label>Gmina (opcjonalnie)</label>
+                <input type="text" id="municipality" placeholder="np. Baboszewo">
+              </div>
+              <button type="submit" class="btn btn-primary"><i class="fa-solid fa-bolt"></i> Analizuj</button>
+            </form>
+            </div>
+            <div class="card-body" id="tab-content-2" style="display:none">
+              <p style="color:var(--text-muted);font-size:0.9rem">Dodatkowe opcje analizy — w przygotowaniu.</p>
+            </div>
+          </div>
 
-  <section class="search-section" id="analyze-now">
-    <div class="search-card">
-      <div class="input-group">
-        <label>Identyfikator działki</label>
-        <input type="text" id="parcelId" placeholder="np. 142003_2.0001.74/1" value="142003_2.0001.74/1">
-      </div>
-      <div class="input-group">
-        <label>Powiat (opcjonalnie)</label>
-        <input type="text" id="county" placeholder="np. płoński">
-      </div>
-      <div class="input-group">
-        <label>Gmina (opcjonalnie)</label>
-        <input type="text" id="municipality" placeholder="np. Baboszewo">
-      </div>
-      <button class="btn btn-primary btn-search" id="btnAnalyze" onclick="runAnalysis()">
-        <i class="fa-solid fa-bolt"></i>
-        <span>ANALIZUJ</span>
-      </button>
-    </div>
-  </section>
-
-  <section class="trust-section">
-    <p>Zaufali nam profesjonaliści z branży GIS</p>
-    <div class="logos">
-      <i class="fa-solid fa-map"></i>
-      <i class="fa-solid fa-earth-europe"></i>
-      <i class="fa-solid fa-database"></i>
-      <i class="fa-solid fa-server"></i>
-      <i class="fa-solid fa-satellite"></i>
-    </div>
-  </section>
-
-  <section class="results-section" id="results-area" style="display: none;">
-    <div class="report-title-page" id="report-title-page">
-      <!-- Injected title page -->
-    </div>
-
-    <div class="results-container">
-      <div class="results-header">
-        <div>
-          <h2 class="font-heading">Raport o Terenie</h2>
-          <p id="report-date-string" style="color: var(--text-muted); font-size: 0.9rem;"></p>
+          <div id="placeholder-area">
+          <i class="fa-solid fa-magnifying-glass-location"></i>
+          <p><strong>Wprowadź numer działki</strong></p>
+          <p style="font-size: 0.9rem; margin-top: 4px;">System pobierze geometrię, infrastrukturę i dane z ULDK oraz GUGiK.</p>
         </div>
-        <div id="parcel-status-badge"></div>
-      </div>
 
-      <div id="results-display">
-        <!-- Results will be injected here -->
+        <section id="results-area">
+          <div class="card">
+            <div class="card-body" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+              <div>
+                <h2 style="font-size: 1.1rem; margin-bottom: 2px;">Raport o terenie</h2>
+                <p id="report-date-string" style="font-size: 0.8125rem; color: var(--text-muted);"></p>
+              </div>
+              <div id="parcel-status-badge"></div>
+            </div>
+          </div>
+          <div id="results-display"></div>
+        </section>
       </div>
-    </div>
-
-    <div class="report-footer">
-      Raport wygenerowany przez GEO-ANALYZE | System Automatycznej Agregacji Danych Przestrzennych | www.geo-analyze.pl
-    </div>
-  </section>
-
-  <section class="results-section" id="placeholder-section">
-    <div class="results-container" style="text-align: center; color: var(--text-muted); padding: 100px 0;">
-      <i class="fa-solid fa-magnifying-glass-location" style="font-size: 4rem; opacity: 0.2; margin-bottom: 24px;"></i>
-      <h3 class="font-heading">Wprowadź numer działki, aby zobaczyć analizę</h3>
-      <p>System automatycznie pobierze geometrię, infrastrukturę oraz stan prawny.</p>
-    </div>
-  </section>
-
-  <footer>
-    <div class="footer-content">
-      <div class="footer-col">
-        <a href="/" class="logo font-heading" style="color: white; margin-bottom: 24px;">GEO-<span>ANALYZE</span></a>
-        <p style="color: #94A3B8; font-size: 0.9rem;">Najnowocześniejsza platforma do agregacji danych przestrzennych i
-          prawnych o nieruchomościach w Polsce.</p>
-      </div>
-      <div class="footer-col">
-        <h4>Produkt</h4>
-        <ul>
-          <li><a href="#">Analiza ULDK</a></li>
-          <li><a href="#">Infrastruktura GESUT</a></li>
-          <li><a href="#">Plany Zagospodarowania</a></li>
-        </ul>
-      </div>
-      <div class="footer-col">
-        <h4>Firma</h4>
-        <ul>
-          <li><a href="#">O nas</a></li>
-          <li><a href="#">Blog</a></li>
-          <li><a href="#">Kontakt</a></li>
-        </ul>
-      </div>
-      <div class="footer-col">
-        <h4>Legal</h4>
-        <ul>
-          <li><a href="#">Regulamin</a></li>
-          <li><a href="#">Prywatność</a></li>
-        </ul>
-      </div>
-    </div>
-    <div style="border-top: 1px solid #334155; padding-top: 40px; color: #64748B; font-size: 0.85rem;">
-      &copy; 2026 GEO-ANALYZE. Wszystkie prawa zastrzeżone.
-    </div>
-  </footer>
+    </main>
+  </div>
 
   <div class="loader-overlay" id="loader">
     <div class="spinner"></div>
-    <p class="font-heading" style="color: var(--secondary); font-weight: 600;">Agregowanie danych...</p>
-    <p style="color: var(--text-muted); font-size: 0.9rem;">To może potrwać kilka sekund</p>
+    <p style="font-weight: 600;">Agregowanie danych...</p>
+    <p style="font-size: 0.875rem; color: var(--text-muted);">ULDK, GESUT, RCN — to może potrwać kilka sekund</p>
   </div>
+  <div class="toast" id="toast" role="alert"></div>
 
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
     let currentMap = null;
-
+    document.querySelectorAll('.card-tabs .tab').forEach(function(t) {
+      t.addEventListener('click', function() {
+        var n = this.getAttribute('data-tab');
+        document.querySelectorAll('.card-tabs .tab').forEach(function(x) { x.classList.remove('active'); });
+        document.getElementById('tab-content-1').style.display = n === '1' ? 'block' : 'none';
+        document.getElementById('tab-content-2').style.display = n === '2' ? 'block' : 'none';
+        this.classList.add('active');
+      });
+    });
+    function showToast(msg, isError) {
+      var el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast' + (isError ? ' error' : '');
+      el.classList.add('show');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(function() { el.classList.remove('show'); }, 4500);
+    }
     async function runAnalysis() {
-      const pid = document.getElementById('parcelId').value.trim();
-      const county = document.getElementById('county').value.trim();
-      const muni = document.getElementById('municipality').value.trim();
-
-      if (!pid) return;
-
-      const loader = document.getElementById('loader');
-      const resultsSection = document.getElementById('results-area');
-      const placeholder = document.getElementById('placeholder-section');
-
+      var pid = document.getElementById('parcelId').value.trim();
+      var county = document.getElementById('county').value.trim();
+      var muni = document.getElementById('municipality').value.trim();
+      if (!pid) { showToast('Wprowadź numer działki.', true); return; }
+      var loader = document.getElementById('loader');
+      var resultsSection = document.getElementById('results-area');
+      var placeholder = document.getElementById('placeholder-area');
       loader.style.display = 'flex';
-
       try {
-        const response = await fetch('/api/analyze', {
+        var response = await fetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            parcel_ids: pid,
-            county: county || null,
-            municipality: muni || null
-          })
+          body: JSON.stringify({ parcel_ids: pid, county: county || null, municipality: muni || null })
         });
-
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || 'Błąd serwera');
-
+        var data = await response.json();
+        if (!response.ok) throw new Error(data.detail || data.message || 'Błąd serwera');
+        var first = data.parcels && data.parcels[0];
+        if (!first) throw new Error('Brak wyników');
+        if (first.error) throw new Error(first.error);
+        if (first.data_status === 'ERROR' || (first.master_record && first.master_record.status === 'ERROR'))
+          throw new Error(first.master_record && first.master_record.message ? first.master_record.message : first.error || 'Działka nie znaleziona');
         placeholder.style.display = 'none';
         resultsSection.style.display = 'block';
-
-        window.currentParcelData = data.parcels[0];
-        renderResults(data.parcels[0]);
-
-        window.scrollTo({
-          top: resultsSection.offsetTop - 100,
-          behavior: 'smooth'
-        });
-
+        window.currentParcelData = first;
+        updateDashboardStats(first);
+        renderResults(first);
       } catch (err) {
-        alert("Błąd: " + err.message);
+        showToast(err.message || 'Wystąpił błąd.', true);
       } finally {
         loader.style.display = 'none';
       }
     }
-
-    function renderResults(parcel) {
-      const display = document.getElementById('results-display');
-      const parcelStatus = document.getElementById('parcel-status-badge');
-      const titlePage = document.getElementById('report-title-page');
-      const dateStr = document.getElementById('report-date-string');
-
-      const now = new Date();
-      dateStr.innerText = `Data generowania: ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
-
-      const m = parcel.master_record;
-      const meta = m.parcel_metadata;
-      const geom = m.geometry;
-      const infra = m.infrastructure;
-      const egib = m.egib;
-      const plan = m.planning;
-      const build = m.buildings;
-      const market = m.market_data;
-
-      // Update Title Page for Print
-      titlePage.innerHTML = `
-        <i class="fa-solid fa-map-location-dot" style="font-size: 5rem; color: var(--primary); margin-bottom: 40px;"></i>
-        <h1 style="font-size: 3.5rem; margin-bottom: 10px;">RAPORT O TERENIE</h1>
-        <h2 style="color: var(--text-muted); margin-bottom: 60px;">Działka nr ${parcel.parcel_id}</h2>
-        <div style="text-align: left; background: var(--bg-light); padding: 40px; border-radius: 20px; width: 600px; border: 1px solid var(--border); margin: 0 auto;">
-          <p><strong>Lokalizacja:</strong> ${meta.commune}, ${meta.county}, ${meta.region || ''}</p>
-          <p><strong>TERYT:</strong> ${parcel.parcel_id}</p>
-          <p><strong>Współrzędne:</strong> ${geom.centroid_ll[1].toFixed(6)}, ${geom.centroid_ll[0].toFixed(6)}</p>
-          <p><strong>Powierzchnia:</strong> ${geom.area_m2.toLocaleString()} m²</p>
-        <p style="margin-top: 100px; color: var(--text-muted);">Niniejszy raport zawiera dane zagregowane z oficjalnych rejestrów państwowych (ULDK, GUGiK, GUNB, RCN).</p>
-      `;
-
-      parcelStatus.innerHTML = `
-        <div class="badge" style="background: rgba(40, 199, 111, 0.1); color: var(--success); border: 1px solid rgba(40, 199, 111, 0.2);">
-          <i class="fa-solid fa-shield-check"></i> Status: Dane Zweryfikowane
-        </div>
-      `;
-
-      display.innerHTML = `
-        <!-- Summary Stats Section -->
-        <div class="summary-stats">
-          <div class="stat-box">
-            <span class="stat-label">Powierzchnia</span>
-            <span class="stat-val">${geom.area_m2.toLocaleString()} m²</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-label">Główny Użytek</span>
-            <span class="stat-val">${egib.land_use.length ? egib.land_use[0].class : 'R'}</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-label">Ograniczenia</span>
-            <span class="stat-val" style="color: ${infra.power.exists ? 'var(--danger)' : 'var(--success)'}">
-              ${infra.power.exists ? 'WYKRYTO' : 'BRAK'}
-            </span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-label">Potencjał</span>
-            <span class="stat-val">${plan.mpzp_active ? 'Budowlana' : 'Rolna/Inna'}</span>
-          </div>
-        </div>
-
-        <div class="parcel-card">
-          <div id="map-container" class="map-container"></div>
-          
-          <div class="data-content">
-            <div class="chapter-header">
-              <h2 class="font-heading">1. Lokalizacja i Parametry Geometryczne</h2>
-            </div>
-            
-            <h2 class="font-heading" style="margin-bottom: 8px;">Działka nr ${parcel.parcel_id}</h2>
-            <p style="color: var(--text-muted); margin-bottom: 32px;">
-              <i class="fa-solid fa-location-dot"></i> ${meta.commune}, ${meta.county}, ${meta.region || ''}
-            </p>
-
-            <div class="data-grid">
-              <!-- Geometria -->
-              <div class="data-card">
-                <h3><i class="fa-solid fa-draw-polygon"></i> Dane Ewidencyjne (EGiB)</h3>
-                <div class="info-row">
-                  <span class="info-label">Powierzchnia</span>
-                  <span class="info-value">${geom.area_m2.toLocaleString()} m²</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">Centroid (Lat, Lon)</span>
-                  <span class="info-value" style="font-size: 0.85rem;">${geom.centroid_ll[1].toFixed(6)}, ${geom.centroid_ll[0].toFixed(6)}</span>
-                </div>
-                <div class="info-row" style="flex-direction: column; gap: 8px; border: none; padding-top: 15px;">
-                  <span class="info-label">Struktura Gruntów:</span>
-                  <div style="font-size: 0.85rem; width: 100%;">
-                    ${egib.land_use.map(u => `
-                      <div style="display:flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #f8fafc;">
-                        <span style="color: #64748b;">Klasa ${u.class || 'n/d'}</span>
-                        <span style="font-weight: 600;">${u.area_m2 > 0 ? u.area_m2.toLocaleString() + ' m²' : '-'}</span>
-                      </div>
-                    `).join('') || '<span style="color: #94a3b8;">Brak szczegółowego podziału (R)</span>'}
-                  </div>
-                </div>
-              </div>
-
-              <!-- Media -->
-              <div class="data-card">
-                <h3><i class="fa-solid fa-plug-circle-bolt"></i> Dostęp do Mediów</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px;">
-                  <div class="utility-tag ${infra.utilities.gaz ? 'utility-available' : 'utility-none'}">
-                    <i class="fa-solid fa-fire"></i> Gaz ${infra.utilities.gaz ? 'Tak' : 'Brak'}
-                  </div>
-                  <div class="utility-tag ${infra.utilities.woda ? 'utility-available' : 'utility-none'}">
-                    <i class="fa-solid fa-faucet"></i> Woda ${infra.utilities.woda ? 'Tak' : 'Brak'}
-                  </div>
-                  <div class="utility-tag ${infra.utilities.kanal ? 'utility-available' : 'utility-none'}">
-                    <i class="fa-solid fa-droplet-slash"></i> Kanal. ${infra.utilities.kanal ? 'Tak' : 'Brak'}
-                  </div>
-                  <div class="utility-tag ${infra.telecom.fiber_ready ? 'utility-available' : 'utility-none'}">
-                    <i class="fa-solid fa-tower-broadcast"></i> Fiber ${infra.telecom.fiber_ready ? 'Tak' : 'Brak'}
-                  </div>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">Dojazd Publiczny</span>
-                  <span class="info-value">${parcel.master_record.access.public_road_access ? parcel.master_record.access.road_type : 'brak danych'}</span>
-                </div>
-              </div>
-
-              <!-- Linia Napowietrzna -->
-              <div class="data-card" style="border-left: 5px solid ${infra.power.exists ? '#EF4444' : '#10B981'};">
-                <h3><i class="fa-solid fa-bolt"></i> Sieci Przesyłowe i Urządzenia</h3>
-                <div class="info-row">
-                  <span class="info-label">Linia Napowietrzna</span>
-                  <span style="font-weight: 700; color: ${infra.power.exists ? 'var(--danger)' : 'var(--success)'}">
-                    ${infra.power.exists ? 'WYKRYTO (KOLIZJA)' : 'BRAK KOLIZJI'}
-                  </span>
-                </div>
-                ${infra.power.exists ? `
-                  <div class="info-row">
-                    <span class="info-label">Napięcie Linii</span>
-                    <span class="info-value">${infra.power.voltage}</span>
-                  </div>
-                  <div class="info-row">
-                    <span class="info-label">Liczba słupów (est.)</span>
-                    <span class="info-value" style="color: var(--danger)">${infra.power.poles_count}</span>
-                  </div>
-                  <div class="info-row">
-                    <span class="info-label">Szerokość strefy</span>
-                    <span class="info-value">${infra.power.buffer_zone_m} m</span>
-                  </div>
-                  <div class="info-row" style="background: rgba(239, 68, 68, 0.05); padding: 10px; border-radius: 8px;">
-                    <span class="info-label" style="color: #991B1B;">Pow. ograniczenia</span>
-                    <span class="info-value" style="color: #991B1B; font-weight: 800;">${infra.power.occupied_area_m2} m²</span>
-                  </div>
-                ` : '<div style="margin-top: 15px; font-size: 0.85rem; color: #64748b; background: rgba(16, 185, 129, 0.05); padding: 12px; border-radius: 8px;">Działka wolna od napowietrznych urządzeń elektroenergetycznych w pasie analizy.</div>'}
-              </div>
-
-              <!-- Budynki i Inwestycje -->
-              <div class="data-card">
-                <h3><i class="fa-solid fa-scroll"></i> Sytuacja Prawno-Faktyczna</h3>
-                <div class="info-row">
-                  <span class="info-label">Plan Miejscowy (MPZP)</span>
-                  <span class="badge ${plan.mpzp_active ? 'badge-success' : 'badge-gray'}">${plan.mpzp_active ? 'OBOWIĄZUJE' : 'BRAK'}</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">Funkcja Wiodąca</span>
-                  <span class="info-value">${plan.usage_code || plan.studium_usage || 'brak'}</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">Zabudowa (EGiB)</span>
-                  <span class="info-value">${parcel.master_record.buildings.count} obiektów</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">Decyzje (GUNB)</span>
-                  <span class="info-value">${parcel.master_record.investments.active_permits} pozwoleń</span>
-                </div>
-              </div>
-
-              <!-- RCN -->
-              <div class="data-card" style="grid-column: span 2; background: linear-gradient(to bottom right, #ffffff, #fdfcfb); border: 1px solid #e2e8f0;">
-                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 20px;">
-                   <h3><i class="fa-solid fa-chart-line"></i> Analiza Rynku Nieruchomości (RCN)</h3>
-                   <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;">Źródło: Rejestr Cen Nieruchomości (GUGiK)</div>
-                </div>
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px;">
-                  <div>
-                    <span class="info-label" style="display: block; margin-bottom: 5px;">Średnia Cena</span>
-                    <span style="font-size: 1.8rem; font-weight: 800; color: var(--primary);">${market.average_price_m2 ? market.average_price_m2 + ' zł/m²' : 'n/d'}</span>
-                  </div>
-                  <div>
-                    <span class="info-label" style="display: block; margin-bottom: 5px;">Wolumen transakcji</span>
-                    <span style="font-size: 1.8rem; font-weight: 800; color: #1e293b;">${market.recent_transactions_count}</span>
-                    <span style="font-size: 0.8rem; color: #64748b; margin-left: 5px;">(promień 1km)</span>
-                  </div>
-                  <div>
-                    <span class="info-label" style="display: block; margin-bottom: 5px;">Ostatni akt notarialny</span>
-                    <span style="font-size: 1.2rem; font-weight: 600;">${market.last_transaction_date || 'brak danych'}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Data Sources Checklist -->
-            <div class="chapter-header">
-              <h2 class="font-heading">2. Weryfikacja Źródeł Danych</h2>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 20px;">
-              <div style="font-size: 0.75rem; padding: 10px; border: 1px dashed #cbd5e1; border-radius: 8px;">
-                <strong>ULDK</strong>: Geometria i BBOX zweryfikowane poprawnie.
-              </div>
-              <div style="font-size: 0.75rem; padding: 10px; border: 1px dashed #cbd5e1; border-radius: 8px;">
-                <strong>KIEG</strong>: Klasoużytki i budynki pobrane z WFS.
-              </div>
-              <div style="font-size: 0.75rem; padding: 10px; border: 1px dashed #cbd5e1; border-radius: 8px;">
-                <strong>GESUT</strong>: Skan sieci przesyłowych ukończony.
-              </div>
-              <div style="font-size: 0.75rem; padding: 10px; border: 1px dashed #cbd5e1; border-radius: 8px;">
-                <strong>GUNB</strong>: Rejestr pozwoleń budowlanych aktualny.
-              </div>
-            </div>
-
-            <div style="margin-top: 60px; display: flex; gap: 12px; flex-wrap: wrap;">
-              <button class="btn btn-primary" onclick="window.currentParcelData ? window.print() : alert('Brak danych')">
-                <i class="fa-solid fa-file-pdf"></i> Drukuj Pełny Raport Techniczny
-              </button>
-              <button class="btn btn-outline" onclick="console.log('Master Record:', window.currentParcelData)">
-                <i class="fa-solid fa-code"></i> Eksportuj JSON
-              </button>
-              ${m.view_3d_url ? `
-              <a href="${m.view_3d_url}" target="_blank" class="btn btn-outline" style="background: #0F172A; color: white;">
-                <i class="fa-solid fa-cube"></i> Eksploracja 3D
-              </a>` : ''}
-            </div>
-          </div>
-        </div>
-      `;
-      initMap(geom.centroid_ll, geom.geojson_ll, infra.power);
+    function updateDashboardStats(parcel) {
+      var m = parcel.master_record || {};
+      var geom = m.geometry || {};
+      var egib = m.egib || {};
+      var plan = m.planning || {};
+      var power = (m.infrastructure || {}).power || {};
+      var landUse = Array.isArray(egib.land_use) ? egib.land_use : [];
+      var areaM2 = typeof geom.area_m2 === 'number' ? geom.area_m2 : null;
+      var elArea = document.getElementById('stat-area');
+      var elUsage = document.getElementById('stat-usage');
+      var elLines = document.getElementById('stat-lines');
+      var elPotential = document.getElementById('stat-potential');
+      if (elArea) elArea.textContent = areaM2 != null ? areaM2.toLocaleString() : '—';
+      if (elUsage) elUsage.textContent = (landUse[0] && landUse[0].class) ? landUse[0].class : 'R';
+      if (elLines) elLines.textContent = power.exists ? 'Tak' : 'Brak';
+      if (elPotential) elPotential.textContent = plan.mpzp_active ? 'Budowlana' : 'Rolna';
     }
-
+    function renderResults(parcel) {
+      var display = document.getElementById('results-display');
+      var parcelStatus = document.getElementById('parcel-status-badge');
+      var dateStr = document.getElementById('report-date-string');
+      dateStr.textContent = 'Data: ' + new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString();
+      parcelStatus.innerHTML = '<span class="badge badge-success"><i class="fa-solid fa-shield-check"></i> Dane zweryfikowane</span>';
+      var m = parcel.master_record || {};
+      var meta = m.parcel_metadata || {};
+      var geom = m.geometry || {};
+      var infra = m.infrastructure || {};
+      var egib = m.egib || {};
+      var plan = m.planning || {};
+      var build = m.buildings || {};
+      var market = m.market_data || {};
+      var power = infra.power || {};
+      var utilities = infra.utilities || {};
+      var telecom = infra.telecom || {};
+      var landUse = Array.isArray(egib.land_use) ? egib.land_use : [];
+      var centroid = geom.centroid_ll || [0, 0];
+      var areaM2 = typeof geom.area_m2 === 'number' ? geom.area_m2 : 0;
+      var loc = [meta.commune, meta.county, meta.region].filter(Boolean).join(', ') || '—';
+      display.innerHTML =
+        '<div class="stats-row">' +
+          '<div class="stat-card stat-navy"><i class="fa-solid fa-ruler-combined stat-icon"></i><span class="stat-value">' + (areaM2 ? areaM2.toLocaleString() : '—') + '</span><span class="stat-label">Powierzchnia [m²]</span></div>' +
+          '<div class="stat-card stat-orange"><i class="fa-solid fa-leaf stat-icon"></i><span class="stat-value">' + (landUse[0] && landUse[0].class ? landUse[0].class : 'R') + '</span><span class="stat-label">Główny użytek</span></div>' +
+          '<div class="stat-card ' + (power.exists ? 'stat-red' : 'stat-green') + '"><i class="fa-solid fa-bolt stat-icon"></i><span class="stat-value">' + (power.exists ? 'Tak' : 'Brak') + '</span><span class="stat-label">Ograniczenia (linie)</span></div>' +
+          '<div class="stat-card ' + (plan.mpzp_active ? 'stat-orange' : 'stat-green') + '"><i class="fa-solid fa-building stat-icon"></i><span class="stat-value">' + (plan.mpzp_active ? 'Budowlana' : 'Rolna') + '</span><span class="stat-label">Potencjał</span></div>' +
+        '</div>' +
+        '<div class="results-grid">' +
+          '<div class="map-wrap" id="map-container"></div>' +
+          '<div class="data-cards">' +
+            '<div class="data-card"><h4><i class="fa-solid fa-draw-polygon"></i> EGiB</h4>' +
+              '<div class="info-row"><span class="info-label">Powierzchnia</span><span class="info-value">' + (areaM2 ? areaM2.toLocaleString() : '—') + ' m²</span></div>' +
+              '<div class="info-row"><span class="info-label">Lokalizacja</span><span class="info-value">' + loc + '</span></div>' +
+            '</div>' +
+            '<div class="data-card"><h4><i class="fa-solid fa-plug-circle-bolt"></i> Media</h4>' +
+              '<div style="margin-bottom:8px"><span class="utility-tag ' + (utilities.gaz ? 'utility-on' : 'utility-off') + '"><i class="fa-solid fa-fire"></i> Gaz</span> ' +
+              '<span class="utility-tag ' + (utilities.woda ? 'utility-on' : 'utility-off') + '"><i class="fa-solid fa-faucet"></i> Woda</span> ' +
+              '<span class="utility-tag ' + (utilities.kanal ? 'utility-on' : 'utility-off') + '"><i class="fa-solid fa-droplet-slash"></i> Kanal.</span></div>' +
+            '</div>' +
+            '<div class="data-card" style="border-left:4px solid ' + (power.exists ? 'var(--danger)' : 'var(--success)') + '"><h4><i class="fa-solid fa-bolt"></i> Sieci przesyłowe</h4>' +
+              '<div class="info-row"><span class="info-label">Linia napowietrzna</span><span class="info-value" style="color:' + (power.exists ? 'var(--danger)' : 'var(--success)') + '">' + (power.exists ? 'Wykryto' : 'Brak kolizji') + '</span></div>' +
+              (power.exists ? '<div class="info-row"><span class="info-label">Napięcie</span><span class="info-value">' + (power.voltage || '—') + '</span></div>' : '') +
+            '</div>' +
+            '<div class="data-card"><h4><i class="fa-solid fa-scroll"></i> Prawo</h4>' +
+              '<div class="info-row"><span class="info-label">MPZP</span><span class="' + (plan.mpzp_active ? 'badge badge-success' : 'badge badge-secondary') + '">' + (plan.mpzp_active ? 'Obowiązuje' : 'Brak') + '</span></div>' +
+              '<div class="info-row"><span class="info-label">Zabudowa</span><span class="info-value">' + (build && typeof build.count === 'number' ? build.count : 0) + ' obiektów</span></div>' +
+              '<div class="info-row"><span class="info-label">Pozwolenia</span><span class="info-value">' + (m.investments && typeof m.investments.active_permits === 'number' ? m.investments.active_permits : 0) + '</span></div>' +
+            '</div>' +
+            '<div class="data-card" style="grid-column:span 2"><h4><i class="fa-solid fa-chart-line"></i> RCN</h4>' +
+              '<div class="info-row"><span class="info-label">Średnia cena</span><span class="info-value" style="color:var(--primary)">' + (market.average_price_m2 ? market.average_price_m2 + ' zł/m²' : 'n/d') + '</span></div>' +
+              '<div class="info-row"><span class="info-label">Transakcje (promień)</span><span class="info-value">' + (market.recent_transactions_count != null ? market.recent_transactions_count : '—') + '</span></div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="card" style="margin-top:1rem"><div class="card-body" style="display:flex;gap:0.75rem;flex-wrap:wrap">' +
+          '<button class="btn btn-primary" onclick="window.currentParcelData&&window.print()"><i class="fa-solid fa-print"></i> Drukuj raport</button>' +
+          '<button class="btn btn-outline" onclick="console.log(window.currentParcelData)"><i class="fa-solid fa-code"></i> JSON</button>' +
+        '</div></div>';
+      initMap(centroid, geom.geojson_ll, power);
+    }
     function initMap(centroid, geojson, powerInfra) {
-      if (currentMap) {
-        currentMap.remove();
-      }
-      currentMap = L.map('map-container').setView([centroid[1], centroid[0]], 16);
-
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-      }).addTo(currentMap);
-
+      if (currentMap) { currentMap.remove(); currentMap = null; }
+      var lat = centroid[1] != null ? Number(centroid[1]) : 52.23;
+      var lon = centroid[0] != null ? Number(centroid[0]) : 21.01;
+      currentMap = L.map('map-container').setView([lat, lon], 16);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(currentMap);
       if (geojson) {
-        L.geoJSON(geojson, {
-          style: {
-            color: "#FF6C4B",
-            weight: 3,
-            fillOpacity: 0.2
-          }
-        }).addTo(currentMap);
+        L.geoJSON(geojson, { style: { color: '#EC994B', weight: 3, fillOpacity: 0.2 } }).addTo(currentMap);
+        var bounds = L.geoJSON(geojson).getBounds();
+        currentMap.fitBounds(bounds, { padding: [20, 20] });
       }
-
-      // Draw Infrastructure
       if (powerInfra && powerInfra.line_geojson) {
-        // Buffer first (underneath)
-        if (powerInfra.buffer_geojson) {
-          L.geoJSON(powerInfra.buffer_geojson, {
-            style: { color: '#FF9F43', weight: 1, fillOpacity: 0.15, dashArray: '5, 5' }
-          }).addTo(currentMap);
-        }
-        // Line
-        L.geoJSON(powerInfra.line_geojson, {
-          style: { color: '#EA5455', weight: 4 }
-        }).addTo(currentMap);
-      }
-
-      if (geojson) {
-        const bounds = L.geoJSON(geojson).getBounds();
-        currentMap.fitBounds(bounds, { padding: [40, 40] });
+        L.geoJSON(powerInfra.line_geojson, { style: { color: '#c0392b', weight: 4 } }).addTo(currentMap);
       }
     }
   </script>
 </body>
-
 </html>

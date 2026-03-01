@@ -47,6 +47,12 @@ async def fetch_planning(lon: float, lat: float) -> Dict[str, Any]:
     """
     Pobiera dane planistyczne dla punktu (centroid działki).
     """
+    if lon is None or lat is None:
+        return {
+            "mpzp": {"has_mpzp": False, "przeznaczenie": None, "symbol": None, "uchwala": None, "source": None, "ok": False},
+            "plan_ogolny": {"status": None, "zone": None, "ok": False},
+            "studium": {"przeznaczenie": None, "ok": False},
+        }
     result = {
         "mpzp": {
             "has_mpzp": False,

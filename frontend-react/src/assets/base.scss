@@ -1,0 +1,352 @@
+/* NOTE: bootstrap/ is loaded from node_modules/ using sass-loader */
+
+// SASS IMPORTS
+@use "sass:math";
+
+// BOOTSTRAP 5 VARIABLES
+
+// 1. Include functions first (so you can manipulate colors, SVGs, calc, etc)
+@import "bootstrap/scss/functions";
+
+// 2. Include any default variable overrides here
+
+@import "themes/layout-variables";
+
+// 3. Include remainder of required Bootstrap stylesheets
+
+@import "bootstrap/scss/variables";
+@import "bootstrap/scss/variables-dark";
+@import "bootstrap/scss/maps";
+@import "bootstrap/scss/mixins";
+@import "bootstrap/scss/utilities";
+
+// BOOTSTRAP 5 IMPORTS
+
+@import "bootstrap/scss/root";
+@import "bootstrap/scss/reboot";
+@import "bootstrap/scss/type";
+@import "bootstrap/scss/images";
+@import "bootstrap/scss/containers";
+@import "bootstrap/scss/grid";
+@import "bootstrap/scss/tables";
+@import "bootstrap/scss/forms";
+@import "bootstrap/scss/buttons";
+@import "bootstrap/scss/transitions";
+@import "bootstrap/scss/dropdown";
+@import "bootstrap/scss/button-group";
+@import "bootstrap/scss/nav";
+@import "bootstrap/scss/navbar";
+@import "bootstrap/scss/card";
+@import "bootstrap/scss/accordion";
+@import "bootstrap/scss/breadcrumb";
+@import "bootstrap/scss/pagination";
+@import "bootstrap/scss/badge";
+@import "bootstrap/scss/alert";
+@import "bootstrap/scss/progress";
+@import "bootstrap/scss/list-group";
+@import "bootstrap/scss/close";
+@import "bootstrap/scss/toasts";
+@import "bootstrap/scss/modal";
+@import "bootstrap/scss/tooltip";
+@import "bootstrap/scss/popover";
+@import "bootstrap/scss/carousel";
+@import "bootstrap/scss/spinners";
+@import "bootstrap/scss/offcanvas";
+@import "bootstrap/scss/placeholders";
+@import "bootstrap/scss/helpers";
+@import "bootstrap/scss/utilities/api";
+
+// LAYOUT
+
+@import "layout/layout";
+
+// UTILS
+
+@import "utils/helpers";
+@import "utils/backgrounds";
+@import "utils/animate";
+@import "utils/comps-animations";
+
+// ELEMENTS
+
+@import "elements/buttons";
+@import "elements/dropdown";
+@import "elements/navs";
+@import "elements/badges";
+@import "elements/cards";
+@import "elements/tabs";
+@import "elements/accordions";
+@import "elements/modals";
+@import "elements/loaders";
+@import "elements/progressbar";
+@import "elements/timeline";
+@import "elements/listgroup";
+@import "elements/forms";
+@import "elements/pagination";
+@import "elements/chat";
+@import "elements/forms-wizard";
+
+// DASHBOARD BOXES
+
+@import "widgets/chart-boxes/chart-boxes";
+@import "widgets/content-boxes/content-boxes";
+@import "widgets/profile-boxes/profile-boxes";
+
+// PAGES
+
+@import "pages/userpages";
+
+// Applications
+
+@import "applications/applications-base";
+
+// COMPONENTS
+
+// Perfect Scrollbar
+@import "components/perfect-scrollbar/perfect-scrollbar";
+
+// RC Tabs
+@import "components/rc-tabs/rc-tabs";
+
+// Loading Buttons
+@import "components/loading-buttons/loading-buttons";
+
+// Hamburger Button
+@import "components/hamburgers/hamburgers";
+
+// Drawer
+@import "components/drawer/drawer";
+
+// Notifications
+@import "components/notifications/sweetalerts";
+@import "components/notifications/toastify";
+
+// Modals
+@import "components/modals/rodal";
+
+// Progress Bar
+@import "components/progress-bar/progress-bar";
+
+// Slick Carousel
+@import "components/slick-carousel/slick/slick";
+
+// Block loading
+@import "components/block-loading/block-loading";
+
+// Popovers & Tooltips
+@import "components/popovers-tooltips/popovers-tooltips";
+
+// Sticky Elements
+@import "components/sticky-elements/sticky-elements";
+
+// Calendar
+@import "components/calendar/calendar";
+
+// Splitters
+@import "components/splitters/splitters";
+
+// Tree View
+@import "components/tree-view/tree-view";
+
+// Tables
+@import "components/tables/tables";
+
+// Icons
+@import "components/icons/linearicons";
+@import "components/icons/p7icons";
+
+// FORMS
+
+@import "components/forms/datepicker/datepicker";
+@import "components/forms/rangeslider/rangeslider";
+@import "components/forms/multiselect/multiselect";
+@import "components/forms/wysiwyg/wysiwyg";
+@import "components/forms/toggle-switch/switch";
+@import "components/forms/dropzone/dropzone";
+@import "components/forms/typeahead/typeahead";
+
+// REACT WIDGETS (Disabled for React 19 compatibility)
+
+// @import "components/react-widgets/scss/react-widgets";
+
+// DEMO
+
+@import "demo-ui/demo";
+
+// Responsive
+
+@import "layout/responsive/responsive-base";
+
+// ORIGINAL ARCHITECTUI NAVIGATION STYLES
+
+// Navigation Menu Vertical
+.vertical-nav-menu {
+  position: relative;
+
+  &::after {
+    content: " ";
+    pointer-events: none;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: 0;
+  }
+
+  .metismenu-container,
+  .metismenu-item {
+    margin: 0;
+    padding: 0;
+    position: relative;
+  }
+  
+  .metismenu-container {
+    list-style: none;
+    text-align: left;
+
+    &:before {
+      opacity: 0;
+      transition: opacity 300ms;
+    }
+
+    .metismenu-link {
+      transition: transform .2s, height 300ms, color 300ms, background-color 300ms;
+      display: flex;
+      align-items: center;
+      line-height: 2.5rem;
+      height: 2.5rem;
+      padding: 0 $layout-spacer-x 0 45px;
+      position: relative;
+      border-radius: $border-radius;
+      color: $gray-800;
+      white-space: nowrap;
+
+      &:hover {
+        background: $dropdown-link-hover-bg;
+        text-decoration: none;
+
+        i.metismenu-icon {
+          opacity: .6;
+        }
+
+        i.metismenu-state-icon {
+          opacity: 1;
+        }
+      }
+
+      &.active {
+        color: $primary;
+        background: $dropdown-link-hover-bg;
+      }
+
+      &.has-active-child,
+      &.active {
+        font-weight: bold;
+      }
+    }
+
+    i.metismenu-state-icon,
+    i.metismenu-icon {
+      text-align: center;
+      width: 34px;
+      height: 34px;
+      line-height: 34px;
+      position: absolute;
+      left: 5px;
+      top: 50%;
+      margin-top: -17px;
+      font-size: 1.5rem;
+      opacity: .3;
+      transition: color 300ms;
+    }
+
+    i.metismenu-state-icon {
+      transition: transform 300ms;
+      left: auto;
+      right: 5px;
+
+      &.rotate-minus-90 {
+        transform: rotate(-180deg);
+      }
+    }
+
+    .metismenu-container {
+      transition: padding 300ms;
+
+      &.visible {
+        padding: .5em 0 0 2rem;
+
+        &:before {
+          content: '';
+          height: 100%;
+          opacity: 1;
+          width: 3px;
+          background: $dropdown-link-hover-bg;
+          position: absolute;
+          left: 20px;
+          top: 0;
+          border-radius: 15px;
+        }
+
+        & > .metismenu-item > .metismenu-link {
+          height: 2.3em;
+          line-height: 2.3em;
+          color: $gray-600;
+          margin: 0 0 3px;
+          padding-left: 35px;
+
+          &:hover {
+            color: $primary;
+          }
+
+          .metismenu-icon {
+            display: none;
+          }
+
+          &.active {
+            color: $primary;
+            background: $dropdown-link-hover-bg;
+          }
+        }
+      }
+
+      .metismenu-item > .metismenu-link {
+        height: 0;
+        overflow: hidden;
+      }
+
+      .metismenu-link {
+        padding-left: 35px;
+      }
+    }
+  }
+}
+
+// CUSTOM FIXES FOR UI ISSUES
+
+// Fix: User profile dropdown positioning on desktop
+@media (min-width: 768px) {
+  .header-btn-lg .dropdown-menu {
+    position: absolute !important;
+    left: auto !important;
+    right: 0 !important;
+    top: 100% !important;
+    transform: none !important;
+    width: auto !important;
+    min-width: 280px !important;
+    max-width: 320px !important;
+  }
+}
+
+// Fix: Badge text color override
+.badge.text-bg-success,
+.badge.text-bg-success small {
+  color: white !important;
+}
+
+// ORIGINAL ARCHITECTUI NAVIGATION STYLES
+@import "layout/sidebar/modifiers/_navmenu-vertical";
+@import "layout/sidebar/modifiers/_closed-sidebar";
+
+
+
