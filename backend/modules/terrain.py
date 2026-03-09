@@ -1,14 +1,16 @@
 """
 Moduł: Cechy terenu (Spec v3.0 - Strict Data Policy)
-Pobiera dane geometryczne i prawne z ULDK.
+Pobiera dane geometryczne z ULDK i dane infrastruktury z GESUT/BDOT10k.
 """
 import logging
 import math
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from backend.integrations.uldk import ULDKClient
+from backend.integrations.gesut_client import GESUTClient
 
 logger = logging.getLogger(__name__)
 _uldk = ULDKClient()
+_gesut = GESUTClient()
 
 async def fetch_terrain(
     parcel_id: str,
@@ -34,6 +36,7 @@ async def fetch_terrain(
         "status": "ERROR", # Default to error until proven real
         "source": "ULDK/GUGiK",
         "ok": False,
+        "infrastructure": [],  # Infrastructure data from GESUT/BDOT10k
     }
 
     try:
@@ -92,6 +95,23 @@ async def fetch_terrain(
                     except Exception:
                         pass
                 result["centroid"] = cent
+
+                # Fetch infrastructure data if we have centroid
+                if cent:
+                    try:
+                        bbox = {
+                            'minx': cent['lon'] - 0.01,  # ~1km buffer
+                            'miny': cent['lat'] - 0.01,
+                            'maxx': cent['lon'] + 0.01,
+                            'maxy': cent['lat'] + 0.01,
+                        }
+                        infrastructure = _gesut.get_infrastructure(bbox)
+                        if infrastructure:
+                            result["infrastructure"] = infrastructure
+                            logger.info(f"✓ Pobrano {len(infrastructure)} obiektów infrastruktury")
+                    except Exception as e:
+                        logger.warning(f"Infrastructure fetch failed: {e}")
+                        result["infrastructure"] = []
             else:
                 result["error"] = "Brak geometrii w bazie ULDK"
         else:
