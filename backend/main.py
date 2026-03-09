@@ -12,6 +12,8 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from backend.modules.terrain import fetch_terrain
 from backend.modules.property import PropertyAggregator
+from backend.core.valuation import calculate_compensation
+from backend.core.reports import create_summary_dict
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -26,6 +28,12 @@ class AnalyzeRequest(BaseModel):
     county: Optional[str] = None       # powiat — pomocniczo
     municipality: Optional[str] = None # gmina — pomocniczo (NIE jest obrebem!)
     infra_type_pref: str = "elektro_SN"
+
+class ValuationRequest(BaseModel):
+    parcel_area_m2: float              # Całkowita powierzchnia działki [m²]
+    value_per_m2: float                # Jednostkowa wartość gruntu [PLN/m²]
+    occupied_area_m2: float            # Powierzchnia zajęta przez pas ochronny [m²]
+    voltage: Optional[str] = None      # Napięcie (np. "400kV", "110kV")
 
 @app.get("/")
 async def index():
@@ -81,6 +89,59 @@ async def get_parcel_preview(parcel_id: str):
     """Szybki podgląd tylko z ULDK (Rule 6)."""
     terrain = await fetch_terrain(parcel_id)
     return terrain
+
+@app.post("/api/valuation")
+async def calculate_valuation(req: ValuationRequest):
+    """
+    Szybka kalkulacja wartości roszczenia na podstawie danych geometrycznych.
+
+    Zwraca rozbicie wg art. 124, 305², 225 KC + odsetki.
+    """
+    try:
+        result = calculate_compensation(
+            parcel_area_m2=req.parcel_area_m2,
+            value_per_m2=req.value_per_m2,
+            occupied_area_m2=req.occupied_area_m2,
+            voltage=req.voltage
+        )
+
+        return {
+            "ok": True,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "input": {
+                "parcel_area_m2": req.parcel_area_m2,
+                "value_per_m2": req.value_per_m2,
+                "occupied_area_m2": req.occupied_area_m2,
+                "voltage": req.voltage
+            },
+            "result": result
+        }
+    except Exception as e:
+        logger.error(f"Błąd kalkulacji wyceny: {e}")
+        return {
+            "ok": False,
+            "error": str(e),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+@app.post("/api/summary")
+async def get_analysis_summary(results: List[dict]):
+    """
+    Tworzy podsumowanie statystyczne z listy wyników analizy.
+    """
+    try:
+        summary = create_summary_dict(results)
+        return {
+            "ok": True,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "summary": summary
+        }
+    except Exception as e:
+        logger.error(f"Błąd tworzenia podsumowania: {e}")
+        return {
+            "ok": False,
+            "error": str(e)
+        }
 
 if __name__ == "__main__":
     import uvicorn
