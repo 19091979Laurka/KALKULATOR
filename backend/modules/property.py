@@ -93,7 +93,6 @@ class PropertyAggregator:
                                     "transactions": self.rcn.get_transactions_near_bbox(
                                                         bbox_2180[0]-1000, bbox_2180[1]-1000, bbox_2180[2]+1000, bbox_2180[3]+1000
                                     ) if bbox_2180 else self._empty_list(),
-                                    "gus_price": self.gus.fetch_market_price(terrain.get("voivodeship") or ""),
                     }
         results = await asyncio.gather(*tasks.values())
         data = dict(zip(tasks.keys(), results))
