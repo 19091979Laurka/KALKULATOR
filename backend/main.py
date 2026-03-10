@@ -1,13 +1,18 @@
 """
 KALKULATOR — Kalkulator Roszczeń Odszkodowawczych Przesyłowych
 Spec v3.0 (Strict Real Data Policy)
+BATCH: CSV upload for 99 parcels + History storage
 """
 import logging
 import os
+import csv
+import json
+import asyncio
+from io import StringIO
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from backend.modules.terrain import fetch_terrain
@@ -22,6 +27,8 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Kalkulator Roszczeń (Spec 3.0)", version="3.0.0")
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+HISTORY_DIR = Path(__file__).parent / ".." / "data" / "history"
+HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 
 class AnalyzeRequest(BaseModel):
     parcel_ids: str
@@ -34,6 +41,12 @@ class AnalyzeRequest(BaseModel):
     manual_land_type: Optional[str] = None        # "agricultural" | "building"
     manual_infra_detected: Optional[bool] = None  # Ręczne potwierdzenie infrastruktury
     manual_voltage: Optional[str] = None          # "WN" | "SN" | "nN"
+
+class BatchParcelRow(BaseModel):
+    parcel_id: str
+    obreb: Optional[str] = None
+    county: Optional[str] = None
+    municipality: Optional[str] = None
 
 class ValuationRequest(BaseModel):
     parcel_area_m2: float              # Całkowita powierzchnia działki [m²]
@@ -93,6 +106,145 @@ async def analyze(req: AnalyzeRequest):
         },
         "parcels": results
     }
+
+@app.post("/api/analyze/batch")
+async def analyze_batch_csv(file: UploadFile = File(...)):
+    """
+    Batch analysis from CSV upload.
+    CSV format: parcel_id,obreb,county,municipality
+
+    Returns analysis for all parcels + saves to history.
+    """
+    try:
+        # Read CSV
+        content = await file.read()
+        csv_str = content.decode('utf-8')
+        csv_reader = csv.DictReader(StringIO(csv_str))
+        rows = list(csv_reader)
+
+        if not rows:
+            raise ValueError("CSV jest pusty")
+
+        # Analyze all parcels in parallel
+        aggregator = PropertyAggregator()
+        all_results = []
+
+        async def analyze_single(row):
+            try:
+                parcel_id = row.get('parcel_id', '').strip()
+                if not parcel_id:
+                    return None
+
+                master_record = await aggregator.generate_master_record(
+                    parcel_id,
+                    infra_type_pref="elektro_SN",
+                    obreb=row.get('obreb'),
+                    county=row.get('county'),
+                    municipality=row.get('municipality'),
+                )
+
+                return {
+                    "parcel_id": parcel_id,
+                    "status": master_record.get("status", "REAL"),
+                    "data": master_record,
+                    "error": None
+                }
+            except Exception as e:
+                logger.error(f"Błąd analizy {row.get('parcel_id', '?')}: {e}")
+                return {
+                    "parcel_id": row.get('parcel_id', '?'),
+                    "status": "ERROR",
+                    "data": None,
+                    "error": str(e)
+                }
+
+        # Parallel analysis
+        tasks = [analyze_single(row) for row in rows]
+        results = await asyncio.gather(*tasks)
+        all_results = [r for r in results if r is not None]
+
+        # Save to history
+        batch_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        history_file = HISTORY_DIR / f"batch_{batch_id}.json"
+
+        history_data = {
+            "batch_id": batch_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "file_name": file.filename,
+            "parcel_count": len(all_results),
+            "successful": sum(1 for r in all_results if r["status"] != "ERROR"),
+            "results": all_results
+        }
+
+        with open(history_file, 'w', encoding='utf-8') as f:
+            json.dump(history_data, f, indent=2, ensure_ascii=False)
+
+        logger.info(f"Batch analysis saved to {history_file}")
+
+        return {
+            "ok": True,
+            "batch_id": batch_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "summary": {
+                "total": len(all_results),
+                "successful": sum(1 for r in all_results if r["status"] != "ERROR"),
+                "failed": sum(1 for r in all_results if r["status"] == "ERROR")
+            },
+            "parcels": all_results
+        }
+
+    except Exception as e:
+        logger.error(f"Błąd batch upload: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/history")
+async def get_analysis_history():
+    """
+    Get list of all batch analyses from history.
+    """
+    try:
+        history_files = sorted(HISTORY_DIR.glob("batch_*.json"), reverse=True)
+
+        summaries = []
+        for hfile in history_files[:20]:  # Last 20 batches
+            with open(hfile, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                summaries.append({
+                    "batch_id": data["batch_id"],
+                    "timestamp": data["timestamp"],
+                    "file_name": data["file_name"],
+                    "total": data["parcel_count"],
+                    "successful": data["successful"]
+                })
+
+        return {
+            "ok": True,
+            "history": summaries
+        }
+    except Exception as e:
+        logger.error(f"Błąd pobierania historii: {e}")
+        return {"ok": False, "error": str(e), "history": []}
+
+@app.get("/api/history/{batch_id}")
+async def get_batch_details(batch_id: str):
+    """
+    Get detailed results for a specific batch.
+    """
+    try:
+        history_file = HISTORY_DIR / f"batch_{batch_id}.json"
+        if not history_file.exists():
+            raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found")
+
+        with open(history_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        return {
+            "ok": True,
+            "data": data
+        }
+    except Exception as e:
+        logger.error(f"Błąd pobierania szczegółów batch: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/parcel/{parcel_id}")
 async def get_parcel_preview(parcel_id: str):
