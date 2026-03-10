@@ -8,12 +8,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from backend.modules.terrain import fetch_terrain
 from backend.modules.property import PropertyAggregator
 from backend.core.valuation import calculate_compensation
 from backend.core.reports import create_summary_dict
+from backend.modules.pdf_report import generate_pdf
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -151,6 +152,39 @@ async def get_analysis_summary(results: List[dict]):
             "ok": False,
             "error": str(e)
         }
+
+class PdfReportRequest(BaseModel):
+    parcels: List[dict]          # lista {parcel_id, master_record}
+    owner_name: Optional[str] = "Właściciel"
+    kw_number: Optional[str] = ""
+    address: Optional[str] = ""
+
+@app.post("/api/report/pdf")
+async def report_pdf(req: PdfReportRequest):
+    """
+    Generuje raport PDF z danych analizy i zwraca plik do pobrania.
+    Dane wejściowe: lista wyników z /api/analyze (pole parcels).
+    """
+    try:
+        masters = [p.get("master_record", {}) for p in req.parcels]
+        ids     = [p.get("parcel_id", f"Dz.{i+1}") for i, p in enumerate(req.parcels)]
+        pdf_bytes = generate_pdf(
+            parcels_data=masters,
+            parcel_ids=ids,
+            owner_name=req.owner_name or "Właściciel",
+            kw_number=req.kw_number or "",
+            address=req.address or "",
+        )
+        filename = f"raport_KSWS_{ids[0].replace('/','_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as e:
+        logger.error(f"Błąd generowania PDF: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn

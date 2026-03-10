@@ -71,13 +71,15 @@ const DEFAULT_CENTER = [52.1, 19.5];
 const DEFAULT_ZOOM   = 6;
 
 export default function KalkulatorPage() {
-  const [parcelIds,    setParcelIds]    = useState("Szapsk 302/6");
+  const [parcelIds,    setParcelIds]    = useState("141906_5.0029.60, 141906_5.0029.129");
   const [obreb,        setObreb]        = useState("");
   const [county,       setCounty]       = useState("");
   const [municipality, setMunicipality] = useState("");
   const [infraType,    setInfraType]    = useState("elektro_SN");
   const [loading,      setLoading]      = useState(false);
+  const [pdfLoading,   setPdfLoading]   = useState(false);
   const [result,       setResult]       = useState(null);
+  const [allResults,   setAllResults]   = useState(null); // pełna odpowiedź /api/analyze
   const [mapCenter,    setMapCenter]    = useState(DEFAULT_CENTER);
   const [mapZoom,      setMapZoom]      = useState(DEFAULT_ZOOM);
   // Korekta ręczna
@@ -119,6 +121,7 @@ export default function KalkulatorPage() {
       if (!first) throw new Error("Brak wyników");
       if (first.data_status === "ERROR" || first.master_record?.status === "ERROR")
         throw new Error(first.master_record?.message || first.error || "Działka nie znaleziona");
+      setAllResults(data.parcels);
       setResult(first);
       const centroid = first.master_record?.geometry?.centroid_ll;
       if (Array.isArray(centroid) && centroid[0] != null) {
@@ -130,6 +133,39 @@ export default function KalkulatorPage() {
       toast.error(err.message || "Wystąpił błąd.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ── PDF Download ─────────────────────────────────────────────────────────
+  const downloadPdf = async () => {
+    if (!allResults) return;
+    setPdfLoading(true);
+    try {
+      const res = await fetch("/api/report/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parcels: allResults,
+          owner_name: "Właściciel",
+          kw_number:  "",
+          address:    "",
+        }),
+      });
+      if (!res.ok) throw new Error("Błąd generowania PDF");
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      const cd   = res.headers.get("Content-Disposition") || "";
+      const fnMatch = cd.match(/filename="([^"]+)"/);
+      a.href     = url;
+      a.download = fnMatch ? fnMatch[1] : "raport_KSWS.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDF pobrany ✓");
+    } catch (err) {
+      toast.error(err.message || "Błąd PDF");
+    } finally {
+      setPdfLoading(false);
     }
   };
 
@@ -353,10 +389,22 @@ export default function KalkulatorPage() {
                       <h5 className="mb-0">{result.parcel_id}</h5>
                       <small className="opacity-7">{locationStr} · {new Date().toLocaleString("pl-PL")}</small>
                     </div>
-                    <div className="d-flex gap-2 flex-wrap">
+                    <div className="d-flex gap-2 flex-wrap align-items-center">
                       <Badge pill color="success"><i className="pe-7s-check me-1" />REAL DATA</Badge>
                       {hasLine && <Badge pill color="danger"><i className="pe-7s-bolt me-1" />Kolizja z linią</Badge>}
                       <Badge pill color="light" className="text-dark">{ksws.label || infraType}</Badge>
+                      <Button
+                        color="light" size="sm"
+                        className="btn-pill ms-2 fw-semibold"
+                        style={{ background: "#fff", border: "1px solid #ddd", color: "#E74C3C" }}
+                        onClick={downloadPdf}
+                        disabled={pdfLoading}
+                        title="Pobierz raport PDF z wizualizacją 3D"
+                      >
+                        {pdfLoading
+                          ? <><Spinner size="sm" className="me-1" />Generuję PDF…</>
+                          : <><i className="pe-7s-download me-1" />Pobierz PDF</>}
+                      </Button>
                     </div>
                   </CardBody>
                 </Card>
