@@ -105,13 +105,13 @@ class GESUTClient:
     async def fetch_infrastructure(self, bbox: Tuple[float, float, float, float]) -> Dict[str, Any]:
         """
         Fetch infrastructure data from WMS service.
-        
+
         Uses WMS GetMap for presence detection and GetFeatureInfo for attributes.
         Never estimates length from pixels (Rule 7.B).
-        
+
         Args:
             bbox: Bounding box as (e_min, n_min, e_max, n_max) in EPSG:2180
-        
+
         Returns:
             Dict with infrastructure detection results
         """
@@ -122,7 +122,7 @@ class GESUTClient:
                 "error": "Invalid bbox format. Expected tuple of 4 floats (e_min, n_min, e_max, n_max)",
                 "status": "ERROR"
             }
-        
+
         # Validate bbox coordinates
         try:
             e_min, n_min, e_max, n_max = bbox
@@ -143,34 +143,40 @@ class GESUTClient:
             return {
                 "ok": False,
                 "error": f"WMS service {self.wms_url} unavailable",
-                "status": "ERROR"
+                "status": "UNCERTAIN",
+                "detected": None,
+                "info": "WMS niedostępny — użytkownik musi ręcznie potwierdzić infrastrukturę (geoportal.gov.pl)"
             }
         logger.info("GESUT fetch_infrastructure request: bbox_2180=(e=%.0f..%.0f n=%.0f..%.0f)", *bbox)
 
         # Fetch infrastructure data
         # Warstwy zweryfikowane z GetCapabilities KIUT WFS:
         layers = "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny,przewod_cieplowniczy"
-        
+
         try:
             # Build and fetch GetMap URL
             url = self._build_getmap_url(layers, bbox, 512, 512)
             r = requests.get(url, timeout=15, headers={'User-Agent': 'Kalkulator-KIUT/3.0'})
-            
+
             # Validate response
             if r.status_code != 200:
                 return {
-                    "ok": False,
-                    "error": f"WMS GetMap request failed with status {r.status_code}",
-                    "status": "ERROR"
+                    "ok": True,
+                    "status": "UNCERTAIN",
+                    "detected": None,
+                    "error": f"WMS GetMap zwrócił {r.status_code}",
+                    "info": "Nie można pobrać danych WMS — sprawdź geoportal.gov.pl | użytkownik potwierdza ręcznie"
                 }
-            
+
             # Check Content-Type
             content_type = r.headers.get('Content-Type', '').lower()
             if 'image' not in content_type:
                 return {
-                    "ok": False,
-                    "error": f"Invalid response Content-Type: {content_type}",
-                    "status": "ERROR"
+                    "ok": True,
+                    "status": "UNCERTAIN",
+                    "detected": None,
+                    "error": f"WMS zwrócił {content_type} zamiast PNG",
+                    "info": "Dane WMS niedostępne — przepytaj geoportal.gov.pl lub potwierdź ręcznie"
                 }
 
             # Get feature info for attributes

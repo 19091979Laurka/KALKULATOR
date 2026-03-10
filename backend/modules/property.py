@@ -111,13 +111,20 @@ class PropertyAggregator:
         primary_class = land_use_list[0]["class"] if land_use_list else "R"
         agri = is_agricultural(primary_class)
 
+        # WAŻNE: jeśli EGiB pokazuje budynki na działce → grunt BUDOWLANY, nie rolny!
+        has_buildings = len(data.get("buildings", [])) > 0
+        if has_buildings and agri:
+            logger.info("Działka ma budynki w EGiB → zmiana klasyfikacji z rolna na budowlaną")
+            agri = False
+            primary_class = "B"  # força do "Building" classification
+
         # Cena — priorytet: RCN transakcje → GUS BDL z klasą gruntu → fallback
         rcn_price = self._calculate_avg_price(data["transactions"])
 
-        # GUS z klasą gruntu (fix 450 → ~8.50 dla rolnych)
+        # GUS z klasą gruntu (poprawiona obsługa zabudowanej)
         gus_result = await self.gus.fetch_market_price(
             terrain.get("voivodeship") or "",
-            land_class=primary_class,
+            land_class=primary_class if primary_class == "B" or not agri else primary_class,
         )
         gus_price = gus_result.get("price_m2") if gus_result.get("ok") else None
         land_type = gus_result.get("land_type", "agricultural" if agri else "building")
