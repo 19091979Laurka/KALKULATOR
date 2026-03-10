@@ -28,10 +28,25 @@ function GeoJSONLayers({ parcelGeojson }) {
   const map = useMap();
   React.useEffect(() => {
     if (!parcelGeojson) return;
+
+    // ✓ Działka
     const layer = L.geoJSON(parcelGeojson, {
-      style: { color: "#545cd8", weight: 3, fillColor: "#545cd8", fillOpacity: 0.15 },
+      style: { color: "#a91079", weight: 3, fillColor: "#a91079", fillOpacity: 0.15 },
     });
     layer.addTo(map);
+
+    // ✓ OpenInfraMap - linie energetyczne
+    L.tileLayer('https://tiles.openinframap.org/power_lines/{z}/{x}/{y}.png', {
+      attribution: '© OpenInfraMap',
+      opacity: 0.8
+    }).addTo(map);
+
+    // ✓ OpenInfraMap - elektrownie
+    L.tileLayer('https://tiles.openinframap.org/power_plants/{z}/{x}/{y}.png', {
+      attribution: '© OpenInfraMap',
+      opacity: 0.6
+    }).addTo(map);
+
     try {
       const bounds = layer.getBounds();
       if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });

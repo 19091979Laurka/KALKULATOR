@@ -27,14 +27,20 @@ const Map3D = ({
   const rendererRef = useRef(null);
   const controlsRef = useRef(null);
 
-  // Kolory dla infrastruktury
+  // Kolory dla infrastruktury - profesjonalne napięcia elektryczne
   const INFRASTRUCTURE_COLORS = {
-    elektro: 0xe74c3c,    // Czerwony
-    gaz: 0xf39c12,        // Pomarańczowy
-    woda: 0x3498db,       // Niebieski
-    teleko: 0x9b59b6,     // Purpurowy
-    granica: 0x2c3e50,    // Ciemny szary
-    teren: 0x27ae60       // Zielony
+    "380kV": 0xff0000,     // Czerwony - główne linie
+    "220kV": 0xff6600,     // Pomarańczowy - linie międzynarodowe
+    "110kV": 0xffcc00,     // Żółty - linie przesyłowe
+    "30kV": 0x00cc00,      // Zielony - SN
+    "15kV": 0x00cc00,      // Zielony - SN
+    "nN": 0x0066ff,        // Niebieski - nN
+    gaz: 0xf39c12,         // Pomarańczowy
+    woda: 0x3498db,        // Niebieski
+    teleko: 0x9b59b6,      // Purpurowy
+    granica: 0xa91079,     // Magenta - granice działki
+    teren: 0x27ae60,       // Zielony
+    slup: 0x8B4513         // Brązowy - słupy
   };
 
   useEffect(() => {

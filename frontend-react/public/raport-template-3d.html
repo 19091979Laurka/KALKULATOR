@@ -14,15 +14,17 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f5f7fa;
-            color: #2c3e50;
+            font-family: 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background: #f0f2f5;
+            color: #1a202c;
+            line-height: 1.5;
         }
 
         .report-container {
             max-width: 1400px;
             margin: 0 auto;
             padding: 40px 20px;
+            font-size: 15px;
         }
 
         .report-header {
@@ -66,24 +68,26 @@
 
         .content-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
             margin-bottom: 30px;
         }
 
         .card {
             background: white;
-            border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e8e8e8;
         }
 
         .card h2 {
-            font-size: 1.5rem;
-            color: #2c3e50;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 3px solid #667eea;
+            font-size: 1.3rem;
+            color: #1a202c;
+            margin-bottom: 18px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #667eea;
+            font-weight: 600;
         }
 
         .card h3 {
@@ -91,6 +95,28 @@
             color: #34495e;
             margin-top: 20px;
             margin-bottom: 15px;
+        }
+
+        .card.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .card.compact {
+            grid-column: span 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .card.col-2 {
+            grid-column: span 2;
+        }
+
+        .card.col-3 {
+            grid-column: span 3;
         }
 
         .data-table {
@@ -133,39 +159,46 @@
         }
 
         .stat-box {
-            background: linear-gradient(135deg, #ecf0f1 0%, #bdc3c7 100%);
-            padding: 20px;
-            border-radius: 10px;
+            background: #f5f7fa;
+            padding: 18px;
+            border-radius: 8px;
             text-align: center;
-            border-left: 4px solid #95a5a6;
+            border-left: 3px solid #cbd5e0;
+            transition: all 0.3s ease;
+        }
+
+        .stat-box:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
 
         .stat-box.success {
-            background: linear-gradient(135deg, #d5f4e6 0%, #a9dfbf 100%);
+            background: #edf9f4;
             border-left-color: #27ae60;
         }
 
         .stat-box.danger {
-            background: linear-gradient(135deg, #fadbd8 0%, #f5b7b1 100%);
+            background: #fef5f5;
             border-left-color: #e74c3c;
         }
 
         .stat-box.info {
-            background: linear-gradient(135deg, #d6eaf8 0%, #aed6f1 100%);
+            background: #eef5ff;
             border-left-color: #3498db;
         }
 
         .stat-label {
-            font-size: 0.85rem;
-            color: #7f8c8d;
+            font-size: 0.8rem;
+            color: #718096;
             font-weight: 500;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .stat-value {
-            font-size: 2rem;
+            font-size: 1.9rem;
             font-weight: 700;
-            color: #2c3e50;
+            color: #1a202c;
         }
 
         .stat-value.success {
@@ -354,15 +387,24 @@
         @media print {
             body {
                 background: white;
+                color: #000;
             }
             .card {
                 page-break-inside: avoid;
                 box-shadow: none;
-                border: 1px solid #ecf0f1;
+                border: 1px solid #d0d0d0;
+                break-inside: avoid;
             }
             .map-container {
                 page-break-inside: avoid;
-                height: 400px;
+                height: 350px;
+                break-inside: avoid;
+            }
+            .print-button {
+                display: none;
+            }
+            .content-grid {
+                gap: 15px;
             }
         }
 
@@ -431,9 +473,27 @@
             transform: translateY(0);
         }
 
+        @media (max-width: 1200px) {
+            .content-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .card.col-2 {
+                grid-column: span 1;
+            }
+        }
+
         @media (max-width: 768px) {
             .content-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .card.col-2 {
+                grid-column: span 2;
+            }
+
+            .card.col-3 {
+                grid-column: span 2;
             }
 
             .infrastructure-legend {
@@ -450,6 +510,16 @@
 
             .report-meta {
                 grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .card.col-2 {
+                grid-column: span 1;
             }
         }
     </style>
@@ -480,10 +550,41 @@
         <!-- PRINT BUTTON -->
         <button class="print-button" onclick="window.print()">🖨️ Drukuj / Zapisz jako PDF</button>
 
-        <!-- MAIN CONTENT GRID -->
+        <!-- MAIN CONTENT GRID - KPI CARDS -->
+        <div class="content-grid">
+            <!-- KPI CARD 1 -->
+            <div class="card compact">
+                <div style="color: #667eea; font-size: 2.5rem; margin-bottom: 10px;">📊</div>
+                <div class="stat-label">ID Działki</div>
+                <div class="stat-value" style="font-size: 1.1rem; color: #1a202c;" id="parcelIdKpi">142003_2.0002.81/5</div>
+            </div>
+
+            <!-- KPI CARD 2 -->
+            <div class="card compact">
+                <div style="color: #27ae60; font-size: 2.5rem; margin-bottom: 10px;">📐</div>
+                <div class="stat-label">Powierzchnia (m²)</div>
+                <div class="stat-value" style="font-size: 1.3rem; color: #27ae60;" id="areaKpi">—</div>
+            </div>
+
+            <!-- KPI CARD 3 -->
+            <div class="card compact">
+                <div style="color: #e74c3c; font-size: 2.5rem; margin-bottom: 10px;">💰</div>
+                <div class="stat-label">Wartość Gruntu (zł)</div>
+                <div class="stat-value" style="font-size: 1.3rem; color: #e74c3c;" id="propertyValueKpi">—</div>
+            </div>
+
+            <!-- KPI CARD 4 -->
+            <div class="card compact">
+                <div style="color: #3498db; font-size: 2.5rem; margin-bottom: 10px;">⚡</div>
+                <div class="stat-label">Odszkodowanie (zł)</div>
+                <div class="stat-value" style="font-size: 1.3rem; color: #3498db;" id="compensationKpi">—</div>
+            </div>
+        </div>
+
+        <!-- SECONDARY CARDS GRID -->
         <div class="content-grid">
             <!-- SEKCJA 1: PODSTAWOWE DANE -->
-            <div class="card">
+            <div class="card col-2">
                 <h2>📋 Dane Działki</h2>
 
                 <h3>Lokalizacja i Identyfikacja</h3>
@@ -510,30 +611,11 @@
                     <tr>
                         <td><span class="label">Obwód:</span><span class="value" id="perimeter">—</span></td>
                     </tr>
-                    <tr>
-                        <td><span class="label">Klasa kształtu:</span><span class="value" id="shapeClass">—</span></td>
-                    </tr>
-                    <tr>
-                        <td><span class="label">Źródło danych:</span><span class="value" id="geomSource">ULDK GUGiK</span></td>
-                    </tr>
-                </table>
-
-                <h3>Użytkowanie Gruntu</h3>
-                <table class="data-table">
-                    <tr>
-                        <td><span class="label">Klasa EGIB:</span><span class="value" id="landClass">—</span></td>
-                    </tr>
-                    <tr>
-                        <td><span class="label">Typ użytkowania:</span><span class="value" id="landType">—</span></td>
-                    </tr>
-                    <tr>
-                        <td><span class="label">Liczba budynków:</span><span class="value" id="buildingCount">—</span></td>
-                    </tr>
                 </table>
             </div>
 
             <!-- SEKCJA 2: WYCENA I WARTOŚĆ -->
-            <div class="card">
+            <div class="card col-2">
                 <h2>💰 Wycena Nieruchomości</h2>
 
                 <h3>Cena Gruntu</h3>
@@ -548,18 +630,6 @@
                         <td><span class="label">Transakcje lokalne:</span><span class="value" id="transactions">—</span></td>
                     </tr>
                 </table>
-
-                <h3>Wartość Całkowita</h3>
-                <div class="stats-grid">
-                    <div class="stat-box success">
-                        <div class="stat-label">💵 Wartość Gruntu</div>
-                        <div class="stat-value success" id="propertyValue">—</div>
-                    </div>
-                    <div class="stat-box info">
-                        <div class="stat-label">📐 Pow. m²</div>
-                        <div class="stat-value info" id="areaStat">—</div>
-                    </div>
-                </div>
 
                 <h3>Infrastruktura</h3>
                 <div id="infraStatus">
