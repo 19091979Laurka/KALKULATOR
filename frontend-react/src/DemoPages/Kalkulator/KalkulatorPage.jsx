@@ -13,6 +13,8 @@ import PageTitleAlt2 from "../../Layout/AppMain/PageTitleAlt2";
 import Tabs, { TabPane } from "../../utils/TabsWrapper";
 import { ScrollableInkTabBar, TabContent } from "../../utils/TabsWrapper";
 import ReportGenerator from "../../Components/ReportGenerator";
+import Map3D from "../../components/Map3D";
+import "./KalkulatorPage.css";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -48,21 +50,15 @@ const fmtPLN = (v) => (v != null && !isNaN(v) ? `${fmt(v)} PLN` : "—");
 const fmtM2  = (v) => (v != null && !isNaN(v) ? `${fmt(v, 2)} zł/m²` : "—");
 
 // ── Kafelek statystyczny ──────────────────────────────────────────────────────
-function StatWidget({ heading, subheading, value, gradient = "bg-night-fade", icon = "pe-7s-graph" }) {
+function StatWidget({ heading, subheading, value, colorClass = "magenta", icon = "pe-7s-graph" }) {
   return (
-    <div className={`card mb-3 widget-content ${gradient}`}>
-      <div className="widget-content-wrapper text-white">
-        <div className="widget-content-left me-3 opacity-7">
-          <i className={`${icon} fa-2x`} />
-        </div>
-        <div className="widget-content-left">
-          <div className="widget-heading">{heading}</div>
-          <div className="widget-subheading">{subheading}</div>
-        </div>
-        <div className="widget-content-right">
-          <div className="widget-numbers text-white">{value}</div>
-        </div>
+    <div className={`kalkulator-stat-widget ${colorClass}`}>
+      <div className={`kalkulator-stat-icon`}>
+        <i className={icon} />
       </div>
+      <div className="kalkulator-stat-label">{heading}</div>
+      <div className="kalkulator-stat-value">{value}</div>
+      <div className="kalkulator-stat-sublabel">{subheading}</div>
     </div>
   );
 }
@@ -213,36 +209,37 @@ export default function KalkulatorPage() {
             />
 
             {/* ── Formularz ── */}
-            <Card className="main-card mb-3" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.08)", borderRadius: "8px" }}>
-              <CardBody>
-                <CardTitle className="mb-3" style={{ fontSize: "18px", fontWeight: 600, color: "#2c3e50" }}>
-                  <i className="pe-7s-rocket me-2 icon-gradient bg-ripe-malin" /> Identyfikacja działki
-                </CardTitle>
+            <Card className="kalkulator-card card-magenta mb-3">
+              <div className="kalkulator-card-header">
+                <i className="pe-7s-rocket" />
+                <h3>Identyfikacja działki</h3>
+              </div>
+              <CardBody className="kalkulator-card-body">
                 <Tabs defaultActiveKey="1" renderTabBar={() => <ScrollableInkTabBar />} renderTabContent={() => <TabContent />}>
                   <TabPane tab="Analiza" key="1">
                     <form onSubmit={runAnalysis}>
                       <Row className="align-items-end">
                         <Col md="4">
-                          <FormGroup>
+                          <FormGroup className="kalkulator-form-group">
                             <Label>Identyfikator działki *</Label>
                             <Input value={parcelIds} onChange={e => setParcelIds(e.target.value)}
                               placeholder="Szapsk 302/6 lub 142003_2.0001.74/1" />
                           </FormGroup>
                         </Col>
                         <Col md="2">
-                          <FormGroup>
+                          <FormGroup className="kalkulator-form-group">
                             <Label>Obręb</Label>
                             <Input value={obreb} onChange={e => setObreb(e.target.value)} placeholder="np. Szapsk" />
                           </FormGroup>
                         </Col>
                         <Col md="2">
-                          <FormGroup>
+                          <FormGroup className="kalkulator-form-group">
                             <Label>Powiat</Label>
                             <Input value={county} onChange={e => setCounty(e.target.value)} placeholder="np. płoński" />
                           </FormGroup>
                         </Col>
                         <Col md="2">
-                          <FormGroup>
+                          <FormGroup className="kalkulator-form-group">
                             <Label>Gmina</Label>
                             <Input value={municipality} onChange={e => setMunicipality(e.target.value)} placeholder="np. Baboszewo" />
                           </FormGroup>
@@ -251,10 +248,10 @@ export default function KalkulatorPage() {
                       </Row>
 
                       {/* ── Korekta ręczna ── */}
-                      <div className="mb-3">
+                      <div className="kalkulator-mb-3">
                         <Button
                           type="button" color="link" size="sm"
-                          className="p-0 text-muted text-decoration-none"
+                          className="kalkulator-btn kalkulator-btn-link p-0"
                           onClick={() => setShowManual(v => !v)}
                         >
                           <i className={`me-1 pe-7s-angle-${showManual ? "up" : "down"}`} />
@@ -262,15 +259,22 @@ export default function KalkulatorPage() {
                         </Button>
                       </div>
                       {showManual && (
-                        <div className="p-3 mb-3 rounded" style={{ background: "#fff8e1", border: "1px solid #ffe082" }}>
-                          <div className="small fw-semibold mb-2 text-warning-emphasis">
-                            <i className="pe-7s-tools me-1" />
-                            Korekta ręczna — gdy API zwraca błędne dane (np. rolna zamiast budowlanej, brak wykrytej linii)
+                        <div className="kalkulator-alert kalkulator-alert-warning kalkulator-mb-3">
+                          <div className="kalkulator-alert-icon"><i className="pe-7s-tools" /></div>
+                          <div className="kalkulator-alert-content">
+                            <div className="kalkulator-alert-title">Korekta ręczna</div>
+                            <div className="kalkulator-alert-message">
+                              Gdy API zwraca błędne dane (np. rolna zamiast budowlanej, brak wykrytej linii)
+                            </div>
                           </div>
+                        </div>
+                      )}
+                      {showManual && (
+                        <div className="kalkulator-mb-3 p-3 rounded" style={{ background: "#fff8e1", border: "1px solid #ffe082" }}>
                           <Row>
                             <Col md="3">
-                              <FormGroup>
-                                <Label className="small">Cena rynkowa [zł/m²]</Label>
+                              <FormGroup className="kalkulator-form-group">
+                                <Label><small>Cena rynkowa [zł/m²]</small></Label>
                                 <Input
                                   type="number" step="0.01" min="0"
                                   placeholder="np. 200"
@@ -281,8 +285,8 @@ export default function KalkulatorPage() {
                               </FormGroup>
                             </Col>
                             <Col md="3">
-                              <FormGroup>
-                                <Label className="small">Typ gruntu</Label>
+                              <FormGroup className="kalkulator-form-group">
+                                <Label><small>Typ gruntu</small></Label>
                                 <Input
                                   type="select" value={manualLandType}
                                   onChange={e => setManualLandType(e.target.value)}
@@ -295,8 +299,8 @@ export default function KalkulatorPage() {
                               </FormGroup>
                             </Col>
                             <Col md="3">
-                              <FormGroup>
-                                <Label className="small">Infrastruktura wykryta</Label>
+                              <FormGroup className="kalkulator-form-group">
+                                <Label><small>Infrastruktura wykryta</small></Label>
                                 <Input
                                   type="select" value={manualInfraDetect}
                                   onChange={e => setManualInfraDetect(e.target.value)}
@@ -309,8 +313,8 @@ export default function KalkulatorPage() {
                               </FormGroup>
                             </Col>
                             <Col md="3">
-                              <FormGroup>
-                                <Label className="small">Napięcie</Label>
+                              <FormGroup className="kalkulator-form-group">
+                                <Label><small>Napięcie</small></Label>
                                 <Input
                                   type="select" value={manualVoltage}
                                   onChange={e => setManualVoltage(e.target.value)}
@@ -342,14 +346,12 @@ export default function KalkulatorPage() {
 
                       <Button
                         type="submit"
-                        color="primary"
-                        className="btn-shadow btn-pill px-5 fw-semibold"
+                        className="kalkulator-btn kalkulator-btn-primary kalkulator-btn-lg kalkulator-btn-pill"
                         disabled={loading}
-                        style={{ background: "linear-gradient(135deg, #a91079 0%, #d81b60 100%)", border: "none", fontSize: "15px" }}
                       >
                         {loading
                           ? <><Spinner size="sm" className="me-2" />Analizuję…</>
-                          : <><i className="pe-7s-bolt me-2" />Generuj raport</>}
+                          : <><i className="pe-7s-bolt" />Generuj raport</>}
                       </Button>
                     </form>
                   </TabPane>
@@ -359,16 +361,12 @@ export default function KalkulatorPage() {
 
             {/* ── Pusty stan ── */}
             {!result && !loading && (
-              <div className="card mb-3 widget-content bg-heavy-rain">
-                <div className="widget-content-wrapper text-center py-5">
-                  <div className="widget-content-left mx-auto">
-                    <i className="pe-7s-map-2 opacity-5 mb-3 d-block" style={{ fontSize: "4rem" }} />
-                    <div className="widget-heading">Wprowadź numer działki</div>
-                    <div className="widget-subheading mt-1">
-                      System pobierze geometrię (ULDK), infrastrukturę (GESUT), ceny (RCN/GUS)<br />
-                      i wyliczy roszczenie wg metodyki KSWS Track A/B.
-                    </div>
-                  </div>
+              <div className="kalkulator-empty-state kalkulator-mb-3">
+                <div className="kalkulator-empty-state-icon"><i className="pe-7s-map-2" /></div>
+                <div className="kalkulator-empty-state-title">Wprowadź numer działki</div>
+                <div className="kalkulator-empty-state-message">
+                  System pobierze geometrię (ULDK), infrastrukturę (GESUT), ceny (RCN/GUS)<br />
+                  i wyliczy roszczenie wg metodyki KSWS Track A/B.
                 </div>
               </div>
             )}
@@ -377,8 +375,8 @@ export default function KalkulatorPage() {
             {result && (
               <>
                 {/* Pasek nagłówka */}
-                <Card className="main-card mb-3 border-0"
-                  style={{ background: "linear-gradient(135deg,#3f0d59 0%,#a91079 100%)", boxShadow: "0 4px 12px rgba(169, 16, 121, 0.2)", borderRadius: "8px" }}>
+                <Card className="kalkulator-card kalkulator-card-magenta mb-3 border-0"
+                  style={{ background: "linear-gradient(135deg,#3f0d59 0%,#a91079 100%)", boxShadow: "0 4px 12px rgba(169, 16, 121, 0.2)", borderRadius: "12px" }}>
                   <CardBody className="d-flex justify-content-between align-items-center flex-wrap gap-2 py-3">
                     <div className="text-white">
                       <h5 className="mb-0">{result.parcel_id}</h5>
@@ -390,7 +388,7 @@ export default function KalkulatorPage() {
                       <Badge pill color="light" className="text-dark">{ksws.label || infraType}</Badge>
                       <Button
                         color="light" size="sm"
-                        className="btn-pill ms-2 fw-semibold"
+                        className="kalkulator-btn-pill fw-semibold ms-2"
                         style={{ background: "#fff", border: "1px solid #ddd", color: "#E74C3C" }}
                         onClick={downloadPdf}
                         disabled={pdfLoading}
@@ -406,58 +404,52 @@ export default function KalkulatorPage() {
 
                 {/* ── INFRASTRUKTURA: Karta do potwierdzenia ── */}
                 {!power.exists && manualInfraDetect !== "true" && (
-                  <Card className="main-card mb-3" style={{ borderLeft: "4px solid #f39c12", background: "#fffbf0" }}>
-                    <CardBody>
-                      <div className="d-flex align-items-start gap-3">
-                        <div style={{ fontSize: "2rem" }}>⚡</div>
-                        <div className="flex-grow-1">
-                          <h6 className="mb-2">
-                            <strong>System: Brak infrastruktury</strong>
-                          </h6>
-                          <p className="text-muted small mb-3">
-                            Automatyczna detekacja nie znalazła linii (WFS niedostępny).
-                            Ale jeśli <strong>WIESZ że działka ma linie</strong> — potwierdź poniżej aby przeliczyć Track A/B.
-                          </p>
-                          <div className="d-flex gap-2">
-                            <Button
-                              color="success" size="sm" className="btn-pill"
-                              onClick={() => {
-                                setManualInfraDetect("true");
-                                // Odśwież analizę
-                                runAnalysis({ preventDefault: () => {} });
-                              }}
-                            >
-                              ✓ TAK — ma linie (przeliczy Track A/B)
-                            </Button>
-                            <Button
-                              color="secondary" size="sm" className="btn-outline"
-                              onClick={() => setManualInfraDetect("false")}
-                            >
-                              ✗ NIE — na pewno brak
-                            </Button>
-                            <Button
-                              color="link" size="sm" className="text-muted p-0"
-                              onClick={() => setShowManual(true)}
-                            >
-                              Szczegóły...
-                            </Button>
-                          </div>
-                        </div>
+                  <div className="kalkulator-alert kalkulator-alert-warning kalkulator-mb-3">
+                    <div className="kalkulator-alert-icon"><i className="pe-7s-bolt" /></div>
+                    <div className="kalkulator-alert-content">
+                      <div className="kalkulator-alert-title">System: Brak infrastruktury</div>
+                      <div className="kalkulator-alert-message">
+                        Automatyczna detekacja nie znalazła linii (WFS niedostępny).
+                        Ale jeśli <strong>WIESZ że działka ma linie</strong> — potwierdź poniżej aby przeliczyć Track A/B.
                       </div>
-                    </CardBody>
-                  </Card>
+                      <div className="d-flex gap-2 mt-3">
+                        <Button
+                          color="success" size="sm" className="kalkulator-btn-pill"
+                          onClick={() => {
+                            setManualInfraDetect("true");
+                            // Odśwież analizę
+                            runAnalysis({ preventDefault: () => {} });
+                          }}
+                        >
+                          ✓ TAK — ma linie (przeliczy Track A/B)
+                        </Button>
+                        <Button
+                          color="secondary" size="sm" className="kalkulator-btn-pill"
+                          onClick={() => setManualInfraDetect("false")}
+                        >
+                          ✗ NIE — na pewno brak
+                        </Button>
+                        <Button
+                          color="link" size="sm" className="kalkulator-btn-link"
+                          onClick={() => setShowManual(true)}
+                        >
+                          Szczegóły...
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 )}
 
                 {/* ── 4 kafelki ── */}
                 <Row>
                   <Col lg="6" xl="3">
-                    <StatWidget heading="Powierzchnia" subheading="EGiB / ULDK" gradient="bg-night-fade"
+                    <StatWidget heading="Powierzchnia" subheading="EGiB / ULDK" colorClass="blue"
                       icon="pe-7s-map"
                       value={areaM2 > 0 ? <><CountUp end={areaM2} duration={1.2} separator=" " /> m²</> : "—"} />
                   </Col>
                   <Col lg="6" xl="3">
                     <StatWidget heading="Klasa gruntu" subheading={egib.land_type === "agricultural" ? "Rolny" : "Budowlany"}
-                      gradient="bg-arielle-smile" icon="pe-7s-leaf"
+                      colorClass="green" icon="pe-7s-leaf"
                       value={primaryClass} />
                   </Col>
                   <Col lg="6" xl="3">
@@ -466,12 +458,12 @@ export default function KalkulatorPage() {
                       subheading={hasLine
                         ? `${power.voltage || powerL.voltage || "—"} · strefa ${power.buffer_zone_m || ksws.band_width_m || "—"} m`
                         : "Brak kolizji"}
-                      gradient={hasLine ? "bg-ripe-malin" : "bg-grow-early"} icon="pe-7s-bolt"
+                      colorClass={hasLine ? "magenta" : "green"} icon="pe-7s-bolt"
                       value={hasLine ? "Wykryto" : "Brak"} />
                   </Col>
                   <Col lg="6" xl="3">
                     <StatWidget heading="Cena rynkowa" subheading={`Źródło: ${priceSource || "brak"}`}
-                      gradient="bg-tempting-azure" icon="pe-7s-cash"
+                      colorClass="orange" icon="pe-7s-cash"
                       value={fmtM2(priceM2)} />
                   </Col>
                 </Row>
@@ -480,8 +472,8 @@ export default function KalkulatorPage() {
                 <Row className="mb-1">
                   {/* Track A */}
                   <Col md="6">
-                    <Card className="main-card mb-3 h-100" style={{ borderLeft: "4px solid #545cd8" }}>
-                      <CardBody>
+                    <Card className="kalkulator-card card-blue mb-3 h-100">
+                      <CardBody className="kalkulator-card-body">
                         <div className="d-flex justify-content-between align-items-start mb-2">
                           <div>
                             <h6 className="mb-0">Track A — Ścieżka sądowa</h6>
@@ -522,8 +514,8 @@ export default function KalkulatorPage() {
 
                   {/* Track B */}
                   <Col md="6">
-                    <Card className="main-card mb-3 h-100" style={{ borderLeft: "4px solid #f7b924" }}>
-                      <CardBody>
+                    <Card className="kalkulator-card card-orange mb-3 h-100">
+                      <CardBody className="kalkulator-card-body">
                         <div className="d-flex justify-content-between align-items-start mb-2">
                           <div>
                             <h6 className="mb-0">Track B — Ścieżka negocjacyjna</h6>
@@ -561,34 +553,52 @@ export default function KalkulatorPage() {
                 {/* ── Mapa + panel boczny ── */}
                 <Row>
                   <Col lg="7">
-                    <Card className="main-card mb-3">
-                      <CardBody className="p-0" style={{ overflow: "hidden", borderRadius: "inherit" }}>
-                        <div style={{ height: 420 }}>
-                          <MapContainer
-                            key={result?.parcel_id || "empty"}
-                            center={mapCenter} zoom={mapZoom}
-                            style={{ height: "100%", width: "100%" }}
-                            scrollWheelZoom
-                          >
-                            <TileLayer
-                              attribution='&copy; <a href="https://www.openstreetmap.org/">OSM</a>'
-                              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                            />
-                            <GeoJSONLayers parcelGeojson={geom.geojson_ll || geom.geojson} />
-                          </MapContainer>
-                        </div>
+                    <Card className="kalkulator-card card-blue mb-3">
+                      <div className="kalkulator-card-header">
+                        <i className="pe-7s-map-2" />
+                        <h3>Wizualizacja działki</h3>
+                      </div>
+                      <CardBody className="kalkulator-card-body p-0">
+                        <Tabs defaultActiveKey="1" renderTabBar={() => <ScrollableInkTabBar />} renderTabContent={() => <TabContent />}>
+                          <TabPane tab="Mapa 2D" key="1">
+                            <div className="kalkulator-map-container">
+                              <MapContainer
+                                key={result?.parcel_id || "empty"}
+                                center={mapCenter} zoom={mapZoom}
+                                style={{ height: "100%", width: "100%" }}
+                                scrollWheelZoom
+                              >
+                                <TileLayer
+                                  attribution='&copy; <a href="https://www.openstreetmap.org/">OSM</a>'
+                                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                />
+                                <GeoJSONLayers parcelGeojson={geom.geojson_ll || geom.geojson} />
+                              </MapContainer>
+                            </div>
+                          </TabPane>
+                          <TabPane tab="Mapa 3D" key="2">
+                            <div className="kalkulator-map-container-3d">
+                              <Map3D
+                                parcels={allResults ? allResults : (result ? [result] : [])}
+                                infrastructureTypes={['elektro', 'gaz', 'woda', 'teleko']}
+                                center={mapCenter}
+                                zoom={mapZoom}
+                              />
+                            </div>
+                          </TabPane>
+                        </Tabs>
                       </CardBody>
                     </Card>
                   </Col>
 
                   <Col lg="5">
                     {/* Geometria */}
-                    <InfoCard icon="pe-7s-map" iconBg="bg-primary" title="Geometria EGiB"
+                    <InfoCard icon="pe-7s-map" colorClass="blue" title="Geometria EGiB"
                       sub={`${areaM2 > 0 ? `${fmt(areaM2)} m² (${fmt(areaM2 / 10000, 4)} ha)` : "—"}${geom.perimeter_m ? ` · obwód ${Math.round(geom.perimeter_m)} m` : ""}`}
                       extra={locationStr} />
 
                     {/* Użytek gruntowy */}
-                    <InfoCard icon="pe-7s-leaf" iconBg="bg-success" title="Użytek gruntowy"
+                    <InfoCard icon="pe-7s-leaf" colorClass="green" title="Użytek gruntowy"
                       sub={landUse.length
                         ? landUse.map((u, i) => <span key={i} className="me-2"><Badge color="secondary" className="me-1">{u.class}</Badge>{u.area_m2 ? `${fmt(u.area_m2)} m²` : ""}</span>)
                         : primaryClass}
@@ -597,7 +607,7 @@ export default function KalkulatorPage() {
                     {/* Infrastruktura */}
                     <InfoCard
                       icon="pe-7s-bolt"
-                      iconBg={hasLine ? "bg-danger" : "bg-success"}
+                      colorClass={hasLine ? "magenta" : "green"}
                       title="Sieci przesyłowe (GESUT)"
                       highlight={hasLine}
                       sub={hasLine
@@ -606,12 +616,12 @@ export default function KalkulatorPage() {
                       extra={`Gaz: ${utils.gaz ? "✓" : "—"} · Woda: ${utils.woda ? "✓" : "—"} · Kanal.: ${utils.kanal ? "✓" : "—"}`} />
 
                     {/* Planowanie */}
-                    <InfoCard icon="pe-7s-note2" iconBg="bg-warning" title="Planowanie przestrzenne"
+                    <InfoCard icon="pe-7s-note2" colorClass="orange" title="Planowanie przestrzenne"
                       sub={<>{<Badge color={hasMpzp ? "success" : "secondary"} className="me-1">{hasMpzp ? "MPZP" : "Brak MPZP"}</Badge>}{plan.usage && <span className="me-1">{plan.usage}</span>}{plan.studium_usage && <span className="text-muted small">{plan.studium_usage}</span>}</>}
                       extra={`Pozwolenia: ${invest.active_permits || 0} · Budynki w okolicy: ${mr.buildings?.count ?? 0}`} />
 
                     {/* Cena rynkowa */}
-                    <InfoCard icon="pe-7s-cash" iconBg="bg-info" title="Cena rynkowa"
+                    <InfoCard icon="pe-7s-cash" colorClass="blue" title="Cena rynkowa"
                       sub={<><span className="fw-semibold">{fmtM2(priceM2)}</span>{priceSource && <Badge color="light" className="ms-2 text-muted" style={{ fontSize: "0.7em" }}>{priceSource}</Badge>}</>}
                       extra={[market.rcn_price_m2 && `RCN: ${fmtM2(market.rcn_price_m2)}`, market.gus_price_m2 && `GUS: ${fmtM2(market.gus_price_m2)}`, market.transactions_count > 0 && `${market.transactions_count} transakcji`].filter(Boolean).join(" · ")} />
                   </Col>
@@ -619,12 +629,12 @@ export default function KalkulatorPage() {
 
                 {/* ── KSWS szczegóły ── */}
                 {ksws.infra_type && (
-                  <Card className="main-card mb-3">
-                    <CardBody>
-                      <CardTitle className="mb-3">
-                        <i className="pe-7s-calculator me-2 icon-gradient bg-ripe-malin" />
-                        Podstawa wyceny KSWS
-                      </CardTitle>
+                  <Card className="kalkulator-card card-magenta mb-3">
+                    <div className="kalkulator-card-header">
+                      <i className="pe-7s-calculator" />
+                      <h3>Podstawa wyceny KSWS</h3>
+                    </div>
+                    <CardBody className="kalkulator-card-body">
                       <Row>
                         <Col md="6">
                           <Table size="sm" className="mb-0">
@@ -667,21 +677,16 @@ export default function KalkulatorPage() {
 }
 
 // ── Helper komponent karty bocznej ────────────────────────────────────────────
-function InfoCard({ icon, iconBg, title, sub, extra, highlight = false }) {
+function InfoCard({ icon, colorClass = "magenta", title, sub, extra, highlight = false }) {
   return (
-    <div className={`card mb-2 widget-content text-start${highlight ? " border-danger" : ""}`}>
-      <div className="widget-content-wrapper py-2 px-3">
-        <div
-          className={`icon-wrapper rounded-circle me-3 ${iconBg}`}
-          style={{ width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-        >
-          <i className={`${icon} text-white`} />
-        </div>
-        <div className="widget-content-left">
-          <div className="widget-heading">{title}</div>
-          <div className="widget-subheading">{sub}</div>
-          {extra && <div className="widget-subheading text-muted" style={{ fontSize: "0.75rem" }}>{extra}</div>}
-        </div>
+    <div className={`kalkulator-info-card${highlight ? " highlight" : ""}`}>
+      <div className={`kalkulator-info-icon ${colorClass}`}>
+        <i className={icon} />
+      </div>
+      <div className="kalkulator-info-content">
+        <div className="kalkulator-info-title">{title}</div>
+        <div className="kalkulator-info-value">{sub}</div>
+        {extra && <div className="kalkulator-info-subtitle">{extra}</div>}
       </div>
     </div>
   );
