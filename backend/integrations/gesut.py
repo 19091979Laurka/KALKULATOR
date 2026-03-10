@@ -176,10 +176,19 @@ class GESUTClient:
             # Get feature info for attributes
             feature_info = await self._get_feature_info(layers, bbox, 256, 256)
             
-            # Determine if infrastructure is detected
-            detected = len(r.content) > 5000  # Simple threshold for non-empty PNG
+            # Determine if infrastructure is detected.
+            # Fully transparent 512x512 PNG ≈ 1–2 KB.
+            # A tile with even a few infrastructure pixels is typically > 1500 B.
+            content_len = len(r.content)
+            detected = content_len > 1500
             voltage = self._parse_voltage(feature_info) if feature_info else "nieznane"
-            logger.info("GESUT fetch_infrastructure OK: detected=%s voltage=%s content_len=%s", detected, voltage, len(r.content))
+            logger.info("GESUT fetch_infrastructure OK: detected=%s voltage=%s content_len=%s", detected, voltage, content_len)
+
+            info_text = (
+                "Wykryto linie w KIUT WMS. Długość wektorowa niedostępna — brak WFS w tym powiecie."
+                if detected else
+                "Brak linii w KIUT WMS dla tego obszaru."
+            )
 
             return {
                 "ok": True,
@@ -187,7 +196,7 @@ class GESUTClient:
                 "detected": detected,
                 "voltage": voltage,
                 "line_length_m": 0.0,  # Rule 7.B: No pixel estimations
-                "info": "Obecność potwierdzona wizualnie (WMS). Długość wektorowa niedostępna w KIUT WMS.",
+                "info": info_text,
                 "feature_info_raw": feature_info if feature_info else None,
                 "source": "GUGiK KIUT WMS",
                 "bbox": bbox,

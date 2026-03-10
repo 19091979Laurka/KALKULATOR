@@ -80,6 +80,12 @@ export default function KalkulatorPage() {
   const [result,       setResult]       = useState(null);
   const [mapCenter,    setMapCenter]    = useState(DEFAULT_CENTER);
   const [mapZoom,      setMapZoom]      = useState(DEFAULT_ZOOM);
+  // Korekta ręczna
+  const [showManual,        setShowManual]        = useState(false);
+  const [manualPrice,       setManualPrice]       = useState("");
+  const [manualLandType,    setManualLandType]    = useState("");
+  const [manualInfraDetect, setManualInfraDetect] = useState("");
+  const [manualVoltage,     setManualVoltage]     = useState("");
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const runAnalysis = async (e) => {
@@ -98,6 +104,10 @@ export default function KalkulatorPage() {
           county:       county       || undefined,
           municipality: municipality || undefined,
           infra_type_pref: infraType,
+          manual_price_m2:      manualPrice       ? parseFloat(manualPrice)           : undefined,
+          manual_land_type:     manualLandType    || undefined,
+          manual_infra_detected: manualInfraDetect !== "" ? manualInfraDetect === "true" : undefined,
+          manual_voltage:       manualVoltage     || undefined,
         }),
       });
       const data = await res.json();
@@ -214,6 +224,97 @@ export default function KalkulatorPage() {
                           </FormGroup>
                         </Col>
                       </Row>
+
+                      {/* ── Korekta ręczna ── */}
+                      <div className="mb-3">
+                        <Button
+                          type="button" color="link" size="sm"
+                          className="p-0 text-muted text-decoration-none"
+                          onClick={() => setShowManual(v => !v)}
+                        >
+                          <i className={`me-1 pe-7s-angle-${showManual ? "up" : "down"}`} />
+                          {showManual ? "Ukryj" : "Korekta ręczna"} — nadpisz dane API
+                        </Button>
+                      </div>
+                      {showManual && (
+                        <div className="p-3 mb-3 rounded" style={{ background: "#fff8e1", border: "1px solid #ffe082" }}>
+                          <div className="small fw-semibold mb-2 text-warning-emphasis">
+                            <i className="pe-7s-tools me-1" />
+                            Korekta ręczna — gdy API zwraca błędne dane (np. rolna zamiast budowlanej, brak wykrytej linii)
+                          </div>
+                          <Row>
+                            <Col md="3">
+                              <FormGroup>
+                                <Label className="small">Cena rynkowa [zł/m²]</Label>
+                                <Input
+                                  type="number" step="0.01" min="0"
+                                  placeholder="np. 200"
+                                  value={manualPrice}
+                                  onChange={e => setManualPrice(e.target.value)}
+                                  bsSize="sm"
+                                />
+                              </FormGroup>
+                            </Col>
+                            <Col md="3">
+                              <FormGroup>
+                                <Label className="small">Typ gruntu</Label>
+                                <Input
+                                  type="select" value={manualLandType}
+                                  onChange={e => setManualLandType(e.target.value)}
+                                  bsSize="sm"
+                                >
+                                  <option value="">— auto —</option>
+                                  <option value="building">Budowlany</option>
+                                  <option value="agricultural">Rolny</option>
+                                </Input>
+                              </FormGroup>
+                            </Col>
+                            <Col md="3">
+                              <FormGroup>
+                                <Label className="small">Infrastruktura wykryta</Label>
+                                <Input
+                                  type="select" value={manualInfraDetect}
+                                  onChange={e => setManualInfraDetect(e.target.value)}
+                                  bsSize="sm"
+                                >
+                                  <option value="">— auto —</option>
+                                  <option value="true">TAK — potwierdzona</option>
+                                  <option value="false">NIE — brak</option>
+                                </Input>
+                              </FormGroup>
+                            </Col>
+                            <Col md="3">
+                              <FormGroup>
+                                <Label className="small">Napięcie</Label>
+                                <Input
+                                  type="select" value={manualVoltage}
+                                  onChange={e => setManualVoltage(e.target.value)}
+                                  bsSize="sm"
+                                >
+                                  <option value="">— auto —</option>
+                                  <option value="WN">WN (110–400 kV)</option>
+                                  <option value="SN">SN (15–30 kV)</option>
+                                  <option value="nN">nN (&lt;1 kV)</option>
+                                </Input>
+                              </FormGroup>
+                            </Col>
+                          </Row>
+                          {(manualPrice || manualLandType || manualInfraDetect || manualVoltage) && (
+                            <div className="mt-1">
+                              <Badge color="warning" className="text-dark me-1">Aktywna korekta:</Badge>
+                              {manualPrice       && <Badge color="secondary" className="me-1">cena {manualPrice} zł/m²</Badge>}
+                              {manualLandType    && <Badge color="secondary" className="me-1">{manualLandType === "building" ? "budowlany" : "rolny"}</Badge>}
+                              {manualInfraDetect && <Badge color="secondary" className="me-1">infra: {manualInfraDetect === "true" ? "TAK" : "NIE"}</Badge>}
+                              {manualVoltage     && <Badge color="secondary" className="me-1">{manualVoltage}</Badge>}
+                              <Button type="button" color="link" size="sm" className="text-muted p-0 ms-2"
+                                onClick={() => { setManualPrice(""); setManualLandType(""); setManualInfraDetect(""); setManualVoltage(""); }}>
+                                Wyczyść
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       <Button type="submit" color="primary" className="btn-shadow btn-pill px-4" disabled={loading}>
                         {loading
                           ? <><Spinner size="sm" className="me-2" />Analizuję…</>

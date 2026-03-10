@@ -28,6 +28,11 @@ class AnalyzeRequest(BaseModel):
     county: Optional[str] = None       # powiat — pomocniczo
     municipality: Optional[str] = None # gmina — pomocniczo (NIE jest obrebem!)
     infra_type_pref: str = "elektro_SN"
+    # Korekta ręczna — nadpisuje dane z API gdy rzeczywistość się nie zgadza
+    manual_price_m2: Optional[float] = None       # Ręczna cena rynkowa [PLN/m²]
+    manual_land_type: Optional[str] = None        # "agricultural" | "building"
+    manual_infra_detected: Optional[bool] = None  # Ręczne potwierdzenie infrastruktury
+    manual_voltage: Optional[str] = None          # "WN" | "SN" | "nN"
 
 class ValuationRequest(BaseModel):
     parcel_area_m2: float              # Całkowita powierzchnia działki [m²]
@@ -60,6 +65,10 @@ async def analyze(req: AnalyzeRequest):
                 obreb=req.obreb,
                 county=req.county,
                 municipality=req.municipality,
+                manual_price_m2=req.manual_price_m2,
+                manual_land_type=req.manual_land_type,
+                manual_infra_detected=req.manual_infra_detected,
+                manual_voltage=req.manual_voltage,
             )
             
             results.append({

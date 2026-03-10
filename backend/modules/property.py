@@ -65,6 +65,10 @@ class PropertyAggregator:
         obreb: Optional[str] = None,
         county: Optional[str] = None,
         municipality: Optional[str] = None,
+        manual_price_m2: Optional[float] = None,
+        manual_land_type: Optional[str] = None,
+        manual_infra_detected: Optional[bool] = None,
+        manual_voltage: Optional[str] = None,
     ) -> Dict[str, Any]:
         # 1. Podstawowa geometria (ULDK)
         terrain = await fetch_terrain(parcel_id, obreb=obreb, county=county, municipality=municipality)
@@ -121,6 +125,24 @@ class PropertyAggregator:
 
         # Wybór ceny: RCN tylko jeśli mamy transakcje, inaczej GUS z właściwą klasą
         avg_price = rcn_price if rcn_price else gus_price
+
+        # === KOREKTA RĘCZNA — nadpisuje dane API gdy rzeczywistość się nie zgadza ===
+        if manual_price_m2 is not None:
+            avg_price = manual_price_m2
+            price_source = "Korekta ręczna"
+            logger.info("Manual override: price_m2=%.2f", manual_price_m2)
+        if manual_land_type is not None:
+            land_type = manual_land_type
+            agri = (manual_land_type == "agricultural")
+            logger.info("Manual override: land_type=%s", manual_land_type)
+
+        # === KOREKTA RĘCZNA — infrastruktura ===
+        if manual_infra_detected is not None:
+            pl["detected"] = manual_infra_detected
+            logger.info("Manual override: infra_detected=%s", manual_infra_detected)
+        if manual_voltage is not None:
+            pl["voltage"] = manual_voltage
+            logger.info("Manual override: voltage=%s", manual_voltage)
 
         # KSWS + Track A/B (jeśli jest linia)
         area_m2 = terrain.get("area_m2") or 0
@@ -197,8 +219,10 @@ class PropertyAggregator:
                 "price_source": price_source,
                 "recent_transactions_count": len(data["transactions"]),
                 "last_transaction_date": None,
-                "status": "REAL (RCN GUGiK)" if data["transactions"] else (
-                    f"GUS BDL ({land_type})" if gus_result.get("ok") else "BRAK DANYCH"
+                "status": "Korekta ręczna" if manual_price_m2 is not None else (
+                    "REAL (RCN GUGiK)" if data["transactions"] else (
+                        f"GUS BDL ({land_type})" if gus_result.get("ok") else "BRAK DANYCH"
+                    )
                 )
             },
             "investments": {
