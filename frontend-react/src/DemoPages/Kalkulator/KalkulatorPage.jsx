@@ -409,6 +409,50 @@ export default function KalkulatorPage() {
                   </CardBody>
                 </Card>
 
+                {/* ── INFRASTRUKTURA: Karta do potwierdzenia ── */}
+                {!power.exists && manualInfraDetect !== "true" && (
+                  <Card className="main-card mb-3" style={{ borderLeft: "4px solid #f39c12", background: "#fffbf0" }}>
+                    <CardBody>
+                      <div className="d-flex align-items-start gap-3">
+                        <div style={{ fontSize: "2rem" }}>⚡</div>
+                        <div className="flex-grow-1">
+                          <h6 className="mb-2">
+                            <strong>System: Brak infrastruktury</strong>
+                          </h6>
+                          <p className="text-muted small mb-3">
+                            Automatyczna detekacja nie znalazła linii (WFS niedostępny).
+                            Ale jeśli <strong>WIESZ że działka ma linie</strong> — potwierdź poniżej aby przeliczyć Track A/B.
+                          </p>
+                          <div className="d-flex gap-2">
+                            <Button
+                              color="success" size="sm" className="btn-pill"
+                              onClick={() => {
+                                setManualInfraDetect("true");
+                                // Odśwież analizę
+                                runAnalysis({ preventDefault: () => {} });
+                              }}
+                            >
+                              ✓ TAK — ma linie (przeliczy Track A/B)
+                            </Button>
+                            <Button
+                              color="secondary" size="sm" className="btn-outline"
+                              onClick={() => setManualInfraDetect("false")}
+                            >
+                              ✗ NIE — na pewno brak
+                            </Button>
+                            <Button
+                              color="link" size="sm" className="text-muted p-0"
+                              onClick={() => setShowManual(true)}
+                            >
+                              Szczegóły...
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </CardBody>
+                  </Card>
+                )}
+
                 {/* ── 4 kafelki ── */}
                 <Row>
                   <Col lg="6" xl="3">
