@@ -1,1192 +1,745 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Raport Analiza KSWS - 3D Wizualizacja</title>
-    <script src="https://threejs.org/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@r128/examples/js/controls/OrbitControls.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            background: #f0f2f5;
-            color: #1a202c;
-            line-height: 1.5;
-        }
-
-        .report-container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 40px 20px;
-            font-size: 15px;
-        }
-
-        .report-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 40px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-        }
-
-        .report-header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-        }
-
-        .report-header p {
-            font-size: 1.1rem;
-            opacity: 0.95;
-            margin-bottom: 5px;
-        }
-
-        .report-meta {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 20px;
-            margin-top: 20px;
-            font-size: 0.95rem;
-            opacity: 0.9;
-        }
-
-        .meta-item {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .meta-label {
-            font-weight: 600;
-            margin-bottom: 5px;
-        }
-
-        .content-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .card {
-            background: white;
-            border-radius: 10px;
-            padding: 25px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            border: 1px solid #e8e8e8;
-        }
-
-        .card h2 {
-            font-size: 1.3rem;
-            color: #1a202c;
-            margin-bottom: 18px;
-            padding-bottom: 12px;
-            border-bottom: 2px solid #667eea;
-            font-weight: 600;
-        }
-
-        .card h3 {
-            font-size: 1.1rem;
-            color: #34495e;
-            margin-top: 20px;
-            margin-bottom: 15px;
-        }
-
-        .card.full-width {
-            grid-column: 1 / -1;
-        }
-
-        .card.compact {
-            grid-column: span 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            padding: 20px;
-        }
-
-        .card.col-2 {
-            grid-column: span 2;
-        }
-
-        .card.col-3 {
-            grid-column: span 3;
-        }
-
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 15px 0;
-        }
-
-        .data-table tr {
-            border-bottom: 1px solid #ecf0f1;
-        }
-
-        .data-table td {
-            padding: 12px 0;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .data-table .label {
-            font-weight: 600;
-            color: #7f8c8d;
-        }
-
-        .data-table .value {
-            color: #2c3e50;
-            font-weight: 500;
-        }
-
-        .data-table .value.highlight {
-            color: #e74c3c;
-            font-weight: 700;
-            font-size: 1.1rem;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin: 20px 0;
-        }
-
-        .stat-box {
-            background: #f5f7fa;
-            padding: 18px;
-            border-radius: 8px;
-            text-align: center;
-            border-left: 3px solid #cbd5e0;
-            transition: all 0.3s ease;
-        }
-
-        .stat-box:hover {
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        .stat-box.success {
-            background: #edf9f4;
-            border-left-color: #27ae60;
-        }
-
-        .stat-box.danger {
-            background: #fef5f5;
-            border-left-color: #e74c3c;
-        }
-
-        .stat-box.info {
-            background: #eef5ff;
-            border-left-color: #3498db;
-        }
-
-        .stat-label {
-            font-size: 0.8rem;
-            color: #718096;
-            font-weight: 500;
-            margin-bottom: 6px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .stat-value {
-            font-size: 1.9rem;
-            font-weight: 700;
-            color: #1a202c;
-        }
-
-        .stat-value.success {
-            color: #27ae60;
-        }
-
-        .stat-value.danger {
-            color: #e74c3c;
-        }
-
-        .stat-value.info {
-            color: #3498db;
-        }
-
-        .map-container {
-            width: 100%;
-            height: 500px;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            margin: 20px 0;
-        }
-
-        #canvas3d {
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
-
-        .infrastructure-legend {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin: 20px 0;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 10px;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            border-radius: 3px;
-            flex-shrink: 0;
-        }
-
-        .legend-label {
-            font-size: 0.9rem;
-            font-weight: 500;
-            color: #555;
-        }
-
-        .color-elektro { background: #e74c3c; } /* Czerwony */
-        .color-gaz { background: #f39c12; } /* Pomarańczowy */
-        .color-woda { background: #3498db; } /* Niebieski */
-        .color-teleko { background: #9b59b6; } /* Purpurowy */
-
-        .full-width {
-            grid-column: 1 / -1;
-        }
-
-        .compensation-section {
-            margin-top: 30px;
-        }
-
-        .track-comparison {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin: 20px 0;
-        }
-
-        .track-box {
-            padding: 20px;
-            border-radius: 10px;
-            border-left: 5px solid #667eea;
-        }
-
-        .track-box.track-a {
-            background: #ecf0f1;
-            border-left-color: #2c3e50;
-        }
-
-        .track-box.track-b {
-            background: #fff3cd;
-            border-left-color: #f39c12;
-        }
-
-        .track-title {
-            font-size: 1.1rem;
-            font-weight: 700;
-            margin-bottom: 15px;
-        }
-
-        .track-description {
-            font-size: 0.9rem;
-            color: #7f8c8d;
-            margin-bottom: 10px;
-        }
-
-        .track-value {
-            font-size: 2.2rem;
-            font-weight: 700;
-            color: #2c3e50;
-            margin: 10px 0;
-        }
-
-        .track-period {
-            font-size: 0.85rem;
-            color: #95a5a6;
-            margin-bottom: 10px;
-        }
-
-        .track-note {
-            font-size: 0.85rem;
-            color: #e74c3c;
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid rgba(0,0,0,0.1);
-        }
-
-        .conclusions {
-            background: linear-gradient(135deg, #f5f7fa 0%, #ecf0f1 100%);
-            padding: 25px;
-            border-radius: 10px;
-            margin-top: 30px;
-            border-left: 5px solid #2c3e50;
-        }
-
-        .conclusions h3 {
-            margin-bottom: 15px;
-            color: #2c3e50;
-        }
-
-        .conclusions-list {
-            list-style: none;
-        }
-
-        .conclusions-list li {
-            padding: 10px 0;
-            padding-left: 30px;
-            position: relative;
-            line-height: 1.6;
-        }
-
-        .conclusions-list li:before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            color: #27ae60;
-            font-weight: bold;
-        }
-
-        .conclusions-list li.warning:before {
-            content: "⚠";
-            color: #f39c12;
-        }
-
-        .conclusions-list li.danger:before {
-            content: "✗";
-            color: #e74c3c;
-        }
-
-        .page-break {
-            page-break-after: always;
-            margin: 60px 0;
-            padding: 60px 0;
-            border-top: 3px solid #ecf0f1;
-        }
-
-        .footer {
-            text-align: center;
-            padding: 30px;
-            color: #95a5a6;
-            font-size: 0.85rem;
-            border-top: 1px solid #ecf0f1;
-            margin-top: 60px;
-        }
-
-        @media print {
-            body {
-                background: white;
-                color: #000;
-            }
-            .card {
-                page-break-inside: avoid;
-                box-shadow: none;
-                border: 1px solid #d0d0d0;
-                break-inside: avoid;
-            }
-            .map-container {
-                page-break-inside: avoid;
-                height: 350px;
-                break-inside: avoid;
-            }
-            .print-button {
-                display: none;
-            }
-            .content-grid {
-                gap: 15px;
-            }
-        }
-
-        .error-box {
-            background: #fadbd8;
-            border: 2px solid #e74c3c;
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
-            color: #c0392b;
-        }
-
-        .error-box h4 {
-            margin-bottom: 10px;
-            color: #c0392b;
-        }
-
-        .success-box {
-            background: #d5f4e6;
-            border: 2px solid #27ae60;
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
-            color: #196f3d;
-        }
-
-        .success-box h4 {
-            margin-bottom: 10px;
-            color: #196f3d;
-        }
-
-        .warning-box {
-            background: #fff3cd;
-            border: 2px solid #f39c12;
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
-            color: #7d6608;
-        }
-
-        .warning-box h4 {
-            margin-bottom: 10px;
-            color: #7d6608;
-        }
-
-        .print-button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-            transition: all 0.3s ease;
-        }
-
-        .print-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-        }
-
-        .print-button:active {
-            transform: translateY(0);
-        }
-
-        @media (max-width: 1200px) {
-            .content-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
-
-            .card.col-2 {
-                grid-column: span 1;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .content-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-
-            .card.col-2 {
-                grid-column: span 2;
-            }
-
-            .card.col-3 {
-                grid-column: span 2;
-            }
-
-            .infrastructure-legend {
-                grid-template-columns: 1fr 1fr;
-            }
-
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .track-comparison {
-                grid-template-columns: 1fr;
-            }
-
-            .report-meta {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .content-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .card.col-2 {
-                grid-column: span 1;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Raport KSWS — Kalkulator Roszczeń Przesyłowych</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+      background: #f4f6f9;
+      color: #1a2035;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ══════════ PRINT ══════════ */
+    @media print {
+      body { background: white; }
+      .no-print { display: none !important; }
+      .page-break { page-break-before: always; }
+      .card { box-shadow: none !important; border: 1px solid #ddd !important; break-inside: avoid; }
+      .report-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .kpi-card { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .track-a { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .track-b { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+
+    /* ══════════ LAYOUT ══════════ */
+    .report-wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 20px 60px;
+    }
+
+    /* ══════════ PRINT BUTTON ══════════ */
+    .print-bar {
+      text-align: right;
+      margin-bottom: 24px;
+    }
+    .btn-print {
+      background: linear-gradient(135deg, #a91079, #d81b60);
+      color: white;
+      border: none;
+      padding: 12px 32px;
+      border-radius: 50px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(169,16,121,0.35);
+      letter-spacing: 0.3px;
+    }
+    .btn-print:hover { opacity: 0.92; }
+
+    /* ══════════ HEADER ══════════ */
+    .report-header {
+      background: linear-gradient(135deg, #3f0d59 0%, #a91079 100%);
+      color: white;
+      padding: 40px 48px;
+      border-radius: 16px;
+      margin-bottom: 32px;
+      box-shadow: 0 8px 30px rgba(169,16,121,0.25);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 32px;
+    }
+    .report-header-left {}
+    .report-header h1 {
+      font-size: 26px;
+      font-weight: 800;
+      margin-bottom: 6px;
+      letter-spacing: -0.5px;
+    }
+    .report-header .subtitle {
+      font-size: 13px;
+      opacity: 0.85;
+      margin-bottom: 20px;
+    }
+    .report-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(3, auto);
+      gap: 24px;
+    }
+    .meta-item { display: flex; flex-direction: column; gap: 2px; }
+    .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7; font-weight: 600; }
+    .meta-value { font-size: 14px; font-weight: 600; }
+    .report-header-badge {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .badge-real {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      padding: 6px 16px;
+      border-radius: 50px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      border: 1px solid rgba(255,255,255,0.3);
+    }
+    .badge-spec {
+      background: rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.9);
+      padding: 4px 12px;
+      border-radius: 50px;
+      font-size: 10px;
+    }
+
+    /* ══════════ KPI ROW ══════════ */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .kpi-card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+      border-top: 4px solid #ccc;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .kpi-card.blue   { border-top-color: #3498db; }
+    .kpi-card.green  { border-top-color: #27ae60; }
+    .kpi-card.red    { border-top-color: #e74c3c; }
+    .kpi-card.gold   { border-top-color: #f39c12; }
+    .kpi-card.magenta { border-top-color: #a91079; }
+    .kpi-icon { font-size: 22px; margin-bottom: 4px; }
+    .kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #7f8c8d; font-weight: 600; }
+    .kpi-value { font-size: 24px; font-weight: 800; color: #1a2035; line-height: 1.1; }
+    .kpi-sub { font-size: 11px; color: #95a5a6; }
+
+    /* ══════════ SECTION TITLE ══════════ */
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1a2035;
+      margin: 32px 0 14px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #a91079;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ══════════ CARDS ══════════ */
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #7f8c8d;
+      margin-bottom: 16px;
+    }
+
+    /* ══════════ TWO-COL GRID ══════════ */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+    /* ══════════ DATA TABLE ══════════ */
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table tr { border-bottom: 1px solid #f0f2f5; }
+    .data-table tr:last-child { border-bottom: none; }
+    .data-table td { padding: 10px 0; vertical-align: top; }
+    .data-table .dl { color: #7f8c8d; font-size: 12px; font-weight: 600; width: 48%; }
+    .data-table .dv { color: #1a2035; font-weight: 500; font-size: 13px; text-align: right; }
+    .data-table .dv.big { font-size: 16px; font-weight: 700; color: #a91079; }
+    .data-table .dv.green { color: #27ae60; font-weight: 700; }
+    .data-table .dv.red { color: #e74c3c; font-weight: 700; }
+
+    /* ══════════ ALERT ══════════ */
+    .alert-warning {
+      background: #fff8e1;
+      border-left: 5px solid #f39c12;
+      padding: 16px 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 13px;
+    }
+    .alert-warning strong { color: #e67e22; }
+    .alert-success {
+      background: #e8f8f5;
+      border-left: 5px solid #27ae60;
+      padding: 16px 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 13px;
+    }
+
+    /* ══════════ TRACK CARDS ══════════ */
+    .track-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+
+    .track-a {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-left: 6px solid #2c3e50;
+      border-radius: 12px;
+      padding: 28px;
+    }
+    .track-b {
+      background: #fffdf0;
+      border: 1px solid #f39c12;
+      border-left: 6px solid #f39c12;
+      border-radius: 12px;
+      padding: 28px;
+    }
+    .track-tag {
+      display: inline-block;
+      padding: 3px 12px;
+      border-radius: 50px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .track-tag.sad { background: #1a2035; color: white; }
+    .track-tag.neg { background: #f39c12; color: white; }
+    .track-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+    .track-desc { font-size: 11px; color: #7f8c8d; margin-bottom: 20px; }
+    .track-amount {
+      font-size: 32px;
+      font-weight: 800;
+      color: #1a2035;
+      margin-bottom: 4px;
+    }
+    .track-amount.na { font-size: 20px; color: #bdc3c7; }
+    .track-sub { font-size: 11px; color: #95a5a6; }
+    .track-breakdown {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(0,0,0,0.08);
+    }
+    .track-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 12px; }
+    .track-row .tl { color: #7f8c8d; }
+    .track-row .tv { font-weight: 600; }
+
+    /* ══════════ MAPA PLACEHOLDER ══════════ */
+    .map-box {
+      background: linear-gradient(135deg, #1a2035, #2c3e50);
+      border-radius: 12px;
+      height: 300px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      opacity: 0.9;
+    }
+
+    /* ══════════ LEGENDA MAP ══════════ */
+    .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 12px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #555; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+    .legend-line { width: 24px; height: 3px; flex-shrink: 0; }
+
+    /* ══════════ WNIOSKI ══════════ */
+    .conclusions { background: #f8f9fa; border-radius: 12px; padding: 24px; }
+    .conclusion-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid #e9ecef;
+      font-size: 13px;
+    }
+    .conclusion-item:last-child { border-bottom: none; }
+    .ci-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+    .ci-text { color: #2c3e50; }
+    .ci-text strong { color: #1a2035; }
+
+    /* ══════════ FOOTER ══════════ */
+    .report-footer {
+      text-align: center;
+      padding: 32px 0 16px;
+      border-top: 1px solid #dee2e6;
+      margin-top: 48px;
+      color: #95a5a6;
+      font-size: 11px;
+    }
+    .report-footer strong { color: #7f8c8d; }
+
+    /* ══════════ INFRA BADGE ══════════ */
+    .infra-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: #e74c3c; color: white;
+      padding: 4px 12px; border-radius: 50px;
+      font-size: 11px; font-weight: 700;
+    }
+    .infra-badge.brak { background: #27ae60; }
+    .voltage-chip {
+      background: #1a2035; color: white;
+      padding: 3px 10px; border-radius: 50px;
+      font-size: 11px; font-weight: 600;
+    }
+
+    /* ══════════ SOURCES ══════════ */
+    .sources { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .source-pill {
+      background: #f0f2f5; color: #7f8c8d;
+      padding: 3px 10px; border-radius: 50px;
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+  </style>
 </head>
 <body>
-    <div class="report-container">
-        <!-- HEADER -->
-        <div class="report-header">
-            <h1>📊 Raport Analiza KSWS</h1>
-            <p>Metodologia Wyceny Odszkodowań dla Transmission Infrastructure Impact</p>
+<div class="report-wrap">
 
-            <div class="report-meta">
-                <div class="meta-item">
-                    <span class="meta-label">🏗️ ID Działki:</span>
-                    <span id="parcelId">142003_2.0002.81/5</span>
-                </div>
-                <div class="meta-item">
-                    <span class="meta-label">📍 Lokalizacja:</span>
-                    <span id="location">Baboszewo, powiat płoński</span>
-                </div>
-                <div class="meta-item">
-                    <span class="meta-label">📅 Data Raportu:</span>
-                    <span id="reportDate">2026-03-10</span>
-                </div>
-            </div>
+  <!-- PRINT BUTTON -->
+  <div class="print-bar no-print">
+    <button class="btn-print" onclick="window.print()">⬇ Drukuj / Zapisz jako PDF</button>
+  </div>
+
+  <!-- HEADER -->
+  <div class="report-header">
+    <div class="report-header-left">
+      <h1>⚡ Raport Analizy KSWS</h1>
+      <p class="subtitle">Kalkulator Roszczeń Odszkodowawczych Przesyłowych — Spec v3.0</p>
+      <div class="report-meta-grid">
+        <div class="meta-item">
+          <span class="meta-label">Działka</span>
+          <span class="meta-value" id="meta-parcel">—</span>
         </div>
-
-        <!-- PRINT BUTTON -->
-        <button class="print-button" onclick="window.print()">🖨️ Drukuj / Zapisz jako PDF</button>
-
-        <!-- MAIN CONTENT GRID - KPI CARDS -->
-        <div class="content-grid">
-            <!-- KPI CARD 1 -->
-            <div class="card compact">
-                <div style="color: #667eea; font-size: 2.5rem; margin-bottom: 10px;">📊</div>
-                <div class="stat-label">ID Działki</div>
-                <div class="stat-value" style="font-size: 1.1rem; color: #1a202c;" id="parcelIdKpi">142003_2.0002.81/5</div>
-            </div>
-
-            <!-- KPI CARD 2 -->
-            <div class="card compact">
-                <div style="color: #27ae60; font-size: 2.5rem; margin-bottom: 10px;">📐</div>
-                <div class="stat-label">Powierzchnia (m²)</div>
-                <div class="stat-value" style="font-size: 1.3rem; color: #27ae60;" id="areaKpi">—</div>
-            </div>
-
-            <!-- KPI CARD 3 -->
-            <div class="card compact">
-                <div style="color: #e74c3c; font-size: 2.5rem; margin-bottom: 10px;">💰</div>
-                <div class="stat-label">Wartość Gruntu (zł)</div>
-                <div class="stat-value" style="font-size: 1.3rem; color: #e74c3c;" id="propertyValueKpi">—</div>
-            </div>
-
-            <!-- KPI CARD 4 -->
-            <div class="card compact">
-                <div style="color: #3498db; font-size: 2.5rem; margin-bottom: 10px;">⚡</div>
-                <div class="stat-label">Odszkodowanie (zł)</div>
-                <div class="stat-value" style="font-size: 1.3rem; color: #3498db;" id="compensationKpi">—</div>
-            </div>
+        <div class="meta-item">
+          <span class="meta-label">Lokalizacja</span>
+          <span class="meta-value" id="meta-location">—</span>
         </div>
-
-        <!-- SECONDARY CARDS GRID -->
-        <div class="content-grid">
-            <!-- SEKCJA 1: PODSTAWOWE DANE -->
-            <div class="card col-2">
-                <h2>📋 Dane Działki</h2>
-
-                <h3>Lokalizacja i Identyfikacja</h3>
-                <table class="data-table">
-                    <tr>
-                        <td><span class="label">ID Działki (TERYT):</span><span class="value" id="terytId">—</span></td>
-                    </tr>
-                    <tr>
-                        <td><span class="label">Gmina:</span><span class="value" id="commune">—</span></td>
-                    </tr>
-                    <tr>
-                        <td><span class="label">Powiat:</span><span class="value" id="county">—</span></td>
-                    </tr>
-                    <tr>
-                        <td><span class="label">Województwo:</span><span class="value" id="region">—</span></td>
-                    </tr>
-                </table>
-
-                <h3>Parametry Geometryczne</h3>
-                <table class="data-table">
-                    <tr>
-                        <td><span class="label">Powierzchnia:</span><span class="value highlight" id="area">—</span></td>
-                    </tr>
-                    <tr>
-                        <td><span class="label">Obwód:</span><span class="value" id="perimeter">—</span></td>
-                    </tr>
-                </table>
-            </div>
-
-            <!-- SEKCJA 2: WYCENA I WARTOŚĆ -->
-            <div class="card col-2">
-                <h2>💰 Wycena Nieruchomości</h2>
-
-                <h3>Cena Gruntu</h3>
-                <table class="data-table">
-                    <tr>
-                        <td><span class="label">Cena jednostkowa:</span><span class="value highlight" id="unitPrice">—</span></td>
-                    </tr>
-                    <tr>
-                        <td><span class="label">Źródło ceny:</span><span class="value" id="priceSource">—</span></td>
-                    </tr>
-                    <tr>
-                        <td><span class="label">Transakcje lokalne:</span><span class="value" id="transactions">—</span></td>
-                    </tr>
-                </table>
-
-                <h3>Infrastruktura</h3>
-                <div id="infraStatus">
-                    <!-- Dynamicznie wstawiane -->
-                </div>
-            </div>
+        <div class="meta-item">
+          <span class="meta-label">Data analizy</span>
+          <span class="meta-value" id="meta-date">—</span>
         </div>
+      </div>
+    </div>
+    <div class="report-header-badge">
+      <span class="badge-real">✓ REAL DATA</span>
+      <span class="badge-spec">KSWS Track A/B · TK P 10/16</span>
+      <span id="infra-voltage-badge"></span>
+    </div>
+  </div>
 
-        <!-- 3D MAPA -->
-        <div class="card full-width">
-            <h2>🗺️ Wizualizacja 3D - Infrastruktura</h2>
-            <p style="color: #7f8c8d; margin-bottom: 15px;">Kamera: Drag - Rotate, Scroll - Zoom, Right-Click - Pan</p>
-            <div class="map-container">
-                <canvas id="canvas3d"></canvas>
-            </div>
-            <div class="infrastructure-legend">
-                <div class="legend-item">
-                    <div class="legend-color color-elektro"></div>
-                    <div class="legend-label">⚡ Elektro (WN/SN/nN)</div>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color color-gaz"></div>
-                    <div class="legend-label">🔥 Gaz (wysokie/średnie/niskie)</div>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color color-woda"></div>
-                    <div class="legend-label">💧 Woda / Kanalizacja</div>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color color-teleko"></div>
-                    <div class="legend-label">📡 Telekomunikacja</div>
-                </div>
-            </div>
+  <!-- KPI ROW -->
+  <div class="kpi-row">
+    <div class="kpi-card blue">
+      <div class="kpi-icon">📐</div>
+      <div class="kpi-label">Powierzchnia</div>
+      <div class="kpi-value" id="kpi-area">—</div>
+      <div class="kpi-sub">EGiB / ULDK</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-icon">🌱</div>
+      <div class="kpi-label">Klasa gruntu</div>
+      <div class="kpi-value" id="kpi-class">—</div>
+      <div class="kpi-sub" id="kpi-class-sub">—</div>
+    </div>
+    <div class="kpi-card red" id="kpi-infra-card">
+      <div class="kpi-icon">⚡</div>
+      <div class="kpi-label">Sieci przesyłowe</div>
+      <div class="kpi-value" id="kpi-infra">—</div>
+      <div class="kpi-sub" id="kpi-infra-sub">—</div>
+    </div>
+    <div class="kpi-card gold">
+      <div class="kpi-icon">💰</div>
+      <div class="kpi-label">Cena rynkowa</div>
+      <div class="kpi-value" id="kpi-price">—</div>
+      <div class="kpi-sub" id="kpi-price-sub">GUS BDL</div>
+    </div>
+  </div>
+
+  <!-- MAPA -->
+  <div class="section-title">🗺️ Lokalizacja działki</div>
+  <div class="card">
+    <div class="map-box" id="map-placeholder">
+      🗺️ Geoportal — Mapa zostanie wydrukowana z przeglądarki
+    </div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-line" style="background:#a91079"></div> Granica działki</div>
+      <div class="legend-item"><div class="legend-line" style="background:#e74c3c"></div> Linia 380/220kV</div>
+      <div class="legend-item"><div class="legend-line" style="background:#f39c12"></div> Linia 110kV</div>
+      <div class="legend-item"><div class="legend-line" style="background:#27ae60"></div> Linia 15-30kV</div>
+      <div class="legend-item"><div class="legend-line" style="background:#3498db"></div> Linia nN</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#8B4513"></div> Słup</div>
+    </div>
+  </div>
+
+  <!-- DANE DZIAŁKI -->
+  <div class="section-title">📋 Dane działki i gruntu</div>
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Ewidencja gruntów (EGiB)</div>
+      <table class="data-table">
+        <tr><td class="dl">Identyfikator</td><td class="dv" id="d-parcel-id">—</td></tr>
+        <tr><td class="dl">Gmina / Obręb</td><td class="dv" id="d-commune">—</td></tr>
+        <tr><td class="dl">Powiat</td><td class="dv" id="d-county">—</td></tr>
+        <tr><td class="dl">Województwo</td><td class="dv" id="d-region">—</td></tr>
+        <tr><td class="dl">Powierzchnia</td><td class="dv big" id="d-area">—</td></tr>
+        <tr><td class="dl">Obwód</td><td class="dv" id="d-perimeter">—</td></tr>
+        <tr><td class="dl">Kształt</td><td class="dv" id="d-shape">—</td></tr>
+        <tr><td class="dl">Klasa / Użytek</td><td class="dv" id="d-class">—</td></tr>
+        <tr><td class="dl">Budynki</td><td class="dv" id="d-buildings">—</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-title">Wartość rynkowa</div>
+      <table class="data-table">
+        <tr><td class="dl">Cena jednostkowa</td><td class="dv big" id="d-price-m2">—</td></tr>
+        <tr><td class="dl">Wartość całkowita</td><td class="dv big" id="d-price-total">—</td></tr>
+        <tr><td class="dl">Źródło</td><td class="dv" id="d-price-source">—</td></tr>
+        <tr><td class="dl">Typ gruntu</td><td class="dv" id="d-land-type">—</td></tr>
+      </table>
+      <div style="margin-top: 20px;">
+        <div class="card-title">Infrastruktura</div>
+        <table class="data-table">
+          <tr><td class="dl">Linia elektr.</td><td class="dv" id="d-infra-elec">—</td></tr>
+          <tr><td class="dl">Napięcie</td><td class="dv" id="d-voltage">—</td></tr>
+          <tr><td class="dl">Szerokość pasa</td><td class="dv" id="d-band">—</td></tr>
+          <tr><td class="dl">Pow. pasa ochr.</td><td class="dv" id="d-band-area">—</td></tr>
+          <tr><td class="dl">Gaz</td><td class="dv" id="d-gas">—</td></tr>
+          <tr><td class="dl">Woda / Kan.</td><td class="dv" id="d-water">—</td></tr>
+        </table>
+      </div>
+      <div class="sources" style="margin-top: 16px;">
+        <span class="source-pill">ULDK GUGiK</span>
+        <span class="source-pill">GESUT</span>
+        <span class="source-pill">GUS BDL</span>
+        <span class="source-pill">RCN GUGiK</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PLANOWANIE -->
+  <div class="section-title">🏗️ Planowanie przestrzenne</div>
+  <div class="card">
+    <div class="two-col">
+      <table class="data-table">
+        <tr><td class="dl">MPZP</td><td class="dv" id="d-mpzp">—</td></tr>
+        <tr><td class="dl">Przeznaczenie MPZP</td><td class="dv" id="d-mpzp-usage">—</td></tr>
+        <tr><td class="dl">Studium</td><td class="dv" id="d-studium">—</td></tr>
+      </table>
+      <table class="data-table">
+        <tr><td class="dl">Pozwolenia bud.</td><td class="dv" id="d-permits">—</td></tr>
+        <tr><td class="dl">Status</td><td class="dv" id="d-plan-status">—</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- ALERT BRAK INFRASTRUKTURY -->
+  <div id="alert-no-infra" class="alert-warning" style="display:none">
+    ⚠️ <strong>Brak zdetektowanej infrastruktury.</strong> Automatyczna detekcja nie znalazła linii przesyłowych dla tej działki. Wyniki Track A/B nie zostały wyliczone. Możliwe przyczyny: brak dostępu do WFS GUGiK, lub rzeczywisty brak infrastruktury.
+  </div>
+  <div id="alert-has-infra" class="alert-success" style="display:none">
+    ✅ <strong>Infrastruktura zdetektowana.</strong> Linia przesyłowa wykryta w strefie działki. Wyliczenia KSWS Track A/B wykonane poniżej.
+  </div>
+
+  <!-- TRACK A / B -->
+  <div class="section-title">💵 Kalkulacja odszkodowania KSWS</div>
+  <div class="track-grid">
+    <!-- Track A -->
+    <div class="track-a">
+      <span class="track-tag sad">ŚCIEŻKA SĄDOWA</span>
+      <div class="track-name">Track A</div>
+      <div class="track-desc">TK P 10/16 · WSP + WBK + OBN · Wyrok NSA 2016</div>
+      <div class="track-amount" id="track-a-total">—</div>
+      <div class="track-sub" id="track-a-sub">Wymaga zdetektowanej infrastruktury</div>
+      <div class="track-breakdown" id="track-a-breakdown" style="display:none">
+        <div class="track-row">
+          <span class="tl">WSP — Współczynnik przydatności</span>
+          <span class="tv" id="track-a-wsp">—</span>
         </div>
-
-        <!-- SEKCJA 3: ANALIZA KSWS -->
-        <div class="card full-width">
-            <h2>📊 Analiza KSWS - Metodologia Wyceny</h2>
-
-            <div class="warning-box" id="infraWarning">
-                <h4>⚠️ Uwaga: Status Infrastruktury</h4>
-                <p>Dane linii energetycznej nie zostały automatycznie pobrane z serwisu WFS GUGiK. Wartości odszkodowania bazują na teoretycznych założeniach. Wymagana ręczna weryfikacja w terenie.</p>
-            </div>
-
-            <h3>Współczynniki KSWS</h3>
-            <div class="stats-grid">
-                <div class="stat-box">
-                    <div class="stat-label">S (Wpływ społeczny)</div>
-                    <div class="stat-value" id="coeffS">—</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">k (Strata pożyteczności)</div>
-                    <div class="stat-value" id="coeffK">—</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">R (Strata wartości)</div>
-                    <div class="stat-value" id="coeffR">—</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">u (Faktor użytkowania)</div>
-                    <div class="stat-value" id="coeffU">—</div>
-                </div>
-            </div>
-
-            <h3>Parametry Infrastruktury</h3>
-            <table class="data-table">
-                <tr>
-                    <td><span class="label">Typ infrastruktury:</span><span class="value" id="infraType">Elektro SN (15-30 kV)</span></td>
-                </tr>
-                <tr>
-                    <td><span class="label">Napięcie:</span><span class="value" id="voltage">—</span></td>
-                </tr>
-                <tr>
-                    <td><span class="label">Długość linii w działce:</span><span class="value highlight" id="lineLength">—</span></td>
-                </tr>
-                <tr>
-                    <td><span class="label">Strefy ochronne:</span><span class="value" id="protectionZone">15 m (SN)</span></td>
-                </tr>
-                <tr>
-                    <td><span class="label">Zajęta powierzchnia:</span><span class="value" id="occupiedArea">—</span></td>
-                </tr>
-            </table>
-
-            <h3>Obliczenie Odszkodowania Bazowego (OBN)</h3>
-            <div class="success-box">
-                <h4>✓ Formuła OBN</h4>
-                <p style="font-family: monospace; margin: 10px 0; font-size: 0.95rem;">
-                    <strong>OBN = (Długość linii / Obwód działki) × Wartość nieruchomości × Współczynnik S</strong>
-                </p>
-                <p style="font-size: 0.9rem; color: #196f3d; margin-top: 10px;">
-                    Dla S = <span id="sSymptomatic">0.2</span> → OBN = <span id="obnPercent">5%</span> wartości nieruchomości
-                </p>
-            </div>
-
-            <table class="data-table">
-                <tr>
-                    <td><span class="label">OBN (Odszkodowanie Bazowe):</span><span class="value highlight" id="obnValue">—</span></td>
-                </tr>
-            </table>
+        <div class="track-row">
+          <span class="tl">WBK — Wartość bez kolizji</span>
+          <span class="tv" id="track-a-wbk">—</span>
         </div>
-
-        <!-- SEKCJA 4: KOMPENSACJA -->
-        <div class="card full-width compensation-section">
-            <h2>💸 Odszkodowanie - Track A vs Track B</h2>
-
-            <div class="track-comparison">
-                <!-- TRACK A -->
-                <div class="track-box track-a">
-                    <div class="track-title">⚖️ TRACK A - Sądowe</div>
-                    <div class="track-description">Decyzja sądu (standard)</div>
-
-                    <table class="data-table" style="border: none;">
-                        <tr>
-                            <td style="border: none;">
-                                <span class="label">WSP (Wpływ środowiska):</span>
-                                <span class="value" id="trackA_wsp">—</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="border: none;">
-                                <span class="label">WBK (Wzniesienia budynków):</span>
-                                <span class="value" id="trackA_wbk">—</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="border: none;">
-                                <span class="label">OBN (Odszkodowanie bazowe):</span>
-                                <span class="value" id="trackA_obn">—</span>
-                            </td>
-                        </tr>
-                    </table>
-
-                    <div class="track-value" id="trackA_total">—</div>
-                    <div class="track-period">za <span id="trackA_years">10</span> lat (roczna rata: <span id="trackA_annual">—</span>)</div>
-                    <div class="track-note">Baza dla negocjacji (Track B = Track A × 1.56)</div>
-                </div>
-
-                <!-- TRACK B -->
-                <div class="track-box track-b">
-                    <div class="track-title">💼 TRACK B - Negocjacyjny</div>
-                    <div class="track-description">Umowa między stronami (1.56× wyższa)</div>
-
-                    <table class="data-table" style="border: none;">
-                        <tr>
-                            <td style="border: none;">
-                                <span class="label">Mnożnik:</span>
-                                <span class="value" id="multiplier">1.56×</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="border: none;">
-                                <span class="label">Kalkulacja:</span>
-                                <span class="value" style="font-size: 0.85rem;" id="trackB_calc">Track A × 1.56</span>
-                            </td>
-                        </tr>
-                    </table>
-
-                    <div class="track-value" id="trackB_total">—</div>
-                    <div class="track-period">za <span id="trackB_years">10</span> lat (roczna rata: <span id="trackB_annual">—</span>)</div>
-                    <div class="track-note">Rekomendowana kwota negocjacji (56% wyższe niż Track A)</div>
-                </div>
-            </div>
-
-            <div class="success-box" style="margin-top: 30px;">
-                <h4>✓ Rekomendacja</h4>
-                <p>
-                    Na podstawie analizy KSWS rekomendujemy <strong>Track B (Negocjacyjny)</strong> ze względu na:
-                </p>
-                <ul style="margin-left: 20px; margin-top: 10px;">
-                    <li>Wyższą wycenę nieruchomości w relation do rzeczywistego wpływu</li>
-                    <li>Kompensatę za restrykcje zabudowy i użytkowania</li>
-                    <li>Standardową praktykę negocjacyjną inwestorów sektora energii</li>
-                </ul>
-            </div>
+        <div class="track-row">
+          <span class="tl">OBN — Obniżenie wartości</span>
+          <span class="tv" id="track-a-obn">—</span>
         </div>
-
-        <!-- SEKCJA 5: WNIOSKI -->
-        <div class="card full-width">
-            <h2>📌 Wnioski i Rekomendacje</h2>
-
-            <div class="conclusions">
-                <h3>✓ Ustalenia pozytywne:</h3>
-                <ul class="conclusions-list">
-                    <li>Działka została dokładnie geometryzowana z rejestrów ULDK</li>
-                    <li>Wycena gruntu oparta na oficjalnych danych GUS</li>
-                    <li>Metodologia KSWS jest zgodna ze standardami polskiego prawa</li>
-                    <li>Odszkodowanie Track B jest uzasadnione prawnie</li>
-                </ul>
-            </div>
-
-            <div class="conclusions" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); margin-top: 20px;">
-                <h3>⚠️ Uwagi do weryfikacji:</h3>
-                <ul class="conclusions-list">
-                    <li class="warning">Rzeczywisty przebieg linii nie został automatycznie pobrany z WFS GUGiK</li>
-                    <li class="warning">Wymaga się ręcznej weryfikacji w terenie lub poprzez Portal Mapowy Powiatu</li>
-                    <li class="warning">Długość przecięcia linii z działką wpływa na ostateczną wartość odszkodowania</li>
-                    <li class="warning">Typ napięcia (WN/SN/nN) musi być potwierdzony z dokumentacją inwestora</li>
-                </ul>
-            </div>
-
-            <div class="conclusions" style="background: linear-gradient(135deg, #fadbd8 0%, #f5b7b1 100%); margin-top: 20px;">
-                <h3>❌ Brakujące dane (krytyczne):</h3>
-                <ul class="conclusions-list">
-                    <li class="danger">Brak potwierdzenia rzeczywistego przebiegu linii</li>
-                    <li class="danger">Brak pomiaru długości linii w działce (m)</li>
-                    <li class="danger">Brak wizualnego potwierdzenia napięcia</li>
-                </ul>
-            </div>
-        </div>
-
-        <!-- PAGE BREAK -->
-        <div class="page-break"></div>
-
-        <!-- SEKCJA 6: METODOLOGIA SZCZEGÓŁOWA -->
-        <div class="card full-width">
-            <h2>🔬 Metodologia Szczegółowa KSWS</h2>
-
-            <h3>1. Wycena nieruchomości</h3>
-            <p style="color: #555; line-height: 1.8;">
-                Wartość gruntu ustalono na podstawie ceny jednostkowej z tablic statystycznych GUS (Główny Urząd Statystyczny).
-                Dla gruntów rolnych w województwie mazowieckim cena wynosi <strong>8.5 zł/m²</strong>.
-                W braku transakcji lokalnych stosuje się wskaźniki regionalne.
-            </p>
-
-            <h3>2. Współczynnik S (wpływ społeczny)</h3>
-            <p style="color: #555; line-height: 1.8;">
-                Współczynnik S = 0.2 oznacza, że linia infrastrukturalna powoduje 20% straty pożyteczności gruntu.
-                W przypadku linii 15-30 kV (SN) jest to wartość standardowa dla gruntów rolnych.
-                W praktyce: OBN = 0.05 × Wartość nieruchomości (czyli 5%).
-            </p>
-
-            <h3>3. Strefy ochronne</h3>
-            <p style="color: #555; line-height: 1.8;">
-                Przepisy wymagają bezpiecznego odstępu od linii energetycznych:
-            </p>
-            <table class="data-table">
-                <tr>
-                    <td><span class="label">WN (powyżej 30 kV):</span><span class="value">30 m</span></td>
-                </tr>
-                <tr>
-                    <td><span class="label">SN (15-30 kV):</span><span class="value">15 m</span></td>
-                </tr>
-                <tr>
-                    <td><span class="label">nN (poniżej 15 kV):</span><span class="value">5 m</span></td>
-                </tr>
-            </table>
-
-            <h3>4. Track A vs Track B (porównanie)</h3>
-            <p style="color: #555; line-height: 1.8;">
-                <strong>Track A (Sądowy):</strong> Odszkodowanie ustalone przez sąd na podstawie metodologii KSWS.
-                Jest to wartość minimalna, oparta na formalnych wyliczeniach.
-            </p>
-            <p style="color: #555; line-height: 1.8;">
-                <strong>Track B (Negocjacyjny):</strong> Odszkodowanie ustalone w umowie między inwestorem a właścicielem.
-                Standardowo jest 1.56× wyższe niż Track A. Jest to wartość rekomendowana w negocjacjach.
-            </p>
-        </div>
-
-        <!-- FOOTER -->
-        <div class="footer">
-            <p>© 2026 KALKULATOR KSWS v3.0</p>
-            <p>Metodologia zgodna z polskim prawem odszkodowań dla obiektów liniowych</p>
-            <p>Raport wygenerowany automatycznie na podstawie danych z ULDK, EGIB i GUS</p>
-            <p style="margin-top: 20px; color: #7f8c8d;">
-                <strong>Ważne:</strong> Ten raport jest tylko szacunkiem. Ostateczne odszkodowanie musi być uzgodnione między stronami lub ustalone przez sąd.
-            </p>
-        </div>
+      </div>
     </div>
 
-    <!-- THREE.JS 3D VISUALIZATION -->
-    <script>
-        // Funkcja do wczytania danych z URL (jeśli podane)
-        function loadReportData(data) {
-            if (!data) {
-                // Default test data
-                data = {
-                    parcelId: "142003_2.0002.81/5",
-                    location: "Baboszewo, powiat płoński",
-                    commune: "Baboszewo",
-                    county: "powiat płoński",
-                    region: "mazowieckie",
-                    area: 9915.41,
-                    perimeter: 534.3,
-                    shapeClass: "niekorzystny",
-                    landClass: "R",
-                    landType: "ROLA (rolny)",
-                    buildingCount: 0,
-                    unitPrice: 8.5,
-                    priceSource: "GUS BDL",
-                    transactions: 0,
-                    propertyValue: 84280.99,
-                    voltage: "SN (15-30 kV)",
-                    lineLength: 0.0,
-                    occupiedArea: 0.0,
-                    coeffS: 0.2,
-                    coeffK: 0.5,
-                    coeffR: 0.06,
-                    coeffU: 0.065,
-                    obnValue: 4214.05,
-                    trackA_wsp: 0,
-                    trackA_wbk: 0,
-                    trackA_obn: 4214.05,
-                    trackA_total: 4214.05,
-                    trackA_years: 10,
-                    trackB_total: 6573.92,
-                    trackB_years: 10,
-                    multiplier: 1.56,
-                    infraWarning: true
-                };
-            }
+    <!-- Track B -->
+    <div class="track-b">
+      <span class="track-tag neg">ŚCIEŻKA NEGOCJACYJNA</span>
+      <div class="track-name">Track B</div>
+      <div class="track-desc">Track A × Mnożnik rynkowy (benchmark)</div>
+      <div class="track-amount" id="track-b-total">—</div>
+      <div class="track-sub" id="track-b-sub">Wymaga zdetektowanej infrastruktury</div>
+      <div class="track-breakdown" id="track-b-breakdown" style="display:none">
+        <div class="track-row">
+          <span class="tl">Track A (podstawa)</span>
+          <span class="tv" id="track-b-base">—</span>
+        </div>
+        <div class="track-row">
+          <span class="tl">Mnożnik rynkowy</span>
+          <span class="tv" id="track-b-mult">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
 
-            // Wypełnij wszystkie pola
-            document.getElementById('parcelId').textContent = data.parcelId;
-            document.getElementById('location').textContent = data.location;
-            document.getElementById('reportDate').textContent = new Date().toISOString().split('T')[0];
-            document.getElementById('terytId').textContent = data.parcelId;
-            document.getElementById('commune').textContent = data.commune;
-            document.getElementById('county').textContent = data.county;
-            document.getElementById('region').textContent = data.region;
-            document.getElementById('area').textContent = `${data.area.toLocaleString('pl-PL')} m²`;
-            document.getElementById('perimeter').textContent = `${data.perimeter.toLocaleString('pl-PL')} m`;
-            document.getElementById('shapeClass').textContent = data.shapeClass;
-            document.getElementById('landClass').textContent = data.landClass;
-            document.getElementById('landType').textContent = data.landType;
-            document.getElementById('buildingCount').textContent = data.buildingCount;
-            document.getElementById('unitPrice').textContent = `${data.unitPrice} zł/m²`;
-            document.getElementById('priceSource').textContent = data.priceSource;
-            document.getElementById('transactions').textContent = data.transactions;
-            document.getElementById('propertyValue').textContent = `${data.propertyValue.toLocaleString('pl-PL', {maximumFractionDigits: 2})} zł`;
-            document.getElementById('areaStat').textContent = `${(data.area / 1000).toFixed(1)} tys.`;
-            document.getElementById('voltage').textContent = data.voltage;
-            document.getElementById('lineLength').textContent = `${data.lineLength.toLocaleString('pl-PL')} m`;
-            document.getElementById('occupiedArea').textContent = `${data.occupiedArea.toLocaleString('pl-PL')} m²`;
-            document.getElementById('coeffS').textContent = data.coeffS;
-            document.getElementById('coeffK').textContent = data.coeffK;
-            document.getElementById('coeffR').textContent = data.coeffR;
-            document.getElementById('coeffU').textContent = data.coeffU;
-            document.getElementById('obnValue').textContent = `${data.obnValue.toLocaleString('pl-PL', {maximumFractionDigits: 2})} zł`;
-            document.getElementById('trackA_wsp').textContent = `${data.trackA_wsp.toLocaleString('pl-PL')} zł`;
-            document.getElementById('trackA_wbk').textContent = `${data.trackA_wbk.toLocaleString('pl-PL')} zł`;
-            document.getElementById('trackA_obn').textContent = `${data.trackA_obn.toLocaleString('pl-PL')} zł`;
-            document.getElementById('trackA_total').textContent = `${data.trackA_total.toLocaleString('pl-PL', {maximumFractionDigits: 2})} zł`;
-            document.getElementById('trackA_years').textContent = data.trackA_years;
-            document.getElementById('trackA_annual').textContent = `${(data.trackA_total / data.trackA_years).toLocaleString('pl-PL', {maximumFractionDigits: 2})} zł`;
-            document.getElementById('trackB_total').textContent = `${data.trackB_total.toLocaleString('pl-PL', {maximumFractionDigits: 2})} zł`;
-            document.getElementById('trackB_years').textContent = data.trackB_years;
-            document.getElementById('trackB_annual').textContent = `${(data.trackB_total / data.trackB_years).toLocaleString('pl-PL', {maximumFractionDigits: 2})} zł`;
-            document.getElementById('multiplier').textContent = data.multiplier + '×';
+  <!-- KSWS PARAMETRY -->
+  <div class="card" id="ksws-params-card" style="display:none">
+    <div class="card-title">Parametry kalkulacji KSWS</div>
+    <div class="three-col">
+      <table class="data-table">
+        <tr><td class="dl">Typ infrastruktury</td><td class="dv" id="k-type">—</td></tr>
+        <tr><td class="dl">Szerokość pasa [m]</td><td class="dv" id="k-band">—</td></tr>
+        <tr><td class="dl">Pow. pasa [m²]</td><td class="dv" id="k-band-area">—</td></tr>
+      </table>
+      <table class="data-table">
+        <tr><td class="dl">Wsp. S (udz. pasa)</td><td class="dv" id="k-S">—</td></tr>
+        <tr><td class="dl">Wsp. k (korekta)</td><td class="dv" id="k-k">—</td></tr>
+        <tr><td class="dl">Wsp. R (rentowość)</td><td class="dv" id="k-R">—</td></tr>
+      </table>
+      <table class="data-table">
+        <tr><td class="dl">Mnożnik Track B</td><td class="dv" id="k-mult">—</td></tr>
+        <tr><td class="dl">Wartość całk. [PLN]</td><td class="dv" id="k-value">—</td></tr>
+        <tr><td class="dl">Cena/m² [PLN]</td><td class="dv" id="k-price">—</td></tr>
+      </table>
+    </div>
+  </div>
 
-            // Infrastruktura warning
-            if (data.infraWarning) {
-                document.getElementById('infraWarning').style.display = 'block';
-            }
-        }
+  <!-- WNIOSKI -->
+  <div class="section-title">✅ Wnioski i zalecenia</div>
+  <div class="conclusions" id="conclusions">
+    <div class="conclusion-item">
+      <span class="ci-icon">✅</span>
+      <span class="ci-text">Dane działki pobrane z <strong>ULDK GUGiK</strong> — status REAL DATA</span>
+    </div>
+    <div class="conclusion-item">
+      <span class="ci-icon">✅</span>
+      <span class="ci-text">Cena rynkowa pobrana z <strong>GUS BDL</strong> — wartość rynkowa potwierdzona</span>
+    </div>
+    <div class="conclusion-item" id="concl-infra">
+      <span class="ci-icon">⚠️</span>
+      <span class="ci-text">Status infrastruktury — <strong>wymaga weryfikacji</strong></span>
+    </div>
+    <div class="conclusion-item" id="concl-compensation" style="display:none">
+      <span class="ci-icon">💵</span>
+      <span class="ci-text" id="concl-compensation-text">—</span>
+    </div>
+    <div class="conclusion-item">
+      <span class="ci-icon">📄</span>
+      <span class="ci-text">Raport wygenerowany przez <strong>KALKULATOR KSWS v3.0</strong> — wyłącznie dane rzeczywiste</span>
+    </div>
+  </div>
 
-        // THREE.JS - INICJALIZACJA 3D MAPY
-        let scene, camera, renderer, controls;
+  <!-- FOOTER -->
+  <div class="report-footer">
+    <strong>KALKULATOR KSWS v3.0</strong> — Kalkulator Roszczeń Odszkodowawczych Przesyłowych<br>
+    Metodologia: KSWS · Podstawa prawna: TK P 10/16 · Dane: ULDK, GESUT, RCN, GUS BDL, planowanie.gov.pl<br>
+    <span id="footer-date"></span>
+  </div>
 
-        function init3DMap() {
-            const canvas = document.getElementById('canvas3d');
-            const width = canvas.parentElement.clientWidth;
-            const height = canvas.parentElement.clientHeight;
+</div>
 
-            // Scene setup
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xb0d0ff); // Jasne niebo
+<script>
+  // ── Dane wstrzykiwane przez frontend ────────────────────────────────────────
+  // Frontend wywołuje window.fillReport(masterRecord) po pobraniu z API
 
-            // Camera
-            camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
-            camera.position.set(0, 50, 50);
-            camera.lookAt(0, 0, 0);
+  function fmtPLN(v) {
+    if (v == null || isNaN(v)) return '—';
+    return Number(v).toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' PLN';
+  }
+  function fmtM2(v) {
+    if (v == null || isNaN(v)) return '—';
+    return Number(v).toLocaleString('pl-PL', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' m²';
+  }
+  function fmtPrice(v) {
+    if (v == null || isNaN(v)) return '—';
+    return Number(v).toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' zł/m²';
+  }
 
-            // Renderer
-            renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-            renderer.setSize(width, height);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.shadowMap.enabled = true;
+  function set(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val || '—';
+  }
+  function show(id) { const el = document.getElementById(id); if (el) el.style.display = ''; }
+  function hide(id) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }
 
-            // Lighting
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-            scene.add(ambientLight);
+  window.fillReport = function(mr) {
+    const geom   = mr.geometry           || {};
+    const meta   = mr.parcel_metadata    || {};
+    const egib   = mr.egib               || {};
+    const plan   = mr.planning           || {};
+    const infra  = mr.infrastructure     || {};
+    const power  = infra.power           || {};
+    const powerL = infra.power_lines     || {};
+    const utils  = infra.utilities       || {};
+    const market = mr.market_data        || {};
+    const ksws   = mr.ksws               || {};
+    const comp   = mr.compensation       || {};
+    const trackA = comp.track_a          || null;
+    const trackB = comp.track_b          || null;
+    const invest = mr.investments        || {};
+    const landUse = Array.isArray(egib.land_use) ? egib.land_use : [];
+    const primaryClass = egib.primary_class || (landUse[0] && landUse[0].class) || 'R';
+    const hasLine = !!(powerL.detected || power.exists);
+    const locationStr = [meta.commune, meta.county].filter(Boolean).join(', ');
+    const now = new Date().toLocaleString('pl-PL');
 
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            directionalLight.position.set(100, 100, 50);
-            directionalLight.castShadow = true;
-            directionalLight.shadow.mapSize.width = 2048;
-            directionalLight.shadow.mapSize.height = 2048;
-            scene.add(directionalLight);
+    // Header meta
+    set('meta-parcel', mr.metadata && mr.metadata.teryt_id || '—');
+    set('meta-location', locationStr || '—');
+    set('meta-date', now);
+    set('footer-date', 'Wygenerowano: ' + now);
 
-            // GROUND/TERRAIN
-            const groundGeometry = new THREE.PlaneGeometry(200, 200);
-            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x8b7355 }); // Brown
-            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-            ground.rotation.x = -Math.PI / 2;
-            ground.receiveShadow = true;
-            scene.add(ground);
+    // Voltage badge
+    const vb = document.getElementById('infra-voltage-badge');
+    if (vb && powerL.voltage && powerL.voltage !== 'nieznane') {
+      vb.innerHTML = '<span class="voltage-chip">' + powerL.voltage + '</span>';
+    }
 
-            // GRASS TEXTURE (simple)
-            const grassGeometry = new THREE.PlaneGeometry(180, 180);
-            const grassMaterial = new THREE.MeshLambertMaterial({ color: 0x228b22 }); // Forest Green
-            const grass = new THREE.Mesh(grassGeometry, grassMaterial);
-            grass.position.z = 0.1;
-            grass.rotation.x = -Math.PI / 2;
-            grass.receiveShadow = true;
-            scene.add(grass);
+    // KPI
+    set('kpi-area', fmtM2(geom.area_m2));
+    set('kpi-class', primaryClass);
+    set('kpi-class-sub', egib.land_type === 'agricultural' ? 'Rolny' : 'Budowlany');
+    set('kpi-infra', hasLine ? (powerL.voltage || 'Wykryta') : 'Brak');
+    set('kpi-infra-sub', hasLine ? 'Infrastruktura obecna' : 'Brak kolizji');
+    const kpiInfraCard = document.getElementById('kpi-infra-card');
+    if (kpiInfraCard) {
+      kpiInfraCard.classList.remove('red', 'green');
+      kpiInfraCard.classList.add(hasLine ? 'red' : 'green');
+    }
+    set('kpi-price', fmtPrice(market.average_price_m2));
+    set('kpi-price-sub', market.price_source || 'GUS BDL');
 
-            // PARCEL BOUNDARY (działka)
-            drawParcelBoundary();
+    // Dane działki
+    set('d-parcel-id', mr.metadata && mr.metadata.teryt_id);
+    set('d-commune', [meta.commune, meta.county].filter(Boolean).join(', '));
+    set('d-county', meta.county);
+    set('d-region', meta.region);
+    set('d-area', fmtM2(geom.area_m2));
+    set('d-perimeter', geom.perimeter_m ? Math.round(geom.perimeter_m) + ' m' : '—');
+    set('d-shape', geom.shape_class || '—');
+    set('d-class', [primaryClass, egib.land_type === 'agricultural' ? 'rolny' : 'budowlany'].join(' · '));
+    set('d-buildings', (mr.buildings && mr.buildings.count) ? mr.buildings.count + ' szt.' : 'Brak');
 
-            // INFRASTRUCTURE LINES
-            drawInfrastructure();
+    // Cena
+    set('d-price-m2', fmtPrice(market.average_price_m2));
+    set('d-price-total', fmtPLN(market.average_price_m2 && geom.area_m2 ? market.average_price_m2 * geom.area_m2 : null));
+    set('d-price-source', market.price_source || '—');
+    set('d-land-type', egib.land_type === 'agricultural' ? 'Rolny' : 'Budowlany');
 
-            // POLES (słupy)
-            drawPoles();
+    // Infrastruktura
+    set('d-infra-elec', hasLine ? '✓ Wykryto' : '— Brak');
+    set('d-voltage', powerL.voltage || '—');
+    set('d-band', ksws.band_width_m ? ksws.band_width_m + ' m' : '—');
+    set('d-band-area', ksws.band_area_m2 ? fmtM2(ksws.band_area_m2) : '—');
+    set('d-gas', utils.gaz ? '✓ Tak' : '— Brak');
+    set('d-water', (utils.woda || utils.kanal) ? '✓ Tak' : '— Brak');
 
-            // Controls
-            controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-            controls.dampingFactor = 0.05;
-            controls.autoRotate = false;
-            controls.enableZoom = true;
+    // Planowanie
+    set('d-mpzp', plan.mpzp_active ? '✓ Aktywny MPZP' : '— Brak MPZP');
+    set('d-mpzp-usage', plan.usage || '—');
+    set('d-studium', plan.studium_usage || '—');
+    set('d-permits', invest.active_permits ? invest.active_permits + ' szt.' : 'Brak');
+    set('d-plan-status', plan.status || '—');
 
-            // Animation loop
-            function animate() {
-                requestAnimationFrame(animate);
-                controls.update();
-                renderer.render(scene, camera);
-            }
-            animate();
+    // Alert infrastruktura
+    if (hasLine) { show('alert-has-infra'); hide('alert-no-infra'); }
+    else         { show('alert-no-infra');  hide('alert-has-infra'); }
 
-            // Handle resize
-            window.addEventListener('resize', onWindowResize);
-        }
+    // Track A
+    if (trackA && trackA.total != null) {
+      set('track-a-total', fmtPLN(trackA.total));
+      set('track-a-sub', 'Kwota odszkodowania (ścieżka sądowa)');
+      set('track-a-wsp', fmtPLN(trackA.wsp));
+      set('track-a-wbk', fmtPLN(trackA.wbk));
+      set('track-a-obn', fmtPLN(trackA.obn));
+      show('track-a-breakdown');
+    } else {
+      set('track-a-total', '—');
+      document.getElementById('track-a-total').classList.add('na');
+    }
 
-        function drawParcelBoundary() {
-            // Prosty prostokąt reprezentujący działkę
-            const outlineGeometry = new THREE.BufferGeometry();
-            const outlinePoints = [
-                new THREE.Vector3(-40, 0.5, -40),
-                new THREE.Vector3(40, 0.5, -40),
-                new THREE.Vector3(40, 0.5, 40),
-                new THREE.Vector3(-40, 0.5, 40),
-                new THREE.Vector3(-40, 0.5, -40)
-            ];
-            outlineGeometry.setFromPoints(outlinePoints);
+    // Track B
+    if (trackB && trackB.total != null) {
+      set('track-b-total', fmtPLN(trackB.total));
+      set('track-b-sub', 'Kwota negocjacyjna (benchmark rynkowy)');
+      set('track-b-base', fmtPLN(trackA && trackA.total));
+      set('track-b-mult', '× ' + (trackB.multiplier || '—'));
+      show('track-b-breakdown');
+    } else {
+      set('track-b-total', '—');
+      document.getElementById('track-b-total').classList.add('na');
+    }
 
-            const outlineMaterial = new THREE.LineBasicMaterial({ color: 0x2c3e50, linewidth: 3 });
-            const outline = new THREE.Line(outlineGeometry, outlineMaterial);
-            scene.add(outline);
+    // KSWS parametry
+    if (ksws.infra_type) {
+      show('ksws-params-card');
+      set('k-type', ksws.label || ksws.infra_type);
+      set('k-band', ksws.band_width_m + ' m');
+      set('k-band-area', fmtM2(ksws.band_area_m2));
+      set('k-value', fmtPLN(ksws.property_value_total));
+      set('k-price', fmtPrice(ksws.price_per_m2));
+      const coeffs = ksws.coeffs || {};
+      set('k-S', coeffs.S);
+      set('k-k', coeffs.k);
+      set('k-R', coeffs.R);
+      set('k-mult', coeffs.track_b_mult ? '×' + coeffs.track_b_mult : '—');
+    }
 
-            // Label "DZIAŁKA"
-            const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 128;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 48px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('DZIAŁKA', 256, 80);
+    // Wnioski
+    const conclInfra = document.getElementById('concl-infra');
+    if (conclInfra) {
+      if (hasLine) {
+        conclInfra.querySelector('.ci-icon').textContent = '✅';
+        conclInfra.querySelector('.ci-text').innerHTML = 'Infrastruktura przesyłowa <strong>zdetektowana</strong> w strefie działki';
+      } else {
+        conclInfra.querySelector('.ci-icon').textContent = '⚠️';
+        conclInfra.querySelector('.ci-text').innerHTML = 'Infrastruktura przesyłowa <strong>niezdetektowana</strong> — wymaga weryfikacji na Geoportal';
+      }
+    }
+    if (trackA && trackA.total) {
+      show('concl-compensation');
+      const txt = document.getElementById('concl-compensation-text');
+      if (txt) txt.innerHTML = 'Szacowane odszkodowanie: Track A = <strong>' + fmtPLN(trackA.total) + '</strong> · Track B = <strong>' + fmtPLN(trackB && trackB.total) + '</strong>';
+    }
+  };
 
-            const texture = new THREE.CanvasTexture(canvas);
-            const spriteGeometry = new THREE.PlaneGeometry(40, 10);
-            const spriteMaterial = new THREE.MeshBasicMaterial({ map: texture });
-            const sprite = new THREE.Mesh(spriteGeometry, spriteMaterial);
-            sprite.position.y = 30;
-            scene.add(sprite);
-        }
-
-        function drawInfrastructure() {
-            // ELEKTRO (Red line) - główna linia
-            const elektroGeometry = new THREE.BufferGeometry();
-            const elektroPoints = [
-                new THREE.Vector3(-30, 15, -10),
-                new THREE.Vector3(30, 15, 10)
-            ];
-            elektroGeometry.setFromPoints(elektroPoints);
-            const elektroMaterial = new THREE.LineBasicMaterial({ color: 0xe74c3c, linewidth: 4 });
-            const elektro = new THREE.Line(elektroGeometry, elektroMaterial);
-            scene.add(elektro);
-
-            // GAZ (Orange line)
-            const gazGeometry = new THREE.BufferGeometry();
-            const gazPoints = [
-                new THREE.Vector3(-35, 8, -20),
-                new THREE.Vector3(35, 8, 5)
-            ];
-            gazGeometry.setFromPoints(gazPoints);
-            const gazMaterial = new THREE.LineBasicMaterial({ color: 0xf39c12, linewidth: 3 });
-            const gaz = new THREE.Line(gazGeometry, gazMaterial);
-            scene.add(gaz);
-
-            // WODA (Blue line)
-            const wodaGeometry = new THREE.BufferGeometry();
-            const wodaPoints = [
-                new THREE.Vector3(-40, 5, 0),
-                new THREE.Vector3(40, 5, 0)
-            ];
-            wodaGeometry.setFromPoints(wodaPoints);
-            const wodaMaterial = new THREE.LineBasicMaterial({ color: 0x3498db, linewidth: 3 });
-            const woda = new THREE.Line(wodaGeometry, wodaMaterial);
-            scene.add(woda);
-
-            // TELEKOMUNIKACJA (Purple line)
-            const telekoGeometry = new THREE.BufferGeometry();
-            const telekoPoints = [
-                new THREE.Vector3(-25, 12, -35),
-                new THREE.Vector3(25, 12, 35)
-            ];
-            telekoGeometry.setFromPoints(telekoPoints);
-            const telekoMaterial = new THREE.LineBasicMaterial({ color: 0x9b59b6, linewidth: 2 });
-            const teleko = new THREE.Line(telekoGeometry, telekoMaterial);
-            scene.add(teleko);
-        }
-
-        function drawPoles() {
-            // Słupy elektro (towary)
-            const polePositions = [
-                [-30, 0, -10],
-                [-10, 0, 0],
-                [10, 0, 5],
-                [30, 0, 10]
-            ];
-
-            polePositions.forEach(pos => {
-                const poleGeometry = new THREE.CylinderGeometry(0.5, 0.7, 30, 8);
-                const poleMaterial = new THREE.MeshLambertMaterial({ color: 0x8b4513 }); // Brown
-                const pole = new THREE.Mesh(poleGeometry, poleMaterial);
-                pole.position.set(pos[0], pos[1] + 15, pos[2]);
-                pole.castShadow = true;
-                pole.receiveShadow = true;
-                scene.add(pole);
-
-                // Insulator (ceramic) - top of pole
-                const insulatorGeometry = new THREE.SphereGeometry(0.4, 16, 16);
-                const insulatorMaterial = new THREE.MeshLambertMaterial({ color: 0xe74c3c });
-                const insulator = new THREE.Mesh(insulatorGeometry, insulatorMaterial);
-                insulator.position.set(pos[0], pos[1] + 30, pos[2]);
-                insulator.castShadow = true;
-                scene.add(insulator);
-            });
-        }
-
-        function onWindowResize() {
-            const canvas = document.getElementById('canvas3d');
-            const width = canvas.parentElement.clientWidth;
-            const height = canvas.parentElement.clientHeight;
-
-            camera.aspect = width / height;
-            camera.updateProjectionMatrix();
-            renderer.setSize(width, height);
-        }
-
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            loadReportData(); // Load default test data
-            init3DMap(); // Initialize 3D visualization
-        });
-    </script>
+  // Auto-fill z URL parametrów jeśli dostępne
+  document.getElementById('footer-date').textContent = 'Wygenerowano: ' + new Date().toLocaleString('pl-PL');
+</script>
 </body>
 </html>
