@@ -16,49 +16,91 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
 
-// ── GeoJSON + GESUT overlay layer ────────────────────────────────────────────
+// ── GeoJSON + OpenInfraMap + GESUT overlay layers ────────────────────────────
 function GeoJSONLayers({ parcelGeojson }) {
   const map = useMap();
 
   useEffect(() => {
-    if (!parcelGeojson) return;
-
-    const layer = L.geoJSON(parcelGeojson, {
-      style: {
-        color: "#a91079",
-        weight: 3,
-        fillColor: "#a91079",
-        fillOpacity: 0.15,
-      },
-    });
-    layer.addTo(map);
-
-    // GESUT overlay — infrastruktura przesyłowa
-    const gesutLayer = L.tileLayer.wms(
-      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
+    // ── OpenInfraMap — linie WN/SN/nN widoczne od razu (OSM Power Grid) ──
+    const openInfraLines = L.tileLayer(
+      "https://tiles.openinframap.org/power_lines/{z}/{x}/{y}.png",
       {
-        layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy",
-        format: "image/png",
-        transparent: true,
-        opacity: 0.8,
-        attribution: "GESUT GUGiK",
+        maxZoom: 20,
+        opacity: 0.95,
+        attribution: '© <a href="https://openinframap.org" target="_blank">OpenInfraMap</a>',
+        crossOrigin: "anonymous",
+        errorTileUrl: "",
       }
     );
-    gesutLayer.addTo(map);
+    openInfraLines.addTo(map);
 
-    try {
-      const bounds = layer.getBounds();
-      if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
-    } catch (_) {}
+    // ── OpenInfraMap — stacje transformatorowe i słupy ──
+    const openInfraPlants = L.tileLayer(
+      "https://tiles.openinframap.org/power_plants/{z}/{x}/{y}.png",
+      {
+        maxZoom: 20,
+        opacity: 0.9,
+        attribution: '© OpenInfraMap',
+        crossOrigin: "anonymous",
+        errorTileUrl: "",
+      }
+    );
+    openInfraPlants.addTo(map);
+
+    // ── Działka + GESUT (tylko gdy mamy geometrię) ──
+    let parcelLayer = null;
+    let gesutLayer = null;
+
+    if (parcelGeojson) {
+      parcelLayer = L.geoJSON(parcelGeojson, {
+        style: {
+          color: "#a91079",
+          weight: 3,
+          fillColor: "#a91079",
+          fillOpacity: 0.18,
+        },
+      });
+      parcelLayer.addTo(map);
+
+      // GESUT WMS — jako dodatkowe dane uzbrojenia terenu
+      gesutLayer = L.tileLayer.wms(
+        "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
+        {
+          layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy",
+          format: "image/png",
+          transparent: true,
+          opacity: 0.7,
+          attribution: "GESUT GUGiK",
+        }
+      );
+      gesutLayer.addTo(map);
+
+      try {
+        const bounds = parcelLayer.getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
+      } catch (_) {}
+    }
 
     return () => {
-      map.removeLayer(layer);
-      map.removeLayer(gesutLayer);
+      map.removeLayer(openInfraLines);
+      map.removeLayer(openInfraPlants);
+      if (parcelLayer) map.removeLayer(parcelLayer);
+      if (gesutLayer) map.removeLayer(gesutLayer);
     };
   }, [map, parcelGeojson]);
 
   return null;
 }
+
+// ── Legenda OpenInfraMap ────────────────────────────────────────────────────
+const INFRA_LEGEND = [
+  { color: "#e60000", label: "380 kV" },
+  { color: "#ff6600", label: "220 kV" },
+  { color: "#ffcc00", label: "110 kV" },
+  { color: "#00bb00", label: "15–30 kV" },
+  { color: "#0066ff", label: "nN" },
+  { color: "#a91079", label: "Działka" },
+];
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 const fmt = (v, dec = 0) =>
@@ -541,15 +583,58 @@ export default function KalkulatorPage() {
             </div>
           </div>
 
-          {/* ════ PUSTY STAN ════ */}
+          {/* ════ MAPA POGLĄDOWA (przed analizą) ════ */}
           {!result && !loading && (
-            <div className="ksws-empty">
-              <div className="ksws-empty-icon">🗺</div>
-              <div className="ksws-empty-title">Wprowadź numer działki</div>
-              <div className="ksws-empty-sub">
-                System pobierze geometrię (ULDK), infrastrukturę (GESUT), ceny
-                rynkowe (RCN / GUS BDL) i wyliczy roszczenie wg metodyki KSWS
-                Track A/B.
+            <div className="ksws-card">
+              <div className="ksws-card-header">
+                <span className="ksws-card-header-icon">📡</span>
+                <div>
+                  <div className="ksws-card-header-title">Mapa infrastruktury energetycznej</div>
+                  <div className="ksws-card-header-sub">
+                    OpenInfraMap · linie WN/SN/nN · słupy · stacje — Polska
+                  </div>
+                </div>
+              </div>
+              <div className="ksws-card-body" style={{ padding: 0, overflow: "hidden", borderRadius: "0 0 10px 10px" }}>
+                <div className="ksws-map-container" style={{ height: 460, position: "relative" }}>
+                  <MapContainer
+                    center={DEFAULT_CENTER}
+                    zoom={DEFAULT_ZOOM}
+                    style={{ height: "100%", width: "100%" }}
+                    scrollWheelZoom
+                  >
+                    {/* OpenStreetMap base */}
+                    <TileLayer
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      attribution='© <a href="https://openstreetmap.org">OpenStreetMap</a>'
+                    />
+                    {/* OpenInfraMap linie energetyczne */}
+                    <TileLayer
+                      url="https://tiles.openinframap.org/power_lines/{z}/{x}/{y}.png"
+                      attribution='© <a href="https://openinframap.org">OpenInfraMap</a>'
+                      opacity={0.95}
+                    />
+                    {/* OpenInfraMap stacje i słupy */}
+                    <TileLayer
+                      url="https://tiles.openinframap.org/power_plants/{z}/{x}/{y}.png"
+                      opacity={0.9}
+                    />
+                  </MapContainer>
+                  {/* Legenda */}
+                  <div className="ksws-map-legend">
+                    <div className="ksws-map-legend-title">Linie energetyczne</div>
+                    {INFRA_LEGEND.filter(i => i.label !== "Działka").map((item) => (
+                      <div key={item.label} className="ksws-map-legend-item">
+                        <div className="ksws-map-legend-swatch" style={{ background: item.color }} />
+                        <span>{item.label}</span>
+                      </div>
+                    ))}
+                    <div className="ksws-map-legend-source">OpenInfraMap · OSM Power Grid</div>
+                  </div>
+                </div>
+                <div style={{ padding: "12px 20px", fontSize: "0.82rem", color: "#7f8c8d", background: "#f9f9f9", borderTop: "1px solid #eee" }}>
+                  ℹ Znajdź działkę na mapie, następnie wpisz jej numer ewidencyjny powyżej i kliknij <strong>Generuj raport</strong>
+                </div>
               </div>
             </div>
           )}
@@ -745,19 +830,25 @@ export default function KalkulatorPage() {
                       className={`ksws-tab-btn${activeTab === "map2d" ? " active" : ""}`}
                       onClick={() => setActiveTab("map2d")}
                     >
-                      Mapa 2D
+                      📡 Infrastruktura
+                    </button>
+                    <button
+                      className={`ksws-tab-btn${activeTab === "mapy" ? " active" : ""}`}
+                      onClick={() => setActiveTab("mapy")}
+                    >
+                      🏔 Outdoor
                     </button>
                     <button
                       className={`ksws-tab-btn${activeTab === "map3d" ? " active" : ""}`}
                       onClick={() => setActiveTab("map3d")}
                     >
-                      Mapa 3D
+                      🧊 3D
                     </button>
                   </div>
 
                   <div className="ksws-tab-content">
                     {activeTab === "map2d" && (
-                      <div className="ksws-map-container">
+                      <div className="ksws-map-container" style={{ position: "relative" }}>
                         <MapContainer
                           key={result?.parcel_id || "empty"}
                           center={mapCenter}
@@ -765,7 +856,7 @@ export default function KalkulatorPage() {
                           style={{ height: "100%", width: "100%" }}
                           scrollWheelZoom
                         >
-                          {/* Geoportal WMS ortofoto — zamiast OSM */}
+                          {/* Geoportal WMS ortofoto */}
                           <WMSTileLayer
                             url="https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardOGC"
                             layers="Raster"
@@ -774,13 +865,43 @@ export default function KalkulatorPage() {
                             attribution="Geoportal GUGiK"
                           />
 
-                          {/* Działka GeoJSON + nakładka GESUT */}
+                          {/* OpenInfraMap linie + działka GeoJSON + GESUT */}
                           <GeoJSONLayers
                             parcelGeojson={geom.geojson_ll || geom.geojson}
                           />
                         </MapContainer>
+
+                        {/* Legenda OpenInfraMap */}
+                        <div className="ksws-map-legend">
+                          <div className="ksws-map-legend-title">Linie energetyczne</div>
+                          {INFRA_LEGEND.map((item) => (
+                            <div key={item.label} className="ksws-map-legend-item">
+                              <div
+                                className="ksws-map-legend-swatch"
+                                style={{ background: item.color }}
+                              />
+                              <span>{item.label}</span>
+                            </div>
+                          ))}
+                          <div className="ksws-map-legend-source">
+                            OpenInfraMap · GESUT
+                          </div>
+                        </div>
                       </div>
                     )}
+
+                    {activeTab === "mapy" && (
+                      <div className="ksws-map-container" style={{ padding: 0, overflow: "hidden" }}>
+                        <iframe
+                          key={`mapy-${mapCenter[0]}-${mapCenter[1]}`}
+                          src={`https://en.mapy.cz/?source=coor&id=${mapCenter[1]},${mapCenter[0]}&x=${mapCenter[1]}&y=${mapCenter[0]}&z=16&mp=mapset-outdoor&marker=1`}
+                          style={{ width: "100%", height: "100%", border: "none" }}
+                          title="Mapy.cz Outdoor — słupy i linie energetyczne"
+                          allowFullScreen
+                        />
+                      </div>
+                    )}
+
                     {activeTab === "map3d" && (
                       <div className="ksws-map-container-3d">
                         <Map3D

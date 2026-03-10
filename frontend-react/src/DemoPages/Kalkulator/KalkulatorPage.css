@@ -596,12 +596,63 @@
   height: 420px;
   width: 100%;
   overflow: hidden;
+  position: relative;
 }
 
 .ksws-map-container-3d {
   height: 500px;
   width: 100%;
   overflow: hidden;
+}
+
+/* ── LEGENDA OPENINFRAMAP ──────────────────────────────────────────────────── */
+.ksws-map-legend {
+  position: absolute;
+  bottom: 30px;
+  right: 10px;
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.78rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  min-width: 130px;
+  pointer-events: none;
+}
+
+.ksws-map-legend-title {
+  font-weight: 700;
+  color: #1a2035;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 5px;
+}
+
+.ksws-map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 4px;
+  color: #333;
+}
+
+.ksws-map-legend-swatch {
+  width: 20px;
+  height: 4px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.ksws-map-legend-source {
+  margin-top: 8px;
+  font-size: 0.68rem;
+  color: #999;
+  border-top: 1px solid #eee;
+  padding-top: 5px;
 }
 
 /* ── TRACK A/B ────────────────────────────────────────────────────────────── */
