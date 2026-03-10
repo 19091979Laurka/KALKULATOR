@@ -9,6 +9,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { toast } from "react-toastify";
 import PageTitleAlt2 from "../../Layout/AppMain/PageTitleAlt2";
+import "./BatchAnalysisPage.css";
 
 // Leaflet icon fix
 delete L.Icon.Default.prototype._getIconUrl;
@@ -194,205 +195,254 @@ export const BatchAnalysisPage = () => {
     });
 
     return (
-      <div className="table-responsive">
-        <Table striped hover size="sm">
-          <thead>
-            <tr>
-              <th>Dz. Nr</th>
-              <th>Konflikt?</th>
-              <th>Napięcie</th>
-              <th>Zajęta pow. [m²]</th>
-              <th>Linia [m]</th>
-              <th>Track A [PLN]</th>
-              <th>Track B [PLN]</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((p, idx) => {
-              const inf = p.data?.infrastructure?.power_lines || {};
-              const comp = p.data?.compensation || {};
-              const hasConflict = inf.detected;
+      <table className="batch-table">
+        <thead>
+          <tr>
+            <th>Dz. Nr</th>
+            <th>Konflikt?</th>
+            <th>Napięcie</th>
+            <th>Zajęta pow. [m²]</th>
+            <th>Linia [m]</th>
+            <th>Track A [PLN]</th>
+            <th>Track B [PLN]</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((p, idx) => {
+            const inf = p.data?.infrastructure?.power_lines || {};
+            const comp = p.data?.compensation || {};
+            const hasConflict = inf.detected;
 
-              return (
-                <tr key={idx} style={{ backgroundColor: p.status === "ERROR" ? "#fee" : "white" }}>
-                  <td>{p.parcel_id}</td>
-                  <td>
-                    <Badge color={hasConflict ? "danger" : "success"}>
-                      {hasConflict ? "TAK ⚠️" : "NIE ✅"}
-                    </Badge>
-                  </td>
-                  <td>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        backgroundColor: getVoltageColor(inf.voltage),
-                        color: "white",
-                        padding: "2px 6px",
-                        borderRadius: "3px",
-                        fontSize: "12px",
-                      }}
-                    >
-                      {inf.voltage || "—"}
-                    </span>
-                  </td>
-                  <td>{fmt(comp.band_area_m2, 1)}</td>
-                  <td>{fmt(inf.length_m, 1)}</td>
-                  <td>{fmtPLN(comp.track_a_total)}</td>
-                  <td>{fmtPLN(comp.track_b_total)}</td>
-                  <td>
-                    <Badge color={p.status === "ERROR" ? "danger" : "info"}>
-                      {p.status}
-                    </Badge>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </Table>
-      </div>
+            return (
+              <tr key={idx} style={{ backgroundColor: p.status === "ERROR" ? "#fadbd8" : "transparent" }}>
+                <td><strong>{p.parcel_id}</strong></td>
+                <td>
+                  <span className={`batch-table-badge ${hasConflict ? "danger" : "success"}`}>
+                    {hasConflict ? "TAK ⚠️" : "NIE ✅"}
+                  </span>
+                </td>
+                <td>
+                  <div
+                    className="batch-table-color-box"
+                    style={{ backgroundColor: getVoltageColor(inf.voltage) }}
+                  />
+                  {inf.voltage || "—"}
+                </td>
+                <td className="text-right">{fmt(comp.band_area_m2, 1)}</td>
+                <td className="text-right">{fmt(inf.length_m, 1)}</td>
+                <td className="text-right"><strong>{fmtPLN(comp.track_a_total)}</strong></td>
+                <td className="text-right"><strong>{fmtPLN(comp.track_b_total)}</strong></td>
+                <td>
+                  <span className={`batch-table-badge ${p.status === "ERROR" ? "danger" : "info"}`}>
+                    {p.status}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     );
   };
 
   return (
-    <>
-      <PageTitleAlt2 heading="Analiza zbiorcza działek (99)" subheading="CSV upload + Historia + Mapa" />
+    <div className="batch-analysis-wrapper">
+      <div className="batch-header">
+        <h1>📊 Analiza zbiorcza działek</h1>
+        <p>Wgraj CSV, analizuj wszystkie działki naraz, pobierz wyniki</p>
+      </div>
 
-      <div className="row">
-        <div className="col-lg-6">
-          <Card className="main-card mb-3">
-            <CardBody>
-              <CardTitle tag="h5">📋 Upload CSV</CardTitle>
-              <form onSubmit={handleCSVUpload}>
-                <FormGroup>
-                  <Label for="csvInput">Plik CSV (parcel_id, obreb, county, municipality)</Label>
-                  <Input
-                    id="csvInput"
-                    type="file"
-                    accept=".csv"
-                    onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
-                    disabled={loading}
-                  />
-                </FormGroup>
-                <Button color="primary" type="submit" disabled={loading || !csvFile}>
-                  {loading ? <Spinner size="sm" /> : "🚀 Analizuj"}
-                </Button>
-              </form>
-            </CardBody>
-          </Card>
-        </div>
+      <div className="batch-content">
+        {/* Upload Card */}
+        <div className="batch-upload-card">
+          <h3>📋 Upload CSV</h3>
+          <label className="batch-upload-label">
+            Format: parcel_id, obreb, county, municipality
+          </label>
 
-        <div className="col-lg-6">
-          <Card className="main-card mb-3">
-            <CardBody>
-              <CardTitle tag="h5">📚 Historia analiz</CardTitle>
-              {history.length === 0 ? (
-                <p className="text-muted">Brak historii</p>
-              ) : (
-                <div style={{ maxHeight: "250px", overflowY: "auto" }}>
-                  {history.map((h) => (
-                    <div key={h.batch_id} className="mb-2 p-2" style={{ border: "1px solid #ddd", borderRadius: "4px" }}>
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <strong>{h.file_name}</strong>
-                          <br />
-                          <small className="text-muted">{new Date(h.timestamp).toLocaleString("pl-PL")}</small>
-                        </div>
-                        <Badge color="info">{h.successful}/{h.total}</Badge>
-                      </div>
-                      <Button
-                        size="sm"
-                        color="link"
-                        onClick={() => loadBatchDetails(h.batch_id)}
-                        className="mt-2"
-                      >
-                        Szczegóły →
-                      </Button>
-                    </div>
-                  ))}
+          <form onSubmit={handleCSVUpload}>
+            <div className="batch-file-input-wrapper">
+              <input
+                id="csvInput"
+                type="file"
+                accept=".csv"
+                className="batch-file-input"
+                onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                disabled={loading}
+              />
+              <label htmlFor="csvInput" className="batch-file-button">
+                📁 Wybierz plik CSV
+              </label>
+              {csvFile && (
+                <div className="batch-file-name">
+                  ✓ {csvFile.name}
                 </div>
               )}
-            </CardBody>
-          </Card>
+            </div>
+
+            <button
+              type="submit"
+              className="batch-analyze-button"
+              disabled={loading || !csvFile}
+            >
+              {loading ? (
+                <>
+                  <Spinner size="sm" /> Analizowanie...
+                </>
+              ) : (
+                <>🚀 Analizuj działki</>
+              )}
+            </button>
+          </form>
+        </div>
+
+        {/* History Card */}
+        <div className="batch-history-card">
+          <h3>📚 Historia analiz</h3>
+          {history.length === 0 ? (
+            <div className="batch-history-empty">
+              Brak historii analiz<br/>
+              <small>Wgrywajcie pliki CSV aby je zobaczyć</small>
+            </div>
+          ) : (
+            <div className="batch-history-list">
+              {history.map((h) => (
+                <div key={h.batch_id} className="batch-history-item">
+                  <div className="batch-history-item-header">
+                    <div className="batch-history-item-name">{h.file_name}</div>
+                    <div className="batch-history-item-badge">
+                      {h.successful}/{h.total}
+                    </div>
+                  </div>
+                  <div className="batch-history-item-date">
+                    {new Date(h.timestamp).toLocaleString("pl-PL")}
+                  </div>
+                  <div className="batch-history-item-details">
+                    <div className="batch-history-item-stat">
+                      <span className="batch-history-item-stat-label">✓ Pomyślne:</span>
+                      <span className="batch-history-item-stat-value">{h.successful}</span>
+                    </div>
+                    <div className="batch-history-item-stat">
+                      <span className="batch-history-item-stat-label">✗ Błędy:</span>
+                      <span className="batch-history-item-stat-value">{h.total - h.successful}</span>
+                    </div>
+                  </div>
+                  <button
+                    className="batch-history-item-button"
+                    onClick={() => loadBatchDetails(h.batch_id)}
+                  >
+                    Szczegóły →
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Wyniki */}
+      {/* Results Section */}
       {results && (
-        <>
-          <Card className="main-card mb-3">
-            <CardBody>
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <CardTitle tag="h5">
-                  ✅ Wyniki ({results.summary.successful}/{results.summary.total})
-                </CardTitle>
-                <Button color="success" size="sm" onClick={downloadResultsCSV}>
-                  📥 Pobierz CSV
-                </Button>
+        <div className="batch-results-section">
+          {/* Summary Stats */}
+          <div className="batch-results-card">
+            <div className="batch-results-header">
+              <h3>✅ Wyniki analizy</h3>
+              <button className="batch-download-button" onClick={downloadResultsCSV}>
+                📥 Pobierz CSV
+              </button>
+            </div>
+
+            <div className="batch-summary-stats">
+              <div className="batch-stat-box">
+                <div className="batch-stat-label">Wszystkie działki</div>
+                <div className="batch-stat-value">{fmt(results.summary.total)}</div>
               </div>
+              <div className="batch-stat-box success">
+                <div className="batch-stat-label">✓ Analizowane</div>
+                <div className="batch-stat-value">{fmt(results.summary.successful)}</div>
+              </div>
+              <div className="batch-stat-box error">
+                <div className="batch-stat-label">✗ Błędy</div>
+                <div className="batch-stat-value">{fmt(results.summary.failed)}</div>
+              </div>
+            </div>
 
-              <Row className="mb-3">
-                <Col md="4">
-                  <div className="text-center">
-                    <h4>{fmt(results.summary.total)}</h4>
-                    <small className="text-muted">Wszystkie działki</small>
-                  </div>
-                </Col>
-                <Col md="4">
-                  <div className="text-center">
-                    <h4 className="text-success">{fmt(results.summary.successful)}</h4>
-                    <small className="text-muted">Analizowane</small>
-                  </div>
-                </Col>
-                <Col md="4">
-                  <div className="text-center">
-                    <h4 className="text-danger">{fmt(results.summary.failed)}</h4>
-                    <small className="text-muted">Błędy</small>
-                  </div>
-                </Col>
-              </Row>
+            <div style={{ marginTop: "20px" }}>
+              <div style={{ fontSize: "0.9rem", color: "#7f8c8d", marginBottom: "8px" }}>
+                Postęp: {((results.summary.successful / results.summary.total) * 100).toFixed(0)}%
+              </div>
+              <div className="batch-progress-bar">
+                <div
+                  className="batch-progress-fill"
+                  style={{ width: `${(results.summary.successful / results.summary.total) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
 
-              <Progress value={(results.summary.successful / results.summary.total) * 100} />
-            </CardBody>
-          </Card>
-
-          {/* Mapa */}
-          <Card className="main-card mb-3">
-            <CardBody>
-              <CardTitle tag="h5">🗺️ Mapa zbiorcza</CardTitle>
+          {/* Map */}
+          <div className="batch-map-card">
+            <h3>🗺️ Mapa zbiorcza</h3>
+            <div className="batch-map-container">
               <CollectiveMap />
-              <small className="text-muted mt-2 d-block">
-                Kolory: <span style={{ color: "#e74c3c" }}>●</span> WN |
-                <span style={{ color: "#f39c12" }}> ●</span> SN |
-                <span style={{ color: "#27ae60" }}> ●</span> nN |
-                <span style={{ color: "#95a5a6" }}> ●</span> Brak
-              </small>
-            </CardBody>
-          </Card>
+            </div>
+            <div className="batch-map-legend">
+              <div className="batch-map-legend-item">
+                <div className="batch-map-legend-color" style={{ backgroundColor: "#e74c3c" }}></div>
+                <span>WN (Wysoki napór)</span>
+              </div>
+              <div className="batch-map-legend-item">
+                <div className="batch-map-legend-color" style={{ backgroundColor: "#f39c12" }}></div>
+                <span>SN (Średni napór)</span>
+              </div>
+              <div className="batch-map-legend-item">
+                <div className="batch-map-legend-color" style={{ backgroundColor: "#27ae60" }}></div>
+                <span>nN (Niski napór)</span>
+              </div>
+              <div className="batch-map-legend-item">
+                <div className="batch-map-legend-color" style={{ backgroundColor: "#95a5a6" }}></div>
+                <span>Brak infrastruktury</span>
+              </div>
+            </div>
+          </div>
 
-          {/* Tabela */}
-          <Card className="main-card mb-3">
-            <CardBody>
-              <CardTitle tag="h5">📊 Szczegóły działek</CardTitle>
+          {/* Table */}
+          <div className="batch-table-card">
+            <h3>📊 Szczegóły działek</h3>
+            <div style={{ overflowX: "auto" }}>
               {renderTable(results.parcels)}
-            </CardBody>
-          </Card>
-        </>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Details Modal */}
-      <Modal isOpen={detailsModal} toggle={() => setDetailsModal(false)} size="lg">
-        <ModalHeader toggle={() => setDetailsModal(false)}>
-          Historia: {selectedBatch?.batch_id}
-        </ModalHeader>
-        <ModalBody>{selectedBatch && renderTable(selectedBatch.results)}</ModalBody>
-        <ModalFooter>
-          <Button color="secondary" onClick={() => setDetailsModal(false)}>
+      <Modal isOpen={detailsModal} toggle={() => setDetailsModal(false)} size="lg" className="batch-details-modal">
+        <div className="batch-modal-header">
+          <h5>📋 Historia: {selectedBatch?.batch_id}</h5>
+        </div>
+        <div className="batch-modal-body">
+          {selectedBatch && renderTable(selectedBatch.results)}
+        </div>
+        <div style={{ padding: "20px", textAlign: "right", borderTop: "1px solid #ecf0f1" }}>
+          <button
+            style={{
+              background: "#95a5a6",
+              color: "white",
+              border: "none",
+              padding: "10px 20px",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: "600"
+            }}
+            onClick={() => setDetailsModal(false)}
+          >
             Zamknij
-          </Button>
-        </ModalFooter>
+          </button>
+        </div>
       </Modal>
-    </>
+    </div>
   );
 };
 
