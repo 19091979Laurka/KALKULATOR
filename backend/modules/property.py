@@ -1,10 +1,14 @@
 """
 Moduł: Agregator Property_Master_Record (Spec v3.0)
 Główny koordynator zbierania danych z zachowaniem jawności statusu (REAL/TEST/ERROR).
+KROK 2: Shapely integration for real infrastructure intersection calculation.
 """
 import logging
 import asyncio
-from typing import Dict, Any, Optional
+import json
+from typing import Dict, Any, Optional, List, Tuple
+from shapely.geometry import shape, LineString, Polygon, GeometryCollection
+from shapely.ops import unary_union
 from backend.integrations.uldk import ULDKClient
 from backend.integrations.kieg import KIEGClient
 from backend.integrations.gunb import GUNBClient
@@ -48,6 +52,99 @@ def calculate_track_b(track_a_total: float, infra_type: str = "elektro_SN") -> d
     """Track B — ścieżka negocjacyjna: Track A × mnożnik"""
     mult = KSWS_STANDARDS.get(infra_type, KSWS_STANDARDS["default"])["track_b_mult"]
     return {"total": round(track_a_total * mult, 2), "multiplier": mult}
+
+
+def calculate_intersection_length(parcel_geojson: Dict[str, Any], wfs_features: List[Dict[str, Any]]) -> float:
+    """
+    KROK 2: Calculate actual infrastructure line intersection with parcel boundary.
+
+    Uses Shapely to compute real-world intersection length in meters.
+    This replaces pixel-based guessing with vector-based measurements.
+
+    Args:
+        parcel_geojson: GeoJSON geometry of parcel (Polygon)
+        wfs_features: List of WFS GeoJSON features (LineString geometries)
+
+    Returns:
+        float: Total intersection length in meters (sum of all feature intersections)
+    """
+    try:
+        # Parse parcel geometry
+        if not parcel_geojson or parcel_geojson.get("type") != "Polygon":
+            logger.warning("Invalid or missing parcel geometry")
+            return 0.0
+
+        parcel_poly = shape(parcel_geojson)
+        if not parcel_poly.is_valid:
+            logger.warning("Parcel polygon is invalid, attempting to fix...")
+            parcel_poly = parcel_poly.buffer(0)
+
+        total_length = 0.0
+        feature_count = 0
+
+        for feature in wfs_features:
+            try:
+                geom = feature.get("geometry")
+                if not geom:
+                    continue
+
+                geom_type = geom.get("type")
+
+                # Handle LineString (typical for infrastructure lines)
+                if geom_type == "LineString":
+                    line = shape(geom)
+                    if not line.is_valid:
+                        line = line.buffer(0)
+
+                    # Calculate intersection
+                    intersection = parcel_poly.intersection(line)
+                    if intersection.geom_type == "LineString":
+                        total_length += intersection.length
+                    elif intersection.geom_type == "MultiLineString":
+                        for linestring in intersection.geoms:
+                            total_length += linestring.length
+                    elif intersection.geom_type == "GeometryCollection":
+                        for geom_part in intersection.geoms:
+                            if geom_part.geom_type in ["LineString", "MultiLineString"]:
+                                if hasattr(geom_part, "geoms"):
+                                    for ls in geom_part.geoms:
+                                        total_length += ls.length
+                                else:
+                                    total_length += geom_part.length
+
+                    feature_count += 1
+
+                # Handle MultiLineString (rare but possible)
+                elif geom_type == "MultiLineString":
+                    multi_line = shape(geom)
+                    if not multi_line.is_valid:
+                        multi_line = multi_line.buffer(0)
+
+                    intersection = parcel_poly.intersection(multi_line)
+                    if intersection.geom_type == "LineString":
+                        total_length += intersection.length
+                    elif intersection.geom_type == "MultiLineString":
+                        for linestring in intersection.geoms:
+                            total_length += linestring.length
+
+                    feature_count += 1
+
+            except Exception as e:
+                logger.warning(f"Error processing feature: {e}")
+                continue
+
+        logger.info(
+            "Intersection calculation: parcel_area=%.0f m² features=%d total_length=%.2f m",
+            parcel_poly.area if hasattr(parcel_poly, "area") else 0,
+            feature_count,
+            total_length
+        )
+
+        return round(total_length, 2)
+
+    except Exception as e:
+        logger.error(f"Error in calculate_intersection_length: {e}")
+        return 0.0
 
 
 class PropertyAggregator:
@@ -156,8 +253,27 @@ class PropertyAggregator:
         infra_type = infra_type_pref
         coeffs = KSWS_STANDARDS.get(infra_type, KSWS_STANDARDS["default"])
         band_width = coeffs["band_width_m"]
-        line_length = pl.get("length_m", 0)
-        band_area = line_length * band_width if line_length and line_length > 0 else band_width * 50
+
+        # KROK 2: Calculate real intersection length from WFS features (vector data)
+        line_length = 0.0
+        if pl.get("features") and geom_geojson:  # WFS features available
+            try:
+                wfs_features = pl.get("features", [])
+                if wfs_features and isinstance(wfs_features, list):
+                    line_length = calculate_intersection_length(geom_geojson, wfs_features)
+                    logger.info("Real intersection length (WFS Shapely): %.2f m", line_length)
+            except Exception as e:
+                logger.error(f"Error calculating intersection length: {e}")
+                line_length = 0.0
+
+        # Fallback: if no WFS data or calculation failed, use placeholder
+        if not line_length or line_length <= 0:
+            line_length = pl.get("length_m", 0) or 0.0
+            if not line_length or line_length <= 0:
+                # No real data: use placeholder only if infrastructure detected
+                line_length = band_width * 50 if pl.get("detected") else 0.0
+
+        band_area = line_length * band_width if line_length and line_length > 0 else 0.0
 
         property_value = (avg_price or 8.50) * area_m2
         track_a = calculate_track_a(property_value, band_area, area_m2, coeffs) if area_m2 > 0 else None

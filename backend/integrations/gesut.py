@@ -1,119 +1,119 @@
 """
 GESUT/KIUT Client — Spec v3.0 (Strict Real Data Policy)
+WFS Vector Implementation (KROK 1)
 
 Główny klient dla danych infrastruktury przesyłowej (GUGiK KIUT).
 ZASADY:
-1. TYLKO RZECZYWISTE DANE — brak estymacji z pikseli.
+1. TYLKO RZECZYWISTE DANE — wektor zamiast pikseli.
 2. JAWNOŚĆ STATUSU — informacja o źródle i błędach.
 3. BŁĄD ZAMIAST DOMYSŁU — brak "magicznych współczynników".
+4. WEKTOR GEOMETRII — rzeczywista długość i atrybuty z WFS GetFeature.
 """
 
 import logging
 import requests
+import json
 from typing import Dict, Any, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# GUGiK National KIUT WMS (Main source)
-NATIONAL_WMS = "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu"
+# GUGiK National KIUT WFS (Main source) — VECTOR DATA
+NATIONAL_WFS = "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu"
 
-# County-level WMS endpoints (geoportal2.pl) - optional refinement
-# In Spec 3.0 we prioritize national integration for stability.
-COUNTY_WMS_ENDPOINTS = {
-    "0618": "http://tomaszowlubelski.geoportal2.pl/map/geoportal/wms.php",
-    # Add more as needed
+# Layer mapping: medium → WFS typeNames
+# https://integracja.gugik.gov.pl provides these feature types
+LAYER_MAPPING = {
+    "elektro": "przewod_elektroenergetyczny",
+    "gaz": "przewod_gazowy",
+    "woda": "przewod_wodociagowy",
+    "kanal": "przewod_kanalizacyjny",
+    "cieplo": "przewod_cieplowniczy",
 }
 
 class GESUTClient:
     def __init__(self, county_code: Optional[str] = None):
         """
-        Initialize GESUT client.
-        
+        Initialize GESUT WFS client for vector infrastructure data.
+
         Args:
-            county_code: Optional county code for county-level WMS endpoint
+            county_code: Optional county code (reserved for future county-level WFS)
         """
         self.county_code = county_code
-        self.wms_url = COUNTY_WMS_ENDPOINTS.get(county_code) if county_code else NATIONAL_WMS
+        self.wfs_url = NATIONAL_WFS  # Currently using national WFS for all
         self.status = "UNKNOWN"
-        self._validate_inputs()
-    
-    def _validate_inputs(self):
-        """Validate initialization inputs"""
-        if self.county_code and not isinstance(self.county_code, str):
-            logger.warning(f"Invalid county_code type: {type(self.county_code)}, expected str")
-            self.county_code = None
-        if self.county_code and self.county_code not in COUNTY_WMS_ENDPOINTS:
-            logger.warning(f"Unknown county_code: {self.county_code}, using national WMS")
-            self.county_code = None
-            self.wms_url = NATIONAL_WMS
 
     async def validate_service(self) -> bool:
         """
-        Validate WMS service availability.
-        
+        Validate WFS service availability by requesting GetCapabilities.
+
         Returns:
             bool: True if service is available, False otherwise
         """
         try:
-            logger.info("GESUT validate_service: url=%s", self.wms_url)
-            r = requests.get(f"{self.wms_url}?SERVICE=WMS&REQUEST=GetCapabilities", timeout=10)
-            logger.info("GESUT GetCapabilities response: status=%s has_capabilities=%s", r.status_code, b"WMS_Capabilities" in (r.content or b""))
-            if r.status_code == 200 and b"WMS_Capabilities" in r.content:
+            logger.info("GESUT validate_service (WFS): url=%s", self.wfs_url)
+            r = requests.get(
+                f"{self.wfs_url}?SERVICE=WFS&REQUEST=GetCapabilities&VERSION=2.0.0",
+                timeout=10,
+                headers={"User-Agent": "Kalkulator-KIUT/3.0"}
+            )
+            logger.info(
+                "GESUT GetCapabilities response: status=%s has_wfs=%s",
+                r.status_code,
+                b"WFS_Capabilities" in (r.content or b"") or b"FeatureType" in (r.content or b"")
+            )
+            if r.status_code == 200 and (b"WFS_Capabilities" in r.content or b"FeatureType" in r.content):
                 self.status = "REAL"
                 return True
             self.status = "ERROR"
             return False
         except requests.exceptions.Timeout:
-            logger.error(f"WMS service validation timeout for {self.wms_url}")
+            logger.error(f"WFS service validation timeout for {self.wfs_url}")
             self.status = "TIMEOUT"
             return False
         except requests.exceptions.RequestException as e:
-            logger.error(f"WMS service validation error for {self.wms_url}: {e}")
+            logger.error(f"WFS service validation error for {self.wfs_url}: {e}")
             self.status = "ERROR"
             return False
         except Exception as e:
-            logger.error(f"Unexpected error during WMS validation: {e}")
+            logger.error(f"Unexpected error during WFS validation: {e}")
             self.status = "ERROR"
             return False
 
-    def _build_getmap_url(self, layers: str, bbox: Tuple[float, float, float, float], width: int, height: int) -> str:
+    def _build_wfs_url(self, type_names: str, bbox: Tuple[float, float, float, float]) -> str:
         """
-        Build WMS GetMap URL with proper BBOX order for EPSG:2180.
-        
-        Args:
-            layers: Comma-separated layer names
-            bbox: Bounding box as (e_min, n_min, e_max, n_max)
-            width: Image width in pixels
-            height: Image height in pixels
-        
-        Returns:
-            str: Complete WMS GetMap URL
-        """
-        if not bbox or len(bbox) != 4:
-            raise ValueError("Invalid bbox format. Expected tuple of 4 floats (e_min, n_min, e_max, n_max)")
-        
-        e_min, n_min, e_max, n_max = bbox
-        # WMS 1.1.1: SRS + BBOX zawsze jako (x_min,y_min,x_max,y_max) niezależnie od CRS
-        return (
-            f"{self.wms_url}?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap"
-            f"&LAYERS={layers}&SRS=EPSG:2180"
-            f"&BBOX={e_min},{n_min},{e_max},{n_max}"
-            f"&WIDTH={width}&HEIGHT={height}"
-            f"&FORMAT=image/png&TRANSPARENT=true&STYLES="
-        )
-
-    async def fetch_infrastructure(self, bbox: Tuple[float, float, float, float]) -> Dict[str, Any]:
-        """
-        Fetch infrastructure data from WMS service.
-
-        Uses WMS GetMap for presence detection and GetFeatureInfo for attributes.
-        Never estimates length from pixels (Rule 7.B).
+        Build WFS GetFeature URL for vector data extraction.
 
         Args:
+            type_names: Comma-separated WFS typeNames (e.g. 'przewod_elektroenergetyczny')
             bbox: Bounding box as (e_min, n_min, e_max, n_max) in EPSG:2180
 
         Returns:
-            Dict with infrastructure detection results
+            str: Complete WFS GetFeature URL
+        """
+        if not bbox or len(bbox) != 4:
+            raise ValueError("Invalid bbox format. Expected tuple of 4 floats (e_min, n_min, e_max, n_max)")
+
+        e_min, n_min, e_max, n_max = bbox
+        # WFS 2.0.0: BBOX format is (e_min,n_min,e_max,n_max)
+        return (
+            f"{self.wfs_url}?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature"
+            f"&typeNames={type_names}&outputFormat=application/json"
+            f"&BBOX={e_min},{n_min},{e_max},{n_max},urn:ogc:def:crs:EPSG:2180"
+        )
+
+    async def fetch_infrastructure(self, bbox: Tuple[float, float, float, float], layer_key: str = "elektro") -> Dict[str, Any]:
+        """
+        Fetch infrastructure data from WFS service (vector data).
+
+        Returns actual geometry features with properties (voltage, type, etc.).
+        KROK 1: Vector-based detection with real measurements (no pixels).
+
+        Args:
+            bbox: Bounding box as (e_min, n_min, e_max, n_max) in EPSG:2180
+            layer_key: Medium type: "elektro", "gaz", "woda", "kanal", "cieplo"
+
+        Returns:
+            Dict with vector features, geometry coordinates, voltage, and raw GeoJSON
         """
         # Input validation
         if not bbox or len(bbox) != 4:
@@ -137,26 +137,33 @@ class GESUTClient:
                 "status": "ERROR"
             }
 
-        # Validate WMS service
+        # Validate WFS service
         if not await self.validate_service():
-            logger.warning("GESUT fetch_infrastructure skipped: WMS unavailable")
+            logger.warning("GESUT fetch_infrastructure skipped: WFS unavailable")
             return {
                 "ok": False,
-                "error": f"WMS service {self.wms_url} unavailable",
+                "error": f"WFS service {self.wfs_url} unavailable",
                 "status": "UNCERTAIN",
                 "detected": None,
-                "info": "WMS niedostępny — użytkownik musi ręcznie potwierdzić infrastrukturę (geoportal.gov.pl)"
+                "info": "WFS niedostępny — użytkownik musi ręcznie potwierdzić infrastrukturę (geoportal.gov.pl)"
             }
-        logger.info("GESUT fetch_infrastructure request: bbox_2180=(e=%.0f..%.0f n=%.0f..%.0f)", *bbox)
 
-        # Fetch infrastructure data
-        # Warstwy zweryfikowane z GetCapabilities KIUT WFS:
-        layers = "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny,przewod_cieplowniczy"
+        logger.info("GESUT fetch_infrastructure request: layer=%s bbox_2180=(e=%.0f..%.0f n=%.0f..%.0f)", layer_key, *bbox)
+
+        # Get WFS type name for requested layer
+        type_name = LAYER_MAPPING.get(layer_key.lower())
+        if not type_name:
+            return {
+                "ok": False,
+                "error": f"Unknown layer_key: {layer_key}",
+                "status": "ERROR"
+            }
 
         try:
-            # Build and fetch GetMap URL
-            url = self._build_getmap_url(layers, bbox, 512, 512)
-            r = requests.get(url, timeout=15, headers={'User-Agent': 'Kalkulator-KIUT/3.0'})
+            # Build and fetch GetFeature URL (returns GeoJSON)
+            url = self._build_wfs_url(type_name, bbox)
+            logger.info("GESUT WFS request URL: %s", url)
+            r = requests.get(url, timeout=15, headers={"User-Agent": "Kalkulator-KIUT/3.0"})
 
             # Validate response
             if r.status_code != 200:
@@ -164,173 +171,188 @@ class GESUTClient:
                     "ok": True,
                     "status": "UNCERTAIN",
                     "detected": None,
-                    "error": f"WMS GetMap zwrócił {r.status_code}",
-                    "info": "Nie można pobrać danych WMS — sprawdź geoportal.gov.pl | użytkownik potwierdza ręcznie"
+                    "error": f"WFS GetFeature zwrócił {r.status_code}",
+                    "info": "Nie można pobrać danych WFS — sprawdź geoportal.gov.pl | użytkownik potwierdza ręcznie"
                 }
 
-            # Check Content-Type
-            content_type = r.headers.get('Content-Type', '').lower()
-            if 'image' not in content_type:
+            # Parse GeoJSON response
+            try:
+                geojson = r.json()
+            except json.JSONDecodeError as e:
+                return {
+                    "ok": False,
+                    "error": f"WFS zwrócił invalid JSON: {str(e)}",
+                    "status": "ERROR"
+                }
+
+            # Extract features from GeoJSON
+            features = geojson.get("features", [])
+            detected = len(features) > 0
+
+            if detected:
+                # Parse voltage from features
+                voltages = set()
+                for feature in features:
+                    props = feature.get("properties", {})
+                    voltage = self._parse_voltage_from_properties(props)
+                    if voltage != "nieznane":
+                        voltages.add(voltage)
+
+                primary_voltage = list(voltages)[0] if voltages else "nieznane"
+                logger.info("GESUT fetch_infrastructure OK: detected=%s count=%d primary_voltage=%s", detected, len(features), primary_voltage)
+
                 return {
                     "ok": True,
-                    "status": "UNCERTAIN",
-                    "detected": None,
-                    "error": f"WMS zwrócił {content_type} zamiast PNG",
-                    "info": "Dane WMS niedostępne — przepytaj geoportal.gov.pl lub potwierdź ręcznie"
+                    "status": "REAL",
+                    "detected": detected,
+                    "voltage": primary_voltage,
+                    "feature_count": len(features),
+                    "features": features,  # Full GeoJSON features for Shapely processing
+                    "geojson": geojson,  # Full GeoJSON response
+                    "info": f"Pobrano {len(features)} linii z WFS",
+                    "source": "GUGiK KIUT WFS (Vector)",
+                    "bbox": bbox,
+                    "layer": type_name
                 }
-
-            # Get feature info for attributes
-            feature_info = await self._get_feature_info(layers, bbox, 256, 256)
-            
-            # Determine if infrastructure is detected.
-            # Fully transparent 512x512 PNG ≈ 1–2 KB.
-            # A tile with even a few infrastructure pixels is typically > 1500 B.
-            content_len = len(r.content)
-            detected = content_len > 1500
-            voltage = self._parse_voltage(feature_info) if feature_info else "nieznane"
-            logger.info("GESUT fetch_infrastructure OK: detected=%s voltage=%s content_len=%s", detected, voltage, content_len)
-
-            info_text = (
-                "Wykryto linie w KIUT WMS. Długość wektorowa niedostępna — brak WFS w tym powiecie."
-                if detected else
-                "Brak linii w KIUT WMS dla tego obszaru."
-            )
-
-            return {
-                "ok": True,
-                "status": "REAL",
-                "detected": detected,
-                "voltage": voltage,
-                "line_length_m": 0.0,  # Rule 7.B: No pixel estimations
-                "info": info_text,
-                "feature_info_raw": feature_info if feature_info else None,
-                "source": "GUGiK KIUT WMS",
-                "bbox": bbox,
-                "layers": layers
-            }
+            else:
+                return {
+                    "ok": True,
+                    "status": "REAL",
+                    "detected": False,
+                    "voltage": "brak",
+                    "feature_count": 0,
+                    "features": [],
+                    "geojson": geojson,
+                    "info": f"Brak linii {type_name} w tym obszarze",
+                    "source": "GUGiK KIUT WFS (Vector)",
+                    "bbox": bbox,
+                    "layer": type_name
+                }
 
         except requests.exceptions.Timeout:
             return {
                 "ok": False,
-                "error": "WMS GetMap request timeout (15s)",
+                "error": "WFS GetFeature request timeout (15s)",
                 "status": "TIMEOUT"
             }
         except requests.exceptions.RequestException as e:
             return {
                 "ok": False,
-                "error": f"WMS request error: {str(e)}",
+                "error": f"WFS request error: {str(e)}",
                 "status": "ERROR"
             }
         except Exception as e:
-            logger.error(f"Unexpected error in fetch_infrastructure: {e}")
+            logger.error(f"Unexpected error in fetch_infrastructure: {e}", exc_info=True)
             return {
                 "ok": False,
                 "error": f"Unexpected error: {str(e)}",
                 "status": "ERROR"
             }
 
-    async def _get_feature_info(self, layers: str, bbox: Tuple, x: int, y: int) -> Optional[str]:
+    def _parse_voltage_from_properties(self, properties: Dict[str, Any]) -> str:
         """
-        Get feature attributes by clicking on a point in the map.
-        
+        Extract voltage level from WFS feature properties.
+
         Args:
-            layers: Comma-separated layer names
-            bbox: Bounding box coordinates
-            x: X coordinate in image pixels
-            y: Y coordinate in image pixels
-        
+            properties: GeoJSON feature properties dict
+
         Returns:
-            Optional[str]: Feature information text or None
+            str: Voltage level ("WN", "SN", "nN", or "nieznane")
         """
-        try:
-            e_min, n_min, e_max, n_max = bbox
-            url = (
-                f"{self.wms_url}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo"
-                f"&LAYERS={layers}&QUERY_LAYERS={layers}"
-                f"&BBOX={e_min},{n_min},{e_max},{n_max}"
-                f"&WIDTH=512&HEIGHT=512&I={x}&J={y}"
-                f"&CRS=EPSG:2180&INFO_FORMAT=text/plain"
-            )
-            
-            r = requests.get(url, timeout=5)
-            if r.status_code == 200 and len(r.text.strip()) > 10:
-                return r.text.strip()
-                
-        except requests.exceptions.Timeout:
-            logger.warning("GetFeatureInfo request timeout")
-        except requests.exceptions.RequestException as e:
-            logger.warning(f"GetFeatureInfo request error: {e}")
-        except Exception as e:
-            logger.warning(f"Unexpected error in _get_feature_info: {e}")
-        
-        return None
+        if not properties or not isinstance(properties, dict):
+            return "nieznane"
+
+        # Common property names for voltage in KIUT WFS
+        voltage_keys = ["napięcie", "napiecie", "voltage", "NAPIĘCIE", "NAPIECIE", "VOLTAGE",
+                       "klasa_napięcia", "klasa_napieciai", "kv", "KV"]
+
+        for key in voltage_keys:
+            value = properties.get(key)
+            if value:
+                value_str = str(value).upper().strip()
+
+                # WN - High Voltage
+                if any(kw in value_str for kw in ["WYSOKIE", "WN", "110", "220", "330", "400"]):
+                    return "WN"
+
+                # SN - Medium Voltage
+                if any(kw in value_str for kw in ["ŚREDNIE", "SREDNIE", "SN", "10", "15", "20"]):
+                    return "SN"
+
+                # nN - Low Voltage
+                if any(kw in value_str for kw in ["NISKIE", "NN", "0.4", "0,4"]):
+                    return "nN"
+
+        return "nieznane"
 
     def _parse_voltage(self, info: Optional[str]) -> str:
         """
-        Parse voltage level from feature information text.
-        
+        Legacy text-based voltage parsing (fallback).
+
         Args:
             info: Feature information text or None
-        
+
         Returns:
             str: Voltage level ("WN", "SN", "nN", or "nieznane")
         """
         if not info or not isinstance(info, str):
             return "nieznane"
-        
+
         info_upper = info.upper()
-        
+
         # Check for high voltage
         if any(keyword in info_upper for keyword in ["WYSOKIE", " WN ", "WYSOKIE"]):
             return "WN"
-        
+
         # Check for medium voltage
         if any(keyword in info_upper for keyword in ["SREDNIE", " SN ", "ŚREDNIE", "ŚREDNIE NAPIĘCIE"]):
             return "SN"
-        
+
         # Check for low voltage
         if any(keyword in info_upper for keyword in ["NISKIE", " NN ", "NISKIE NAPIĘCIE"]):
             return "nN"
-        
-        return "nieznane"
 
-    # Mapowanie klucza medium na warstwę WMS KIUT
-    _LAYER_MAP = {
-        "elektro": "przewod_elektroenergetyczny",
-        "gaz":     "przewod_gazowy",
-        "woda":    "przewod_wodociagowy",
-        "kanal":   "przewod_kanalizacyjny",
-        "cieplo":  "przewod_cieplowniczy",
-    }
+        return "nieznane"
 
     async def get_infrastructure_in_bbox(self, layer_key: str, bbox: Tuple) -> Dict[str, Any]:
         """
-        Sprawdź obecność konkretnego medium w BBOX.
+        Check presence of specific medium in BBOX using WFS.
 
         Args:
-            layer_key: Klucz medium: "elektro", "gaz", "woda", "kanal", "cieplo"
-            bbox: Bounding box w EPSG:2180
+            layer_key: Medium key: "elektro", "gaz", "woda", "kanal", "cieplo"
+            bbox: Bounding box in EPSG:2180
 
         Returns:
-            Dict z wynikiem detekcji dla wybranej warstwy
+            Dict with detection results and feature count
         """
         if not layer_key or not isinstance(layer_key, str):
             return {"ok": False, "error": "Invalid layer_key", "status": "ERROR"}
 
-        layer = self._LAYER_MAP.get(layer_key)
+        layer = LAYER_MAPPING.get(layer_key.lower())
         if not layer:
             return {"ok": False, "error": f"Unknown layer_key: {layer_key!r}", "status": "ERROR"}
 
         if not await self.validate_service():
-            return {"ok": False, "error": f"WMS service unavailable", "status": "ERROR"}
+            return {"ok": False, "error": f"WFS service unavailable", "status": "ERROR"}
 
         try:
-            url = self._build_getmap_url(layer, bbox, 256, 256)
+            url = self._build_wfs_url(layer, bbox)
             r = requests.get(url, timeout=15, headers={"User-Agent": "Kalkulator-KIUT/3.0"})
             if r.status_code != 200:
-                return {"ok": False, "error": f"WMS status {r.status_code}", "status": "ERROR"}
-            detected = len(r.content) > 5000
-            return {"ok": True, "status": "REAL", "detected": detected, "layer": layer}
+                return {"ok": False, "error": f"WFS status {r.status_code}", "status": "ERROR"}
+
+            geojson = r.json()
+            features = geojson.get("features", [])
+            detected = len(features) > 0
+
+            return {
+                "ok": True,
+                "status": "REAL",
+                "detected": detected,
+                "feature_count": len(features),
+                "layer": layer,
+                "geojson": geojson
+            }
         except requests.exceptions.Timeout:
             return {"ok": False, "error": "Timeout", "status": "TIMEOUT"}
         except Exception as e:

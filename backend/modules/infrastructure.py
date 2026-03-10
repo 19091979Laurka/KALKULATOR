@@ -1,6 +1,7 @@
 """
 Moduł: Infrastruktura (Spec v3.0 - Strict Data Policy)
-Pobiera dane infrastrukturalne z GESUT/KIUT.
+Pobiera dane infrastrukturalne z GESUT/KIUT WFS (Vector).
+KROK 2: Passes WFS features for Shapely intersection calculation.
 NIGDY nie estymuje brakujących danych.
 """
 import logging
@@ -67,25 +68,31 @@ async def fetch_infrastructure(
         "ok": False,
     }
 
-    # --- GESUT: kluczowa warstwa energetyczna ---
+    # --- GESUT: kluczowa warstwa energetyczna (WFS Vector) ---
     try:
-        infra_data = await gesut.fetch_infrastructure(bbox_2180)
-        
+        infra_data = await gesut.fetch_infrastructure(bbox_2180, layer_key="elektro")
+
         if infra_data and infra_data.get("ok"):
             result["energie"]["detected"] = infra_data.get("detected", False)
             result["energie"]["voltage"] = infra_data.get("voltage", "nieznane")
-            result["energie"]["length_m"] = infra_data.get("line_length_m") # 0.0 w Spec 3.0
+            # KROK 2: Pass WFS features for Shapely intersection calculation
+            result["energie"]["features"] = infra_data.get("features", [])  # GeoJSON features
+            result["energie"]["geojson"] = infra_data.get("geojson")  # Full GeoJSON response
+            result["energie"]["feature_count"] = infra_data.get("feature_count", 0)
+            # Line length will be calculated by PropertyAggregator using Shapely
+            result["energie"]["length_m"] = 0.0  # Placeholder, real value from Shapely
             result["energie"]["strefa_m"] = STREFY_OCHRONNE.get(f"elektro_{infra_data.get('voltage', 'SN')}", 15)
-            result["energie"]["status"] = "REAL (KIUT WMS)"
+            result["energie"]["status"] = "REAL (KIUT WFS Vector)"
             result["energie"]["info"] = infra_data.get("info", "")
+            result["energie"]["source"] = infra_data.get("source", "GUGiK KIUT WFS")
             result["energie"]["ok"] = True
             result["ok"] = True
         else:
             result["energie"]["status"] = "ERROR"
-            result["energie"]["info"] = infra_data.get("error", "Błąd serwisu GESUT")
+            result["energie"]["info"] = infra_data.get("error", "Błąd serwisu GESUT WFS")
 
     except Exception as e:
-        logger.error(f"infra_base error: {e}")
+        logger.error(f"infra_base error (WFS): {e}", exc_info=True)
         result["energie"]["status"] = "ERROR"
         result["energie"]["info"] = str(e)
 
