@@ -1,0 +1,6 @@
+# Wykluczone z aider repo-map i kontekstu
+SNAPSHOT_*
+node_modules/
+venv/
+__pycache__/
+*.pyc
