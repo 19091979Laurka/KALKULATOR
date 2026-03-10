@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Optional, List
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse, Response
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from backend.modules.terrain import fetch_terrain
 from backend.modules.property import PropertyAggregator
@@ -25,6 +26,15 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Kalkulator Roszczeń (Spec 3.0)", version="3.0.0")
+
+# CORS Configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins (development)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 HISTORY_DIR = Path(__file__).parent / ".." / "data" / "history"

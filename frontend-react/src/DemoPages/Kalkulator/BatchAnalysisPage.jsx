@@ -9,6 +9,8 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { toast } from "react-toastify";
 import PageTitleAlt2 from "../../Layout/AppMain/PageTitleAlt2";
+import Map3D from "../../Components/Map3D";
+import ReportGenerator from "../../Components/ReportGenerator";
 import "./BatchAnalysisPage.css";
 
 // Leaflet icon fix
@@ -33,6 +35,16 @@ export const BatchAnalysisPage = () => {
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [detailsModal, setDetailsModal] = useState(false);
   const [sortBy, setSortBy] = useState("parcel_id");
+  const [activeTab, setActiveTab] = useState("map2d"); // "map2d" | "map3d" | "table" | "history"
+  const [selectedParcelId, setSelectedParcelId] = useState(null);
+  const [selectedParcelData, setSelectedParcelData] = useState(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [infraFilters, setInfraFilters] = useState({
+    elektro: true,
+    gaz: true,
+    woda: true,
+    teleko: true
+  });
 
   // Load history on mount
   useEffect(() => {
@@ -95,6 +107,19 @@ export const BatchAnalysisPage = () => {
     } catch (e) {
       toast.error("Błąd pobierania szczegółów");
     }
+  };
+
+  const handleParcelClick = (parcelId, parcelData) => {
+    setSelectedParcelId(parcelId);
+    setSelectedParcelData(parcelData);
+    setShowReportModal(true);
+  };
+
+  const toggleInfraFilter = (type) => {
+    setInfraFilters(prev => ({
+      ...prev,
+      [type]: !prev[type]
+    }));
   };
 
   const downloadResultsCSV = () => {
@@ -381,39 +406,106 @@ export const BatchAnalysisPage = () => {
             </div>
           </div>
 
-          {/* Map */}
-          <div className="batch-map-card">
-            <h3>🗺️ Mapa zbiorcza</h3>
-            <div className="batch-map-container">
-              <CollectiveMap />
-            </div>
-            <div className="batch-map-legend">
-              <div className="batch-map-legend-item">
-                <div className="batch-map-legend-color" style={{ backgroundColor: "#e74c3c" }}></div>
-                <span>WN (Wysoki napór)</span>
-              </div>
-              <div className="batch-map-legend-item">
-                <div className="batch-map-legend-color" style={{ backgroundColor: "#f39c12" }}></div>
-                <span>SN (Średni napór)</span>
-              </div>
-              <div className="batch-map-legend-item">
-                <div className="batch-map-legend-color" style={{ backgroundColor: "#27ae60" }}></div>
-                <span>nN (Niski napór)</span>
-              </div>
-              <div className="batch-map-legend-item">
-                <div className="batch-map-legend-color" style={{ backgroundColor: "#95a5a6" }}></div>
-                <span>Brak infrastruktury</span>
-              </div>
-            </div>
+          {/* TAB SWITCHER */}
+          <div className="batch-tab-switcher">
+            <button
+              className={`batch-tab-button ${activeTab === "map2d" ? "active" : ""}`}
+              onClick={() => setActiveTab("map2d")}
+            >
+              🗺️ Mapa 2D
+            </button>
+            <button
+              className={`batch-tab-button ${activeTab === "map3d" ? "active" : ""}`}
+              onClick={() => setActiveTab("map3d")}
+            >
+              🎭 Mapa 3D
+            </button>
+            <button
+              className={`batch-tab-button ${activeTab === "table" ? "active" : ""}`}
+              onClick={() => setActiveTab("table")}
+            >
+              📊 Tabela
+            </button>
           </div>
 
-          {/* Table */}
-          <div className="batch-table-card">
-            <h3>📊 Szczegóły działek</h3>
-            <div style={{ overflowX: "auto" }}>
-              {renderTable(results.parcels)}
+          {/* Map 2D */}
+          {activeTab === "map2d" && (
+            <div className="batch-map-card">
+              <h3>🗺️ Mapa zbiorcza (2D)</h3>
+              <div className="batch-map-container">
+                <CollectiveMap />
+              </div>
+              <div className="batch-map-legend">
+                <div className="batch-map-legend-item">
+                  <div className="batch-map-legend-color" style={{ backgroundColor: "#e74c3c" }}></div>
+                  <span>WN (Wysoki napór)</span>
+                </div>
+                <div className="batch-map-legend-item">
+                  <div className="batch-map-legend-color" style={{ backgroundColor: "#f39c12" }}></div>
+                  <span>SN (Średni napór)</span>
+                </div>
+                <div className="batch-map-legend-item">
+                  <div className="batch-map-legend-color" style={{ backgroundColor: "#27ae60" }}></div>
+                  <span>nN (Niski napór)</span>
+                </div>
+                <div className="batch-map-legend-item">
+                  <div className="batch-map-legend-color" style={{ backgroundColor: "#95a5a6" }}></div>
+                  <span>Brak infrastruktury</span>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Map 3D */}
+          {activeTab === "map3d" && results?.parcels && (
+            <div className="batch-map-card">
+              <h3>🎭 Mapa 3D - Infrastruktura</h3>
+              <div style={{ marginBottom: "15px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 15px", background: infraFilters.elektro ? "#d5f4e6" : "#ecf0f1", borderRadius: "8px", cursor: "pointer", fontWeight: "500" }}>
+                  <input type="checkbox" checked={infraFilters.elektro} onChange={() => toggleInfraFilter("elektro")} />
+                  ⚡ Elektro
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 15px", background: infraFilters.gaz ? "#fff3cd" : "#ecf0f1", borderRadius: "8px", cursor: "pointer", fontWeight: "500" }}>
+                  <input type="checkbox" checked={infraFilters.gaz} onChange={() => toggleInfraFilter("gaz")} />
+                  🔥 Gaz
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 15px", background: infraFilters.woda ? "#d6eaf8" : "#ecf0f1", borderRadius: "8px", cursor: "pointer", fontWeight: "500" }}>
+                  <input type="checkbox" checked={infraFilters.woda} onChange={() => toggleInfraFilter("woda")} />
+                  💧 Woda
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 15px", background: infraFilters.teleko ? "#f0ebf8" : "#ecf0f1", borderRadius: "8px", cursor: "pointer", fontWeight: "500" }}>
+                  <input type="checkbox" checked={infraFilters.teleko} onChange={() => toggleInfraFilter("teleko")} />
+                  📡 Teleko
+                </label>
+              </div>
+              <div style={{ height: "600px", borderRadius: "12px", overflow: "hidden", boxShadow: "0 4px 15px rgba(0,0,0,0.1)" }}>
+                <Map3D
+                  parcels={results.parcels.map(p => ({
+                    parcel_id: p.parcel_id,
+                    ...p.data
+                  }))}
+                  infrastructureTypes={Object.keys(infraFilters).filter(k => infraFilters[k])}
+                  center={[20.2, 52.69]}
+                  zoom={1}
+                  onParcelClick={handleParcelClick}
+                  selectedParcelId={selectedParcelId}
+                />
+              </div>
+              <div style={{ marginTop: "15px", padding: "15px", background: "#f8f9fa", borderRadius: "8px", fontSize: "0.9rem", color: "#7f8c8d" }}>
+                <strong>💡 Podpowiedź:</strong> Kliknij na działkę aby zobaczyć szczegóły. Drag = Obracanie, Scroll = Zoom
+              </div>
+            </div>
+          )}
+
+          {/* Table */}
+          {activeTab === "table" && (
+            <div className="batch-table-card">
+              <h3>📊 Szczegóły działek</h3>
+              <div style={{ overflowX: "auto" }}>
+                {renderTable(results.parcels)}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -440,6 +532,36 @@ export const BatchAnalysisPage = () => {
           >
             Zamknij
           </button>
+        </div>
+      </Modal>
+
+      {/* Report Modal */}
+      <Modal isOpen={showReportModal} toggle={() => setShowReportModal(false)} size="lg" className="batch-report-modal" scrollable>
+        <div className="batch-modal-header">
+          <h5>📄 Raport: {selectedParcelId}</h5>
+          <button
+            style={{
+              background: "none",
+              border: "none",
+              color: "white",
+              fontSize: "1.5rem",
+              cursor: "pointer",
+              padding: "0"
+            }}
+            onClick={() => setShowReportModal(false)}
+          >
+            ✕
+          </button>
+        </div>
+        <div className="batch-modal-body">
+          {selectedParcelData && (
+            <ReportGenerator
+              parcelData={selectedParcelData}
+              onDownload={(info) => {
+                toast.success(`✅ Raport ${info.format.toUpperCase()} pobrany`);
+              }}
+            />
+          )}
         </div>
       </Modal>
     </div>

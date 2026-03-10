@@ -8,6 +8,7 @@ import logging
 from typing import Dict, Any, Optional, List
 from backend.integrations.gesut import GESUTClient
 from backend.integrations.uldk import ULDKClient
+from backend.integrations.overpass import fetch_power_lines
 
 logger = logging.getLogger(__name__)
 
@@ -68,33 +69,40 @@ async def fetch_infrastructure(
         "ok": False,
     }
 
-    # --- GESUT: kluczowa warstwa energetyczna (WFS Vector) ---
+    # --- ELEKTRONIKA: OpenStreetMap Overpass API (zamiast GESUT WFS) ---
+    # GESUT WFS nie działa, ale OpenStreetMap ma doskonałe dane power lines
     try:
-        infra_data = await gesut.fetch_infrastructure(bbox_2180, layer_key="elektro")
+        osm_data = await fetch_power_lines(parcel_geom if parcel_geom else None)
 
-        if infra_data and infra_data.get("ok"):
-            result["energie"]["detected"] = infra_data.get("detected", False)
-            result["energie"]["voltage"] = infra_data.get("voltage", "nieznane")
-            # KROK 2: Pass WFS features for Shapely intersection calculation
-            result["energie"]["features"] = infra_data.get("features", [])  # GeoJSON features
-            result["energie"]["geojson"] = infra_data.get("geojson")  # Full GeoJSON response
-            result["energie"]["feature_count"] = infra_data.get("feature_count", 0)
-            # Line length will be calculated by PropertyAggregator using Shapely
-            result["energie"]["length_m"] = 0.0  # Placeholder, real value from Shapely
-            result["energie"]["strefa_m"] = STREFY_OCHRONNE.get(f"elektro_{infra_data.get('voltage', 'SN')}", 15)
-            result["energie"]["status"] = "REAL (KIUT WFS Vector)"
-            result["energie"]["info"] = infra_data.get("info", "")
-            result["energie"]["source"] = infra_data.get("source", "GUGiK KIUT WFS")
+        if osm_data and osm_data.get("ok") and osm_data.get("lines"):
+            # Linie znalezione w OSM
+            result["energie"]["detected"] = True
+            result["energie"]["features"] = osm_data.get("lines", [])
+            result["energie"]["geojson"] = osm_data.get("line_geojson", {})
+            result["energie"]["feature_count"] = len(osm_data.get("lines", []))
+            result["energie"]["length_m"] = osm_data.get("line_length_m", 0.0)
+
+            # Określ napięcie z pierwszej znalezionej linii
+            first_line = osm_data.get("lines", [{}])[0]
+            voltage = first_line.get("voltage", "SN")
+            result["energie"]["voltage"] = voltage
+            result["energie"]["strefa_m"] = STREFY_OCHRONNE.get(f"elektro_{voltage}", 15)
+            result["energie"]["status"] = "REAL (OSM Overpass)"
+            result["energie"]["info"] = f"OpenStreetMap: {len(osm_data.get('lines', []))} linii, dł. {osm_data.get('line_length_m', 0):.1f}m"
+            result["energie"]["source"] = "OpenStreetMap (Overpass API)"
             result["energie"]["ok"] = True
             result["ok"] = True
         else:
-            result["energie"]["status"] = "ERROR"
-            result["energie"]["info"] = infra_data.get("error", "Błąd serwisu GESUT WFS")
+            # Linie nie znalezione w OSM
+            result["energie"]["detected"] = False
+            result["energie"]["status"] = "NOT_DETECTED"
+            result["energie"]["info"] = "Brak linii w OpenStreetMap dla tego obszaru"
+            result["energie"]["source"] = "OpenStreetMap (Overpass API)"
 
     except Exception as e:
-        logger.error(f"infra_base error (WFS): {e}", exc_info=True)
+        logger.error(f"infra_base error (Overpass): {e}", exc_info=True)
         result["energie"]["status"] = "ERROR"
-        result["energie"]["info"] = str(e)
+        result["energie"]["info"] = f"Błąd Overpass API: {str(e)}"
 
     # --- GESUT: Inne media (uproszczona obecność) ---
     for media in ["gaz", "woda", "kanal", "cieplo"]:

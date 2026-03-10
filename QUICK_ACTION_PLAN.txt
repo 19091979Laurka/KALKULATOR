@@ -1,0 +1,193 @@
+================================================================================
+                    DZIAŁKA 1: 142003_2.0002.81/5
+================================================================================
+
+LOKALIZACJA:
+  📍 Baboszewo, powiat płoński, mazowieckie
+  🗺️  Współrzędne: 20.156684°E, 52.685934°N
+  📐 Powierzchnia: 9,915.41 m²
+
+DANE PEWNE:
+  ✓ Grunt roli (klasa R)
+  ✓ Wartość: 84,281 zł (8.5 zł/m² × GUS)
+  ✓ Granice: Zweryfikowane w ULDK
+  ✓ Użytkowanie: 100% rola
+
+DATA NIEZNANE (do weryfikacji):
+  ❌ Czy przechodzi linia energetyczna?
+  ❌ Jaka długość linii? (____ m)
+  ❌ Jakie napięcie? (WN / SN / nN)
+
+KOMPENSACJA (jeśli są linie):
+  💰 Track A: 4,214.05 zł (sądowe)
+  💰 Track B: 6,573.92 zł (negocjacje, 1.56×)
+
+INSTRUKCJA WERYFIKACJI:
+
+  OPCJA 1: Portal Mapowy Powiatu (SZYBKA)
+  ────────────────────────────────────────
+  1. Wejdź: http://mapy.powiateplaski.pl/
+  2. Wpisz ID: 142003_2.0002.81/5
+  3. Włącz: Warstwa "Infrastruktura - Elektro"
+  4. Sprawdź: Czy widzisz linię? TAK / NIE
+  5. Jeśli TAK: Przybliżona długość: _____ m
+  6. Jeśli TAK: Napięcie: WN / SN / nN
+
+  OPCJA 2: Geoportal Krajowy (OFICJALNA)
+  ──────────────────────────────────────
+  1. Wejdź: https://mapy.geoportal.gov.pl/
+  2. Dodaj WMS: "Krajowa Integracja Uzbrojenia Terenu"
+  3. Zaznacz działkę (po ID lub klikając)
+  4. Zmień skalę na 1:2000
+  5. Zmierz linię (narzędziem GIS lub linijką)
+  6. Długość: _____ m
+
+  OPCJA 3: Plan Inwestora (NAJPEWNIEJSZA)
+  ───────────────────────────────────────
+  1. Poproś projekt techniczny od inwestora
+  2. Wydruk plan w skali
+  3. Nałóż na mapę 1:5000
+  4. Zmierz długość przecięcia z działką
+  5. Długość: _____ m
+  6. Napięcie z dokumentacji: _____
+
+  OPCJA 4: Wjazd w Teren (NAJMIARODAJNIEJSZA)
+  ────────────────────────────────────────────
+  1. Wjechać na działkę (z mapą)
+  2. Zlokalizować słupy/linie
+  3. Zmierzyć trójkątem lub krokami
+  4. Dokumentować zdjęciami (ze słupami)
+  5. Długość: _____ m
+  6. Typ linii (WN/SN/nN): _____
+
+WPROWADZENIE DANYCH DO SYSTEMU:
+
+  KROK 1: W KalkulatorPage
+  ────────────────────────
+  ☐ Wpisz ID działki: 142003_2.0002.81/5
+  ☐ Załaduj dane (powinny się automatycznie)
+
+  KROK 2: Karta "POTWIERDZENIE INFRASTRUKTURY"
+  ────────────────────────────────────────────
+  ☐ Przeczytaj: "Nie udało się pobrać danych..."
+  ☐ Kliknij: [✓ TAK — ma linię] LUB [✗ NIE — brak]
+
+  JEŚLI TAK:
+  ☐ Wpisz długość: [_____] m
+  ☐ Zmień napięcie (jeśli trzeba): [WN/SN/nN]
+  ☐ Kliknij: [PRZELICZ ODSZKODOWANIE]
+  ☐ System pokaże nowe wartości Track A/B
+  ☐ Kliknij: [GENRUJ RAPORT PDF]
+
+  JEŚLI NIE:
+  ☐ Kliknij: [POTWIERDŹ BRAK LINII]
+  ☐ Track A/B zmienią się na 0.00 zł
+  ☐ Kliknij: [GENERUJ RAPORT PDF]
+
+REZULTAT:
+  📄 Raport PDF z danymi działki
+  📊 Tabela parametrów infrastruktury
+  💰 Kalkulacja odszkodowania (Track A/B)
+  ✅ Gotowe do sądu
+
+DEADLINE: _____________________ (wpisz datę)
+
+NOTATKI:
+  _________________________________________________________________
+  _________________________________________________________________
+  _________________________________________________________________
+
+================================================================================
+                    DZIAŁKA 2: 142003_2.0002.81/8
+================================================================================
+
+LOKALIZACJA:
+  📍 Baboszewo, powiat płoński, mazowieckie
+  🗺️  Współrzędne: 20.158445°E, 52.685764°N
+  📐 Powierzchnia: 39,215.45 m² (4× większa niż działka 1)
+
+DANE PEWNE:
+  ✓ Grunt roli (klasa R)
+  ✓ Wartość: 333,331 zł (8.5 zł/m² × GUS)
+  ✓ Granice: Zweryfikowane w ULDK
+  ✓ Użytkowanie: 100% rola
+
+DATA NIEZNANE (do weryfikacji):
+  ❌ Czy przechodzi linia energetyczna?
+  ❌ Jaka długość linii? (____ m)
+  ❌ Jakie napięcie? (WN / SN / nN)
+
+KOMPENSACJA (jeśli są linie):
+  💰 Track A: 16,666.57 zł (sądowe)
+  💰 Track B: 25,999.85 zł (negocjacje, 1.56×)
+
+INSTRUKCJA WERYFIKACJI: [patrz działka 1 - procedura jest taka sama]
+
+WPROWADZENIE DANYCH DO SYSTEMU: [patrz działka 1 - procedura jest taka sama]
+
+REZULTAT:
+  📄 Raport PDF z danymi działki
+  📊 Tabela parametrów infrastruktury
+  💰 Kalkulacja odszkodowania (Track A/B)
+  ✅ Gotowe do sądu
+
+DEADLINE: _____________________ (wpisz datę)
+
+NOTATKI:
+  _________________________________________________________________
+  _________________________________________________________________
+  _________________________________________________________________
+
+================================================================================
+                        PODSUMOWANIE DLA OBU
+================================================================================
+
+DANE ZEBRANE:
+  ☐ Działka 1 - Czy ma linię? TAK / NIE / ?
+    └─ Jeśli TAK: Długość ___ m, Napięcie _____
+
+  ☐ Działka 2 - Czy ma linię? TAK / NIE / ?
+    └─ Jeśli TAK: Długość ___ m, Napięcie _____
+
+DANE WPROWADZONE DO SYSTEMU:
+  ☐ Działka 1: Dane zaakceptowane, raport wygenerowany
+  ☐ Działka 2: Dane zaakceptowane, raport wygenerowany
+
+RAPORTY WYGENEROWANE:
+  ☐ RAPORT_DZIAŁKA_1.pdf
+  ☐ RAPORT_DZIAŁKA_2.pdf
+  ☐ RAPORT_PORÓWNAWCZY.pdf
+
+GOTOWOŚĆ SĄDOWA: ____%
+
+NOTATKI DODATKOWE:
+  _________________________________________________________________
+  _________________________________________________________________
+  _________________________________________________________________
+
+================================================================================
+                    WERSJA SKRÓCONA: JAK TO ZROBIĆ?
+================================================================================
+
+Krótko:
+  1. Otwórz portal mapowy powiatu: http://mapy.powiateplaski.pl/
+  2. Zaznacz działkę ID
+  3. Włącz warstwę "Elektro"
+  4. Sprawdzisz czy linia przechodzi (TAK/NIE)
+  5. Jeśli TAK - przybliżona długość (m)
+  6. Wpisz do systemu w karcie "POTWIERDZENIE INFRASTRUKTURY"
+  7. System automatycznie przelicza odszkodowanie
+  8. Generujesz raport PDF
+  9. Koniec!
+
+Czasochłonność:
+  - Działka 1: 15-20 minut
+  - Działka 2: 15-20 minut
+  - RAZEM: ~30-40 minut dla obu
+
+Dla 99 działek:
+  - Weryfikacja: 99 × 20 min = ~33 godziny (rozsądne rozpracować na tydzień)
+  - Wprowadzenie: 99 × 2 min = ~3.3 godziny
+  - Raporty: Automatyczne
+
+================================================================================

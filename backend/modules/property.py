@@ -276,8 +276,13 @@ class PropertyAggregator:
         band_area = line_length * band_width if line_length and line_length > 0 else 0.0
 
         property_value = (avg_price or 8.50) * area_m2
-        track_a = calculate_track_a(property_value, band_area, area_m2, coeffs) if area_m2 > 0 else None
-        track_b = calculate_track_b(track_a["total"], infra_type) if track_a else None
+        # Compensation only if infrastructure is detected AND area > 0
+        if pl.get("detected") and area_m2 > 0:
+            track_a = calculate_track_a(property_value, band_area, area_m2, coeffs)
+            track_b = calculate_track_b(track_a["total"], infra_type)
+        else:
+            track_a = None
+            track_b = None
 
         master_record = {
             "metadata": {"teryt_id": resolved_pid, "status": "REAL", "source": "ULDK GUGiK"},

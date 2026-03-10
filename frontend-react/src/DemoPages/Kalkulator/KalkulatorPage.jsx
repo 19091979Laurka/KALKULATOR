@@ -12,6 +12,7 @@ import { CSSTransition, TransitionGroup } from "../../utils/TransitionWrapper";
 import PageTitleAlt2 from "../../Layout/AppMain/PageTitleAlt2";
 import Tabs, { TabPane } from "../../utils/TabsWrapper";
 import { ScrollableInkTabBar, TabContent } from "../../utils/TabsWrapper";
+import ReportGenerator from "../../Components/ReportGenerator";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -75,7 +76,8 @@ export default function KalkulatorPage() {
   const [obreb,        setObreb]        = useState("");
   const [county,       setCounty]       = useState("");
   const [municipality, setMunicipality] = useState("");
-  const [infraType,    setInfraType]    = useState("elektro_SN");
+  // Infrastruktura - auto-detect z GUGiK (domyślnie SN)
+  const infraType = "elektro_SN";
   const [loading,      setLoading]      = useState(false);
   const [pdfLoading,   setPdfLoading]   = useState(false);
   const [result,       setResult]       = useState(null);
@@ -192,8 +194,9 @@ export default function KalkulatorPage() {
   const hasLine      = !!(powerL.detected || power.exists);
   const hasMpzp      = !!plan.mpzp_active;
   const locationStr  = [meta.commune, meta.county, meta.region].filter(Boolean).join(", ") || "—";
-  const trackATotal  = trackA.total  || 0;
-  const trackBTotal  = trackB.total  || 0;
+  // KSWS: bez linii = bez kompensacji
+  const trackATotal  = hasLine ? (trackA.total || 0) : 0;
+  const trackBTotal  = hasLine ? (trackB.total || 0) : 0;
   const priceM2      = market.average_price_m2;
   const priceSource  = market.price_source || (market.rcn_price_m2 ? "RCN" : market.gus_price_m2 ? "GUS BDL" : null);
 
@@ -210,9 +213,9 @@ export default function KalkulatorPage() {
             />
 
             {/* ── Formularz ── */}
-            <Card className="main-card mb-3">
+            <Card className="main-card mb-3" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.08)", borderRadius: "8px" }}>
               <CardBody>
-                <CardTitle className="mb-3">
+                <CardTitle className="mb-3" style={{ fontSize: "18px", fontWeight: 600, color: "#2c3e50" }}>
                   <i className="pe-7s-rocket me-2 icon-gradient bg-ripe-malin" /> Identyfikacja działki
                 </CardTitle>
                 <Tabs defaultActiveKey="1" renderTabBar={() => <ScrollableInkTabBar />} renderTabContent={() => <TabContent />}>
@@ -244,21 +247,7 @@ export default function KalkulatorPage() {
                             <Input value={municipality} onChange={e => setMunicipality(e.target.value)} placeholder="np. Baboszewo" />
                           </FormGroup>
                         </Col>
-                        <Col md="2">
-                          <FormGroup>
-                            <Label>Typ infrastruktury</Label>
-                            <Input type="select" value={infraType} onChange={e => setInfraType(e.target.value)}>
-                              <option value="elektro_WN">Elektro WN (110–400 kV)</option>
-                              <option value="elektro_SN">Elektro SN (15–30 kV)</option>
-                              <option value="elektro_nN">Elektro nN (&lt;1 kV)</option>
-                              <option value="gaz_wysokie">Gaz wysokiego ciśnienia</option>
-                              <option value="gaz_srednie">Gaz średniego ciśnienia</option>
-                              <option value="gaz_niskie">Gaz niskiego ciśnienia</option>
-                              <option value="teleko">Telekomunikacja</option>
-                              <option value="wod_kan">Woda / Kanalizacja</option>
-                            </Input>
-                          </FormGroup>
-                        </Col>
+                        {/* Typ infrastruktury - auto-detect z GUGiK, nie ma dropdown */}
                       </Row>
 
                       {/* ── Korekta ręczna ── */}
@@ -351,7 +340,13 @@ export default function KalkulatorPage() {
                         </div>
                       )}
 
-                      <Button type="submit" color="primary" className="btn-shadow btn-pill px-4" disabled={loading}>
+                      <Button
+                        type="submit"
+                        color="primary"
+                        className="btn-shadow btn-pill px-5 fw-semibold"
+                        disabled={loading}
+                        style={{ background: "linear-gradient(135deg, #a91079 0%, #d81b60 100%)", border: "none", fontSize: "15px" }}
+                      >
                         {loading
                           ? <><Spinner size="sm" className="me-2" />Analizuję…</>
                           : <><i className="pe-7s-bolt me-2" />Generuj raport</>}
@@ -383,7 +378,7 @@ export default function KalkulatorPage() {
               <>
                 {/* Pasek nagłówka */}
                 <Card className="main-card mb-3 border-0"
-                  style={{ background: "linear-gradient(135deg,#3f0d59 0%,#a91079 100%)" }}>
+                  style={{ background: "linear-gradient(135deg,#3f0d59 0%,#a91079 100%)", boxShadow: "0 4px 12px rgba(169, 16, 121, 0.2)", borderRadius: "8px" }}>
                   <CardBody className="d-flex justify-content-between align-items-center flex-wrap gap-2 py-3">
                     <div className="text-white">
                       <h5 className="mb-0">{result.parcel_id}</h5>

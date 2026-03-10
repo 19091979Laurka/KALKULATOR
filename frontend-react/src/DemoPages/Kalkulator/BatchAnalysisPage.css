@@ -1,5 +1,41 @@
 /* BatchAnalysisPage Modern Design */
 
+/* Tab Switcher */
+.batch-tab-switcher {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 30px;
+  background: white;
+  padding: 15px;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  flex-wrap: wrap;
+}
+
+.batch-tab-button {
+  padding: 12px 25px;
+  border: 2px solid #ecf0f1;
+  background: white;
+  color: #2c3e50;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.batch-tab-button:hover {
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.batch-tab-button.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
 .batch-analysis-wrapper {
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   min-height: 100vh;
@@ -526,6 +562,25 @@
   }
 }
 
+/* Modal styling */
+.batch-details-modal .batch-modal-header,
+.batch-report-modal .batch-modal-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 20px 30px;
+}
+
+.batch-details-modal .batch-modal-header h5,
+.batch-report-modal .batch-modal-header h5 {
+  margin: 0;
+  font-weight: 600;
+}
+
+.batch-modal-body {
+  padding: 30px;
+}
+
 @media (max-width: 768px) {
   .batch-header h1 {
     font-size: 1.8rem;
@@ -547,5 +602,13 @@
   .batch-table thead th,
   .batch-table tbody td {
     padding: 10px;
+  }
+
+  .batch-tab-switcher {
+    flex-direction: column;
+  }
+
+  .batch-tab-button {
+    width: 100%;
   }
 }
