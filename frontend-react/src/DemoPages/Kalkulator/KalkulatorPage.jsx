@@ -72,7 +72,7 @@ const INFRA_LEGEND = [
 ];
 
 // ── Overpass API — linie i słupy energetyczne z OSM ──────────────────────────
-const OVERPASS_URL = "https://overpass.kumi.systems/api/interpreter";
+const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 
 const VOLTAGE_COLOR = (v) => {
   const n = parseInt(v) || 0;
