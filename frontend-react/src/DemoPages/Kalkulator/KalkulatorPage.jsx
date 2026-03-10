@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { MapContainer, TileLayer, WMSTileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -16,76 +16,45 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
 
-// ── GeoJSON + OpenInfraMap + GESUT overlay layers ────────────────────────────
+// ── GeoJSON działki + GESUT WMS overlay ──────────────────────────────────────
 function GeoJSONLayers({ parcelGeojson }) {
   const map = useMap();
 
   useEffect(() => {
-    // ── OpenInfraMap — linie WN/SN/nN widoczne od razu (OSM Power Grid) ──
-    const openInfraLines = L.tileLayer(
-      "https://tiles.openinframap.org/power_lines/{z}/{x}/{y}.png",
+    if (!parcelGeojson) return;
+
+    // Granica działki
+    const parcelLayer = L.geoJSON(parcelGeojson, {
+      style: {
+        color: "#a91079",
+        weight: 3,
+        fillColor: "#a91079",
+        fillOpacity: 0.18,
+      },
+    });
+    parcelLayer.addTo(map);
+
+    // GESUT WMS — uzbrojenie terenu (niewidoczne na geoportal orto, ale dane są)
+    const gesutLayer = L.tileLayer.wms(
+      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
       {
-        maxZoom: 20,
-        opacity: 0.95,
-        attribution: '© <a href="https://openinframap.org" target="_blank">OpenInfraMap</a>',
-        crossOrigin: "anonymous",
-        errorTileUrl: "",
+        layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy",
+        format: "image/png",
+        transparent: true,
+        opacity: 0.7,
+        attribution: "GESUT GUGiK",
       }
     );
-    openInfraLines.addTo(map);
+    gesutLayer.addTo(map);
 
-    // ── OpenInfraMap — stacje transformatorowe i słupy ──
-    const openInfraPlants = L.tileLayer(
-      "https://tiles.openinframap.org/power_plants/{z}/{x}/{y}.png",
-      {
-        maxZoom: 20,
-        opacity: 0.9,
-        attribution: '© OpenInfraMap',
-        crossOrigin: "anonymous",
-        errorTileUrl: "",
-      }
-    );
-    openInfraPlants.addTo(map);
-
-    // ── Działka + GESUT (tylko gdy mamy geometrię) ──
-    let parcelLayer = null;
-    let gesutLayer = null;
-
-    if (parcelGeojson) {
-      parcelLayer = L.geoJSON(parcelGeojson, {
-        style: {
-          color: "#a91079",
-          weight: 3,
-          fillColor: "#a91079",
-          fillOpacity: 0.18,
-        },
-      });
-      parcelLayer.addTo(map);
-
-      // GESUT WMS — jako dodatkowe dane uzbrojenia terenu
-      gesutLayer = L.tileLayer.wms(
-        "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
-        {
-          layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy",
-          format: "image/png",
-          transparent: true,
-          opacity: 0.7,
-          attribution: "GESUT GUGiK",
-        }
-      );
-      gesutLayer.addTo(map);
-
-      try {
-        const bounds = parcelLayer.getBounds();
-        if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
-      } catch (_) {}
-    }
+    try {
+      const bounds = parcelLayer.getBounds();
+      if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
+    } catch (_) {}
 
     return () => {
-      map.removeLayer(openInfraLines);
-      map.removeLayer(openInfraPlants);
-      if (parcelLayer) map.removeLayer(parcelLayer);
-      if (gesutLayer) map.removeLayer(gesutLayer);
+      map.removeLayer(parcelLayer);
+      map.removeLayer(gesutLayer);
     };
   }, [map, parcelGeojson]);
 
@@ -101,6 +70,155 @@ const INFRA_LEGEND = [
   { color: "#0066ff", label: "nN" },
   { color: "#a91079", label: "Działka" },
 ];
+
+// ── Overpass API — linie i słupy energetyczne z OSM ──────────────────────────
+const OVERPASS_URL = "https://overpass.kumi.systems/api/interpreter";
+
+const VOLTAGE_COLOR = (v) => {
+  const n = parseInt(v) || 0;
+  if (n >= 300) return "#e60000";  // 380kV
+  if (n >= 180) return "#ff6600";  // 220kV
+  if (n >= 100) return "#ffcc00";  // 110kV
+  if (n >= 10)  return "#00bb00";  // 15-30kV
+  return "#0066ff";                // nN / nieznane
+};
+
+const VOLTAGE_WEIGHT = (v) => {
+  const n = parseInt(v) || 0;
+  if (n >= 300) return 4;
+  if (n >= 100) return 3;
+  return 2;
+};
+
+function OverpassPowerLayer({ center, bboxPadding = 0.025 }) {
+  const map = useMap();
+  const layerRef = useRef(null);
+  const abortRef = useRef(null);
+
+  useEffect(() => {
+    if (!center) return;
+    const [lat, lon] = center;
+    if (!lat || !lon) return;
+
+    const s = lat - bboxPadding;
+    const w = lon - bboxPadding;
+    const n = lat + bboxPadding;
+    const e = lon + bboxPadding;
+
+    const query = `[out:json][timeout:30];
+(
+  way["power"="line"](${s},${w},${n},${e});
+  way["power"="cable"](${s},${w},${n},${e});
+  node["power"="tower"](${s},${w},${n},${e});
+  node["power"="pole"](${s},${w},${n},${e});
+  node["power"="transformer"](${s},${w},${n},${e});
+  way["power"="substation"](${s},${w},${n},${e});
+);
+out body;>;out skel qt;`;
+
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
+    fetch(OVERPASS_URL, {
+      method: "POST",
+      body: query,
+      signal: ctrl.signal,
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (ctrl.signal.aborted) return;
+
+        // Build node coordinate map
+        const nodeMap = {};
+        data.elements.forEach((e) => {
+          if (e.type === "node") nodeMap[e.id] = [e.lon, e.lat];
+        });
+
+        const features = [];
+
+        data.elements.forEach((el) => {
+          if (el.type === "way" && el.nodes) {
+            const coords = el.nodes.map((id) => nodeMap[id]).filter(Boolean);
+            if (coords.length > 1) {
+              features.push({
+                type: "Feature",
+                geometry: { type: "LineString", coordinates: coords },
+                properties: el.tags || {},
+              });
+            }
+          } else if (el.type === "node" && el.tags?.power) {
+            features.push({
+              type: "Feature",
+              geometry: { type: "Point", coordinates: [el.lon, el.lat] },
+              properties: el.tags,
+            });
+          }
+        });
+
+        if (features.length === 0) return;
+
+        // Remove previous layer
+        if (layerRef.current) {
+          map.removeLayer(layerRef.current);
+          layerRef.current = null;
+        }
+
+        const geoLayer = L.geoJSON(
+          { type: "FeatureCollection", features },
+          {
+            style: (feature) => ({
+              color: VOLTAGE_COLOR(feature.properties.voltage),
+              weight: VOLTAGE_WEIGHT(feature.properties.voltage),
+              opacity: 0.92,
+            }),
+            pointToLayer: (feature, latlng) => {
+              const pwr = feature.properties.power;
+              const color =
+                pwr === "transformer" || pwr === "substation"
+                  ? "#9b59b6"
+                  : "#8B4513";
+              return L.circleMarker(latlng, {
+                radius: pwr === "tower" ? 3 : 5,
+                fillColor: color,
+                color: "#fff",
+                weight: 1,
+                fillOpacity: 0.9,
+              });
+            },
+            onEachFeature: (feature, layer) => {
+              const p = feature.properties;
+              if (p.voltage || p.power) {
+                layer.bindPopup(
+                  `<b>${p.power || "Linia"}</b><br>` +
+                    (p.voltage ? `Napięcie: ${p.voltage} V<br>` : "") +
+                    (p.cables ? `Przewody: ${p.cables}<br>` : "") +
+                    (p.name ? `Nazwa: ${p.name}` : "")
+                );
+              }
+            },
+          }
+        );
+
+        geoLayer.addTo(map);
+        layerRef.current = geoLayer;
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError") {
+          console.warn("Overpass power query failed:", err.message);
+        }
+      });
+
+    return () => {
+      ctrl.abort();
+      if (layerRef.current) {
+        map.removeLayer(layerRef.current);
+        layerRef.current = null;
+      }
+    };
+  }, [map, center, bboxPadding]);
+
+  return null;
+}
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 const fmt = (v, dec = 0) =>
@@ -591,7 +709,7 @@ export default function KalkulatorPage() {
                 <div>
                   <div className="ksws-card-header-title">Mapa infrastruktury energetycznej</div>
                   <div className="ksws-card-header-sub">
-                    OpenInfraMap · linie WN/SN/nN · słupy · stacje — Polska
+                    OSM Power Grid · linie WN/SN/nN · słupy · stacje (powiększ, aby zobaczyć)
                   </div>
                 </div>
               </div>
@@ -603,22 +721,12 @@ export default function KalkulatorPage() {
                     style={{ height: "100%", width: "100%" }}
                     scrollWheelZoom
                   >
-                    {/* OpenStreetMap base */}
+                    {/* OpenStreetMap base — widoczne linie na zoom 13+ */}
                     <TileLayer
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                       attribution='© <a href="https://openstreetmap.org">OpenStreetMap</a>'
                     />
-                    {/* OpenInfraMap linie energetyczne */}
-                    <TileLayer
-                      url="https://tiles.openinframap.org/power_lines/{z}/{x}/{y}.png"
-                      attribution='© <a href="https://openinframap.org">OpenInfraMap</a>'
-                      opacity={0.95}
-                    />
-                    {/* OpenInfraMap stacje i słupy */}
-                    <TileLayer
-                      url="https://tiles.openinframap.org/power_plants/{z}/{x}/{y}.png"
-                      opacity={0.9}
-                    />
+                    {/* Dane Overpass ładowane gdy użytkownik kliknie na mapie */}
                   </MapContainer>
                   {/* Legenda */}
                   <div className="ksws-map-legend">
@@ -629,7 +737,7 @@ export default function KalkulatorPage() {
                         <span>{item.label}</span>
                       </div>
                     ))}
-                    <div className="ksws-map-legend-source">OpenInfraMap · OSM Power Grid</div>
+                    <div className="ksws-map-legend-source">OSM (widoczne od zoom 13+)</div>
                   </div>
                 </div>
                 <div style={{ padding: "12px 20px", fontSize: "0.82rem", color: "#7f8c8d", background: "#f9f9f9", borderTop: "1px solid #eee" }}>
@@ -865,13 +973,19 @@ export default function KalkulatorPage() {
                             attribution="Geoportal GUGiK"
                           />
 
-                          {/* OpenInfraMap linie + działka GeoJSON + GESUT */}
+                          {/* Overpass OSM — linie i słupy energetyczne wokół działki */}
+                          <OverpassPowerLayer
+                            center={mapCenter}
+                            bboxPadding={0.025}
+                          />
+
+                          {/* Granica działki (GeoJSON) */}
                           <GeoJSONLayers
                             parcelGeojson={geom.geojson_ll || geom.geojson}
                           />
                         </MapContainer>
 
-                        {/* Legenda OpenInfraMap */}
+                        {/* Legenda */}
                         <div className="ksws-map-legend">
                           <div className="ksws-map-legend-title">Linie energetyczne</div>
                           {INFRA_LEGEND.map((item) => (
@@ -884,7 +998,7 @@ export default function KalkulatorPage() {
                             </div>
                           ))}
                           <div className="ksws-map-legend-source">
-                            OpenInfraMap · GESUT
+                            OSM / Overpass · GESUT GUGiK
                           </div>
                         </div>
                       </div>
