@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from backend.modules.terrain import fetch_terrain
 from backend.modules.property import PropertyAggregator
+from backend.modules.infrastructure import prefetch_regional_osm, clear_regional_cache
 from backend.core.valuation import calculate_compensation
 from backend.core.reports import create_summary_dict
 from backend.modules.pdf_report import generate_pdf
@@ -135,10 +136,43 @@ async def analyze_batch_csv(file: UploadFile = File(...)):
         if not rows:
             raise ValueError("CSV jest pusty")
 
-        # Analyze all parcels in parallel
         aggregator = PropertyAggregator()
         all_results = []
 
+        # ====== KROK 0: Pre-fetch geometrii działek → regional OSM cache ======
+        # Pobierz geometrie wszystkich działek (ULDK) → compute regional BBOX
+        # → jedno zapytanie Overpass zamiast 99 osobnych
+        logger.info("BATCH: Krok 0 — pobieranie geometrii %d działek z ULDK...", len(rows))
+        parcel_ids = [row.get('parcel_id', '').strip() for row in rows if row.get('parcel_id', '').strip()]
+        parcel_geometries = []
+
+        async def fetch_geom(pid):
+            try:
+                t = await fetch_terrain(pid)
+                if t.get("ok") and t.get("geometry"):
+                    return t["geometry"]
+            except:
+                pass
+            return None
+
+        # Pobierz geometrie równolegle (max 20 jednocześnie — throttle ULDK)
+        CHUNK_SIZE = 20
+        for i in range(0, len(parcel_ids), CHUNK_SIZE):
+            chunk = parcel_ids[i:i + CHUNK_SIZE]
+            geom_tasks = [fetch_geom(pid) for pid in chunk]
+            geom_results = await asyncio.gather(*geom_tasks)
+            parcel_geometries.extend([g for g in geom_results if g])
+
+        logger.info("BATCH: Pobrano %d/%d geometrii", len(parcel_geometries), len(parcel_ids))
+
+        # Jedno zapytanie Overpass dla CAŁEGO regionu
+        try:
+            osm_count = await prefetch_regional_osm(parcel_geometries)
+            logger.info("BATCH: Regional OSM cache: %d linii energetycznych", osm_count)
+        except Exception as e:
+            logger.warning("BATCH: Regional OSM prefetch error: %s — parcels will use individual queries", e)
+
+        # ====== KROK 1: Analiza wszystkich działek (z cache) ======
         async def analyze_single(row):
             try:
                 parcel_id = row.get('parcel_id', '').strip()
@@ -168,10 +202,13 @@ async def analyze_batch_csv(file: UploadFile = File(...)):
                     "error": str(e)
                 }
 
-        # Parallel analysis
+        # Parallel analysis (z regional cache — bez rate-limitingu Overpass)
         tasks = [analyze_single(row) for row in rows]
         results = await asyncio.gather(*tasks)
         all_results = [r for r in results if r is not None]
+
+        # Wyczyść cache po batch
+        clear_regional_cache()
 
         # Save to history
         batch_id = datetime.now().strftime("%Y%m%d_%H%M%S")

@@ -276,13 +276,13 @@ class PropertyAggregator:
         band_area = line_length * band_width if line_length and line_length > 0 else 0.0
 
         property_value = (avg_price or 8.50) * area_m2
-        # Compensation only if infrastructure is detected AND area > 0
-        if pl.get("detected") and area_m2 > 0:
+        # Compensation: zawsze oblicz (0 gdy brak infrastruktury)
+        if pl.get("detected") and area_m2 > 0 and band_area > 0:
             track_a = calculate_track_a(property_value, band_area, area_m2, coeffs)
             track_b = calculate_track_b(track_a["total"], infra_type)
         else:
-            track_a = None
-            track_b = None
+            track_a = {"wsp": 0.0, "wbk": 0.0, "obn": 0.0, "total": 0.0, "years": 10}
+            track_b = {"total": 0.0, "multiplier": coeffs["track_b_mult"]}
 
         master_record = {
             "metadata": {"teryt_id": resolved_pid, "status": "REAL", "source": "ULDK GUGiK"},
@@ -312,7 +312,8 @@ class PropertyAggregator:
                     "voltage": pl.get("voltage"),
                     "length_m": pl.get("length_m", 0.0),
                     "status": pl.get("status", "UNKNOWN"),
-                    "info": pl.get("info", "")
+                    "info": pl.get("info", ""),
+                    "geojson": pl.get("geojson", {"type": "FeatureCollection", "features": []}),
                 },
                 "power": {
                     "exists": pl.get("detected", False),
