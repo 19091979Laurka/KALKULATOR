@@ -792,12 +792,12 @@ export default function KalkulatorPage() {
                     style={{ height: "100%", width: "100%" }}
                     scrollWheelZoom
                   >
-                    {/* OpenStreetMap base — widoczne linie na zoom 13+ */}
+                    {/* ESRI World Imagery — satelita */}
                     <TileLayer
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                      attribution='© <a href="https://openstreetmap.org">OpenStreetMap</a>'
+                      url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                      attribution='© ESRI World Imagery'
+                      maxZoom={19}
                     />
-                    {/* Dane Overpass ładowane gdy użytkownik kliknie na mapie */}
                   </MapContainer>
                   {/* Legenda */}
                   <div className="ksws-map-legend">
@@ -1035,21 +1035,11 @@ export default function KalkulatorPage() {
                           style={{ height: "100%", width: "100%" }}
                           scrollWheelZoom
                         >
-                          {/* OSM base — niezawodne, linie WN widoczne od zoom 13 */}
+                          {/* ESRI World Imagery — satelita jak Geoportal (darmowe, bez klucza) */}
                           <TileLayer
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                            attribution='© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
+                            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                            attribution='Satelita: © ESRI World Imagery | Linie: OSM Overpass'
                             maxZoom={19}
-                          />
-
-                          {/* KIUT GUGiK — uzbrojenie terenu (to samo źródło co raport Geoportal) */}
-                          <WMSTileLayer
-                            url="https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu"
-                            layers="przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny"
-                            format="image/png"
-                            transparent={true}
-                            opacity={0.85}
-                            attribution="KIUT GUGiK"
                           />
 
                           {/* Overpass OSM — linie i słupy energetyczne (dane OSM) */}
