@@ -57,10 +57,10 @@ const Map3D = ({
     scene.fog = new THREE.Fog(0xb0d0ff, 500, 1500);
     sceneRef.current = scene;
 
-    // Camera
-    const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 10000);
-    camera.position.set(center[0] * 100, 80 * zoom, center[1] * 100 + 50);
-    camera.lookAt(center[0] * 100, 0, center[1] * 100);
+    // Camera — działki są rysowane relatywnie do centrum (0,0,0)
+    const camera = new THREE.PerspectiveCamera(60, width / height, 1, 20000);
+    camera.position.set(0, 400, 600);
+    camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
     // Renderer
@@ -89,23 +89,18 @@ const Map3D = ({
     scene.add(directionalLight);
 
     // === GROUND/TERRAIN ===
-    // Podłoże (z teksturą)
-    const groundGeometry = new THREE.PlaneGeometry(800, 800);
-    const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x8b7355 });
+    const groundGeometry = new THREE.PlaneGeometry(4000, 4000);
+    const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x5a7a3a });
     const ground = new THREE.Mesh(groundGeometry, groundMaterial);
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
-    ground.position.y = -5;
+    ground.position.y = -2;
     scene.add(ground);
 
-    // Trawa
-    const grassGeometry = new THREE.PlaneGeometry(750, 750);
-    const grassMaterial = new THREE.MeshLambertMaterial({ color: 0x228b22 });
-    const grass = new THREE.Mesh(grassGeometry, grassMaterial);
-    grass.position.y = 0.1;
-    grass.rotation.x = -Math.PI / 2;
-    grass.receiveShadow = true;
-    scene.add(grass);
+    // Siatka pomocnicza
+    const gridHelper = new THREE.GridHelper(2000, 40, 0x888888, 0xcccccc);
+    gridHelper.position.y = -1;
+    scene.add(gridHelper);
 
     // === DZIAŁKI (PARCELS) ===
     const parcelMeshes = {};
@@ -117,9 +112,9 @@ const Map3D = ({
       const coordinates = parcel.geometry.coordinates[0];
       const points = coordinates.map(coord => {
         return new THREE.Vector3(
-          (coord[0] - center[0]) * 100000 * 0.01,
+          (coord[0] - center[0]) * 50000,
           0.5,
-          (coord[1] - center[1]) * 100000 * 0.01
+          (coord[1] - center[1]) * 50000
         );
       });
 
@@ -183,7 +178,7 @@ const Map3D = ({
         label.position.set(
           (parcel.geometry.centroid_ll[0] - center[0]) * 100000 * 0.01,
           25,
-          (parcel.geometry.centroid_ll[1] - center[1]) * 100000 * 0.01
+          (parcel.geometry.centroid_ll[1] - center[1]) * 50000
         );
         label.rotation.y = Math.PI;
         scene.add(label);
@@ -199,8 +194,8 @@ const Map3D = ({
       // ELEKTRO (POWER LINES)
       if (infrastructureTypes.includes('elektro') && (parcel.infrastructure.power_lines?.detected || parcel.infrastructure.power?.exists || true)) {
         const color = INFRASTRUCTURE_COLORS.elektro;
-        const centerX = (parcel.geometry.centroid_ll[0] - center[0]) * 100000 * 0.01;
-        const centerZ = (parcel.geometry.centroid_ll[1] - center[1]) * 100000 * 0.01;
+        const centerX = (parcel.geometry.centroid_ll[0] - center[0]) * 50000;
+        const centerZ = (parcel.geometry.centroid_ll[1] - center[1]) * 50000;
 
         // Linia
         const lineGeometry = new THREE.BufferGeometry();
@@ -224,8 +219,8 @@ const Map3D = ({
       // GAZ
       if (infrastructureTypes.includes('gaz') && parcel.infrastructure.other_media?.gaz?.detected) {
         const color = INFRASTRUCTURE_COLORS.gaz;
-        const centerX = (parcel.geometry.centroid_ll[0] - center[0]) * 100000 * 0.01;
-        const centerZ = (parcel.geometry.centroid_ll[1] - center[1]) * 100000 * 0.01;
+        const centerX = (parcel.geometry.centroid_ll[0] - center[0]) * 50000;
+        const centerZ = (parcel.geometry.centroid_ll[1] - center[1]) * 50000;
 
         const lineGeometry = new THREE.BufferGeometry();
         const linePoints = [
@@ -241,8 +236,8 @@ const Map3D = ({
       // WODA
       if (infrastructureTypes.includes('woda') && (parcel.infrastructure.other_media?.woda?.detected || parcel.infrastructure.other_media?.kanal?.detected)) {
         const color = INFRASTRUCTURE_COLORS.woda;
-        const centerX = (parcel.geometry.centroid_ll[0] - center[0]) * 100000 * 0.01;
-        const centerZ = (parcel.geometry.centroid_ll[1] - center[1]) * 100000 * 0.01;
+        const centerX = (parcel.geometry.centroid_ll[0] - center[0]) * 50000;
+        const centerZ = (parcel.geometry.centroid_ll[1] - center[1]) * 50000;
 
         const lineGeometry = new THREE.BufferGeometry();
         const linePoints = [
@@ -258,8 +253,8 @@ const Map3D = ({
       // TELEKOMUNIKACJA
       if (infrastructureTypes.includes('teleko') && parcel.infrastructure.telecom?.fiber_ready) {
         const color = INFRASTRUCTURE_COLORS.teleko;
-        const centerX = (parcel.geometry.centroid_ll[0] - center[0]) * 100000 * 0.01;
-        const centerZ = (parcel.geometry.centroid_ll[1] - center[1]) * 100000 * 0.01;
+        const centerX = (parcel.geometry.centroid_ll[0] - center[0]) * 50000;
+        const centerZ = (parcel.geometry.centroid_ll[1] - center[1]) * 50000;
 
         const lineGeometry = new THREE.BufferGeometry();
         const linePoints = [
@@ -304,7 +299,9 @@ const Map3D = ({
     controls.enableZoom = true;
     controls.enablePan = true;
     controls.minDistance = 50;
-    controls.maxDistance = 1000;
+    controls.maxDistance = 5000;
+    controls.target.set(0, 0, 0);  // patrz na środek sceny (działka jest przy 0,0,0)
+    controls.update();
     controlsRef.current = controls;
 
     // === RAYCASTER FOR CLICKING ===

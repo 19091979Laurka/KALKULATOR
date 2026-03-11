@@ -1035,16 +1035,24 @@ export default function KalkulatorPage() {
                           style={{ height: "100%", width: "100%" }}
                           scrollWheelZoom
                         >
-                          {/* Geoportal WMS ortofoto */}
-                          <WMSTileLayer
-                            url="https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardOGC"
-                            layers="Raster"
-                            format="image/jpeg"
-                            transparent={false}
-                            attribution="Geoportal GUGiK"
+                          {/* OSM base — niezawodne, linie WN widoczne od zoom 13 */}
+                          <TileLayer
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            attribution='© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
+                            maxZoom={19}
                           />
 
-                          {/* Overpass OSM — linie i słupy energetyczne wokół działki */}
+                          {/* KIUT GUGiK — uzbrojenie terenu (to samo źródło co raport Geoportal) */}
+                          <WMSTileLayer
+                            url="https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu"
+                            layers="przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny"
+                            format="image/png"
+                            transparent={true}
+                            opacity={0.85}
+                            attribution="KIUT GUGiK"
+                          />
+
+                          {/* Overpass OSM — linie i słupy energetyczne (dane OSM) */}
                           <OverpassPowerLayer
                             center={mapCenter}
                             bboxPadding={0.025}
@@ -1069,7 +1077,17 @@ export default function KalkulatorPage() {
                             </div>
                           ))}
                           <div className="ksws-map-legend-source">
-                            OSM / Overpass · GESUT GUGiK
+                            OSM · KIUT GUGiK · Overpass
+                          </div>
+                          <div style={{ marginTop: 8 }}>
+                            <a
+                              href={`https://www.geoportal.gov.pl/pl/mapy-i-dane/usluga-wyszukiwania-dzialek-ewidencyjnych/?par_id=${encodeURIComponent(result?.parcel_id || "")}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ fontSize: "0.72rem", color: "#a91079", fontWeight: 600, textDecoration: "none" }}
+                            >
+                              🇵🇱 Geoportal →
+                            </a>
                           </div>
                         </div>
                       </div>
@@ -1194,7 +1212,7 @@ export default function KalkulatorPage() {
                       ⚡
                     </div>
                     <div className="ksws-info-item-body">
-                      <div className="ksws-info-item-label">Sieci przesyłowe (GESUT)</div>
+                      <div className="ksws-info-item-label">Sieci przesyłowe (KIUT GUGiK)</div>
                       <div className="ksws-info-item-value">
                         {hasLine ? (
                           <>
