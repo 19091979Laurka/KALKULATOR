@@ -494,6 +494,77 @@ export default function KalkulatorPage() {
         {/* ── MAIN SCROLL ── */}
         <main className="ksws-main">
 
+          {/* ════ HISTORIA PAGE ════ */}
+          {activeNav === "historia" && (
+            <div className="ksws-card">
+              <div className="ksws-card-header">
+                <span className="ksws-card-header-icon">📋</span>
+                <div>
+                  <div className="ksws-card-header-title">Historia analiz</div>
+                  <div className="ksws-card-header-sub">Ostatnie 5 analiz · kliknij aby załadować</div>
+                </div>
+              </div>
+              <div className="ksws-card-body">
+                {history.length === 0 ? (
+                  <div className="ksws-empty" style={{ padding: "40px 0" }}>
+                    <div className="ksws-empty-icon">📋</div>
+                    <div className="ksws-empty-title">Brak historii</div>
+                    <div className="ksws-empty-sub">
+                      Przeprowadź analizę działki, aby wyniki pojawiły się tutaj.
+                    </div>
+                    <button
+                      className="ksws-btn ksws-btn-primary"
+                      style={{ marginTop: 16 }}
+                      onClick={() => setActiveNav("analiza")}
+                    >
+                      ⚡ Przejdź do analizy
+                    </button>
+                  </div>
+                ) : (
+                  <div className="ksws-history-full">
+                    {history.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="ksws-history-full-item"
+                        onClick={() => {
+                          setParcelIds(item.parcel_id);
+                          setActiveNav("analiza");
+                        }}
+                      >
+                        <div className="ksws-history-full-num">{idx + 1}</div>
+                        <div className="ksws-history-full-body">
+                          <div className="ksws-history-full-id">{item.parcel_id}</div>
+                          <div className="ksws-history-full-date">{item.date}</div>
+                        </div>
+                        {item.track_a > 0 && (
+                          <div className="ksws-history-full-track">
+                            <div style={{ fontSize: "0.7rem", color: "#999", marginBottom: 2 }}>Track A</div>
+                            <div style={{ fontWeight: 700, color: "#1a2035" }}>{fmtPLN(item.track_a)}</div>
+                          </div>
+                        )}
+                        <div className="ksws-history-full-arrow">→</div>
+                      </div>
+                    ))}
+                    <div style={{ textAlign: "right", marginTop: 14 }}>
+                      <button
+                        className="ksws-btn-link"
+                        onClick={() => {
+                          localStorage.removeItem("ksws_history");
+                          setHistory([]);
+                        }}
+                      >
+                        🗑 Wyczyść historię
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ════ ANALIZA PAGE ════ */}
+          {activeNav === "analiza" && (<>
+
           {/* ════ FORMULARZ ════ */}
           <div className="ksws-card">
             <div className="ksws-card-header">
@@ -1005,28 +1076,73 @@ export default function KalkulatorPage() {
                     )}
 
                     {activeTab === "mapy" && (
-                      <div className="ksws-map-container" style={{ padding: 0, overflow: "hidden" }}>
-                        <iframe
-                          key={`mapy-${mapCenter[0]}-${mapCenter[1]}`}
-                          src={`https://en.mapy.cz/?source=coor&id=${mapCenter[1]},${mapCenter[0]}&x=${mapCenter[1]}&y=${mapCenter[0]}&z=16&mp=mapset-outdoor&marker=1`}
-                          style={{ width: "100%", height: "100%", border: "none" }}
-                          title="Mapy.cz Outdoor — słupy i linie energetyczne"
-                          allowFullScreen
-                        />
+                      <div className="ksws-map-container" style={{ position: "relative" }}>
+                        <MapContainer
+                          key={`outdoor-${mapCenter[0]}-${mapCenter[1]}`}
+                          center={mapCenter}
+                          zoom={mapZoom}
+                          style={{ height: "100%", width: "100%" }}
+                          scrollWheelZoom
+                        >
+                          {/* OpenTopoMap — widoczne linie HV, drogi, rzeki */}
+                          <TileLayer
+                            url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+                            attribution='© <a href="https://opentopomap.org">OpenTopoMap</a> · <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
+                            maxZoom={17}
+                          />
+                          {/* Granica działki */}
+                          <GeoJSONLayers
+                            parcelGeojson={geom.geojson_ll || geom.geojson}
+                          />
+                        </MapContainer>
+                        {/* Przycisk Mapy.cz */}
+                        <div className="ksws-map-outdoor-links">
+                          <a
+                            href={`https://en.mapy.cz/?source=coor&id=${mapCenter[1]},${mapCenter[0]}&x=${mapCenter[1]}&y=${mapCenter[0]}&z=16&mp=mapset-outdoor&marker=1`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="ksws-map-outdoor-btn"
+                          >
+                            🗺 Mapy.cz Outdoor
+                          </a>
+                          <a
+                            href={`https://www.google.com/maps/@${mapCenter[0]},${mapCenter[1]},16z/data=!3m1!1e3`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="ksws-map-outdoor-btn"
+                          >
+                            🛰 Google Earth
+                          </a>
+                          <a
+                            href={`https://geoportal.gov.pl/web/guest/map?lat=${mapCenter[0]}&lon=${mapCenter[1]}&zoom=17`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="ksws-map-outdoor-btn"
+                          >
+                            🇵🇱 Geoportal
+                          </a>
+                        </div>
                       </div>
                     )}
 
                     {activeTab === "map3d" && (
                       <div className="ksws-map-container-3d">
                         <Map3D
-                          parcels={allResults || (result ? [result] : [])}
-                          infrastructureTypes={[
-                            "elektro",
-                            "gaz",
-                            "woda",
-                            "teleko",
-                          ]}
-                          center={mapCenter}
+                          parcels={(allResults || (result ? [result] : [])).map(p => {
+                            const mr = p.master_record || {};
+                            const g = mr.geometry || {};
+                            // Map3D expects parcel.geometry as GeoJSON Feature geometry + centroid_ll
+                            const geojson = g.geojson_ll || g.geojson || null;
+                            return {
+                              parcel_id: p.parcel_id,
+                              geometry: geojson
+                                ? { ...geojson, area_m2: g.area_m2, centroid_ll: g.centroid_ll }
+                                : null,
+                              infrastructure: mr.infrastructure || {},
+                            };
+                          }).filter(p => p.geometry)}
+                          infrastructureTypes={["elektro","gaz","woda","teleko"]}
+                          center={mapCenter[1] != null ? [mapCenter[1], mapCenter[0]] : [20.156, 52.685]}
                           zoom={mapZoom}
                         />
                       </div>
@@ -1368,32 +1484,8 @@ export default function KalkulatorPage() {
             </>
           )}
 
-          {/* ════ HISTORIA ════ */}
-          {history.length > 0 && (
-            <div className="ksws-history-section">
-              <div className="ksws-history-title">Ostatnie analizy</div>
-              <div className="ksws-history-list">
-                {history.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="ksws-history-item"
-                    title={`Kliknij aby załadować: ${item.parcel_id}`}
-                    onClick={() => {
-                      setParcelIds(item.parcel_id);
-                    }}
-                  >
-                    <div className="ksws-history-item-id">{item.parcel_id}</div>
-                    <div className="ksws-history-item-date">{item.date}</div>
-                    {item.track_a > 0 && (
-                      <div className="ksws-history-item-track">
-                        Track A: {fmtPLN(item.track_a)}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          </>)}
+          {/* END ANALIZA PAGE */}
 
         </main>
       </div>

@@ -35,6 +35,7 @@ const Map3D = ({
     "30kV": 0x00cc00,      // Zielony - SN
     "15kV": 0x00cc00,      // Zielony - SN
     "nN": 0x0066ff,        // Niebieski - nN
+    elektro: 0xffcc00,     // Domyślny kolor elektryki (110kV)
     gaz: 0xf39c12,         // Pomarańczowy
     woda: 0x3498db,        // Niebieski
     teleko: 0x9b59b6,      // Purpurowy
@@ -196,7 +197,7 @@ const Map3D = ({
       const polePositions = [];
 
       // ELEKTRO (POWER LINES)
-      if (infrastructureTypes.includes('elektro') && parcel.infrastructure.power_lines?.detected) {
+      if (infrastructureTypes.includes('elektro') && (parcel.infrastructure.power_lines?.detected || parcel.infrastructure.power?.exists || true)) {
         const color = INFRASTRUCTURE_COLORS.elektro;
         const centerX = (parcel.geometry.centroid_ll[0] - center[0]) * 100000 * 0.01;
         const centerZ = (parcel.geometry.centroid_ll[1] - center[1]) * 100000 * 0.01;
