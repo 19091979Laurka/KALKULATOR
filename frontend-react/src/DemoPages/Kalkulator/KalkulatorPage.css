@@ -599,11 +599,6 @@
   position: relative;
 }
 
-.ksws-map-container-3d {
-  height: 500px;
-  width: 100%;
-  overflow: hidden;
-}
 
 /* ── LEGENDA OPENINFRAMAP ──────────────────────────────────────────────────── */
 .ksws-map-legend {

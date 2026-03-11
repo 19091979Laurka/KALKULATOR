@@ -526,24 +526,16 @@ function BatchCSVSection() {
   const [batchError, setBatchError] = useState(null);
 
   useEffect(() => {
-    loadBatchData();
-  }, []);
-
-  const loadBatchData = async () => {
+    // Załaduj ostatni batch z historii localStorage (nie z hardcoded ID)
     try {
-      setBatchError(null);
-      const res = await fetch("/api/history/20260311_194524");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      if (json.ok && json.data?.results) {
-        setBatchResults(json.data);
-        // Zapisz pełne dane do historii
-        saveBatchToHistory(json.data);
+      const hist = JSON.parse(localStorage.getItem("batch_history") || "[]");
+      if (hist.length > 0 && hist[0].full_data) {
+        setBatchResults({ results: hist[0].full_data, parcel_count: hist[0].parcel_count, successful: hist[0].successful });
       }
-    } catch (err) {
-      setBatchError(err.message);
+    } catch (e) {
+      console.error("Batch history load error:", e);
     }
-  };
+  }, []);
 
   const saveBatchToHistory = (batchData) => {
     try {
@@ -577,6 +569,8 @@ function BatchCSVSection() {
       toast.error("Wybierz plik CSV");
       return;
     }
+    // ZERUJ poprzednie wyniki
+    setBatchResults(null);
     setBatchLoading(true);
     setBatchError(null);
     const form = new FormData();
@@ -586,13 +580,19 @@ function BatchCSVSection() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Błąd");
-      setBatchResults(data.data);
+      // Ustaw nowe wyniki
+      const batchData = {
+        results: data.parcels,
+        parcel_count: data.summary?.total || data.parcels?.length || 0,
+        successful: data.summary?.successful || 0,
+      };
+      setBatchResults(batchData);
       // Zapisz do historii
-      if (data.data?.results) {
-        saveBatchToHistory(data.data);
+      if (batchData.results) {
+        saveBatchToHistory(batchData);
       }
       setCsvFile(null);
-      toast.success("Batch załadowany i zapisany do historii!");
+      toast.success(`Batch ${batchData.parcel_count} działek załadowany i zapisany!`);
     } catch (err) {
       setBatchError(err.message);
       toast.error("Błąd: " + err.message);
@@ -897,7 +897,7 @@ function BatchCSVSection() {
                     return (
                       <tr key={i} style={{ borderBottom: "1px solid #f0f0f0", background: i % 2 === 0 ? "#fafafa" : "white" }}>
                         <td style={{ padding: "8px", fontWeight: "bold" }}>
-                          <a href={`https://www.geoportal.gov.pl/pl/mapy-i-dane/usluga-wyszukiwania-dzialek-ewidencyjnych/?par_id=${encodeURIComponent(p.parcel_id || "")}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2575fc", textDecoration: "none" }} title="Otwórz w Geoportalu">
+                          <a href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${p.parcel_id || ""}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2575fc", textDecoration: "none" }} title="Otwórz w Geoportalu">
                             {p.parcel_id} 🔗
                           </a>
                         </td>
@@ -996,7 +996,7 @@ function loadHistory() {
 function saveToHistory(entry) {
   try {
     const prev = loadHistory();
-    const next = [entry, ...prev.filter((h) => h.parcel_id !== entry.parcel_id)].slice(0, 5);
+    const next = [entry, ...prev.filter((h) => h.parcel_id !== entry.parcel_id)].slice(0, 20);
     localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
     return next;
   } catch {
@@ -1111,14 +1111,30 @@ export default function KalkulatorPage() {
         setPowerGeoJSON(null);
       }
 
-      // Save to history
-      const mr = first.master_record || {};
-      const comp = mr.compensation || {};
-      const trackA = comp.track_a || {};
+      // Save to history — FULL calculation data
+      const mr2 = first.master_record || {};
+      const comp2 = mr2.compensation || {};
+      const ksws2 = mr2.ksws || {};
+      const geom2 = mr2.geometry || {};
+      const mkt2 = mr2.market_data || {};
+      const infra2 = mr2.infrastructure || {};
+      const pl2 = infra2.power_lines || {};
       const newEntry = {
         parcel_id: first.parcel_id,
         date: nowPL(),
-        track_a: trackA.total || 0,
+        track_a: comp2.track_a?.total || 0,
+        track_b: comp2.track_b?.total || 0,
+        razem: (comp2.track_a?.total || 0) + (comp2.track_b?.total || 0),
+        area_m2: geom2.area_m2 || 0,
+        price_m2: mkt2.average_price_m2 || 0,
+        value_pln: ksws2.property_value_total || 0,
+        voltage: pl2.voltage || "—",
+        collision: !!(pl2.detected),
+        line_length_m: pl2.length_m || 0,
+        band_width_m: ksws2.band_width_m || 0,
+        band_area_m2: ksws2.band_area_m2 || 0,
+        location: [mr2.parcel_metadata?.commune, mr2.parcel_metadata?.county, mr2.parcel_metadata?.region].filter(Boolean).join(", "),
+        full_master_record: mr2,
       };
       setHistory(saveToHistory(newEntry));
 
@@ -1262,7 +1278,7 @@ export default function KalkulatorPage() {
                 <span className="ksws-card-header-icon">📋</span>
                 <div>
                   <div className="ksws-card-header-title">Historia analiz</div>
-                  <div className="ksws-card-header-sub">Ostatnie 5 analiz · kliknij aby załadować</div>
+                  <div className="ksws-card-header-sub">Pełne dane wyliczeń · kliknij aby załadować</div>
                 </div>
               </div>
               <div className="ksws-card-body">
@@ -1287,23 +1303,51 @@ export default function KalkulatorPage() {
                       <div
                         key={idx}
                         className="ksws-history-full-item"
+                        style={{ flexDirection: "column", gap: "8px", padding: "16px", cursor: "pointer" }}
                         onClick={() => {
                           setParcelIds(item.parcel_id);
                           setActiveNav("analiza");
                         }}
                       >
-                        <div className="ksws-history-full-num">{idx + 1}</div>
-                        <div className="ksws-history-full-body">
-                          <div className="ksws-history-full-id">{item.parcel_id}</div>
-                          <div className="ksws-history-full-date">{item.date}</div>
-                        </div>
-                        {item.track_a > 0 && (
-                          <div className="ksws-history-full-track">
-                            <div style={{ fontSize: "0.7rem", color: "#999", marginBottom: 2 }}>Track A</div>
-                            <div style={{ fontWeight: 700, color: "#1a2035" }}>{fmtPLN(item.track_a)}</div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <div className="ksws-history-full-num">{idx + 1}</div>
+                            <div>
+                              <div className="ksws-history-full-id" style={{ fontWeight: 700, fontSize: "0.95rem" }}>
+                                <a href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${item.parcel_id}`} target="_blank" rel="noreferrer" style={{ color: "#2575fc", textDecoration: "none" }} onClick={(e) => e.stopPropagation()}>
+                                  {item.parcel_id} 🔗
+                                </a>
+                              </div>
+                              <div className="ksws-history-full-date">{item.date}</div>
+                              {item.location && <div style={{ fontSize: "0.72rem", color: "#888" }}>{item.location}</div>}
+                            </div>
                           </div>
-                        )}
-                        <div className="ksws-history-full-arrow">→</div>
+                          <div className="ksws-history-full-arrow">→</div>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", fontSize: "0.78rem", background: "#f7f8fa", borderRadius: "6px", padding: "10px", marginTop: "4px" }}>
+                          <div><span style={{ color: "#999" }}>Pow:</span> <strong>{Math.round(item.area_m2 || 0).toLocaleString()} m²</strong></div>
+                          <div><span style={{ color: "#999" }}>Cena:</span> <strong>{Math.round(item.price_m2 || 0)} PLN/m²</strong></div>
+                          <div><span style={{ color: "#999" }}>Wartość:</span> <strong>{Math.round(item.value_pln || 0).toLocaleString()} PLN</strong></div>
+                          <div><span style={{ color: "#999" }}>Kolizja:</span> <strong style={{ color: item.collision ? "#e74c3c" : "#27ae60" }}>{item.collision ? "TAK" : "NIE"}</strong></div>
+                          <div><span style={{ color: "#999" }}>Napięcie:</span> <strong>{item.voltage || "—"}</strong></div>
+                          <div><span style={{ color: "#999" }}>Dł linii:</span> <strong>{Math.round(item.line_length_m || 0)} m</strong></div>
+                          <div><span style={{ color: "#999" }}>Pas:</span> <strong>{Math.round(item.band_width_m || 0)}m × {Math.round(item.band_area_m2 || 0)} m²</strong></div>
+                          <div><span style={{ color: "#999" }}>Razem:</span> <strong style={{ color: "#1a2035" }}>{Math.round(item.razem || item.track_a || 0).toLocaleString()} PLN</strong></div>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", fontSize: "0.82rem", marginTop: "4px" }}>
+                          <div style={{ background: "#eafaf1", padding: "8px 12px", borderRadius: "6px", textAlign: "center" }}>
+                            <div style={{ fontSize: "0.68rem", color: "#999" }}>Track A</div>
+                            <div style={{ fontWeight: 700, color: "#27ae60" }}>{Math.round(item.track_a || 0).toLocaleString()} PLN</div>
+                          </div>
+                          <div style={{ background: "#fef9e7", padding: "8px 12px", borderRadius: "6px", textAlign: "center" }}>
+                            <div style={{ fontSize: "0.68rem", color: "#999" }}>Track B</div>
+                            <div style={{ fontWeight: 700, color: "#f39c12" }}>{Math.round(item.track_b || 0).toLocaleString()} PLN</div>
+                          </div>
+                          <div style={{ background: "#eaf2fd", padding: "8px 12px", borderRadius: "6px", textAlign: "center" }}>
+                            <div style={{ fontSize: "0.68rem", color: "#999" }}>RAZEM</div>
+                            <div style={{ fontWeight: 700, color: "#1a2035" }}>{Math.round(item.razem || item.track_a || 0).toLocaleString()} PLN</div>
+                          </div>
+                        </div>
                       </div>
                     ))}
                     <div style={{ textAlign: "right", marginTop: 14 }}>
@@ -1639,7 +1683,7 @@ export default function KalkulatorPage() {
                     {result.parcel_id}
                     {result.parcel_id && (
                       <a
-                        href={`https://geoportal.gov.pl/?zoom=18&x=${result.data?.geometry?.centroid_ll?.[0] || 20}&y=${result.data?.geometry?.centroid_ll?.[1] || 52}&baselayer=ORTOFOTOMAPA`}
+                        href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${result.parcel_id || ""}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         title="Otwórz działkę w Geoportalu"
@@ -1886,7 +1930,7 @@ export default function KalkulatorPage() {
                           </div>
                           <div style={{ marginTop: 8 }}>
                             <a
-                              href={`https://www.geoportal.gov.pl/pl/mapy-i-dane/usluga-wyszukiwania-dzialek-ewidencyjnych/?par_id=${encodeURIComponent(result?.parcel_id || "")}`}
+                              href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${result?.parcel_id || ""}`}
                               target="_blank"
                               rel="noreferrer"
                               style={{ fontSize: "0.72rem", color: "#a91079", fontWeight: 600, textDecoration: "none" }}
@@ -1937,7 +1981,7 @@ export default function KalkulatorPage() {
                             🛰 Google Earth
                           </a>
                           <a
-                            href={`https://geoportal.gov.pl/web/guest/map?lat=${mapCenter[0]}&lon=${mapCenter[1]}&zoom=17`}
+                            href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${result?.parcel_id || ""}`}
                             target="_blank"
                             rel="noreferrer"
                             className="ksws-map-outdoor-btn"
