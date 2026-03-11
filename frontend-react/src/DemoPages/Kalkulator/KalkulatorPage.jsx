@@ -5,7 +5,7 @@ import "leaflet/dist/leaflet.css";
 import { toast } from "react-toastify";
 import CountUp from "react-countup";
 import { Spinner, Badge, Table, Progress } from "reactstrap";
-import Map3D from "../../components/Map3D";
+import jsPDF from "jspdf";
 import "./KalkulatorPage.css";
 
 // ── Leaflet default icon fix ──────────────────────────────────────────────────
@@ -220,6 +220,63 @@ out body;>;out skel qt;`;
   return null;
 }
 
+// ── PreloadedPowerLayer — renderuje dane Overpass pobrane podczas analizy ──────
+function PreloadedPowerLayer({ geoJSON }) {
+  const map = useMap();
+  const layerRef = useRef(null);
+
+  useEffect(() => {
+    if (!geoJSON || !geoJSON.features?.length) return;
+
+    if (layerRef.current) {
+      map.removeLayer(layerRef.current);
+      layerRef.current = null;
+    }
+
+    const geoLayer = L.geoJSON(geoJSON, {
+      style: (feature) => ({
+        color: VOLTAGE_COLOR(feature.properties.voltage),
+        weight: VOLTAGE_WEIGHT(feature.properties.voltage),
+        opacity: 0.92,
+      }),
+      pointToLayer: (feature, latlng) => {
+        const pwr = feature.properties.power;
+        const color = pwr === "transformer" || pwr === "substation" ? "#9b59b6" : "#8B4513";
+        return L.circleMarker(latlng, {
+          radius: pwr === "tower" ? 3 : 5,
+          fillColor: color,
+          color: "#fff",
+          weight: 1,
+          fillOpacity: 0.9,
+        });
+      },
+      onEachFeature: (feature, layer) => {
+        const p = feature.properties;
+        if (p.voltage || p.power) {
+          layer.bindPopup(
+            `<b>${p.power || "Linia"}</b><br>` +
+              (p.voltage ? `Napięcie: ${p.voltage} V<br>` : "") +
+              (p.cables ? `Przewody: ${p.cables}<br>` : "") +
+              (p.name ? `Nazwa: ${p.name}` : "")
+          );
+        }
+      },
+    });
+
+    geoLayer.addTo(map);
+    layerRef.current = geoLayer;
+
+    return () => {
+      if (layerRef.current) {
+        map.removeLayer(layerRef.current);
+        layerRef.current = null;
+      }
+    };
+  }, [map, geoJSON]);
+
+  return null;
+}
+
 // ── Formatters ────────────────────────────────────────────────────────────────
 const fmt = (v, dec = 0) =>
   v != null && !isNaN(v)
@@ -243,6 +300,687 @@ const nowPL = () =>
     hour: "2-digit",
     minute: "2-digit",
   });
+
+// ── Batch Parcels Layer - wyświetla wszystkie działki na mapie ──────────────
+function BatchParcelsLayer({ results }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!results || !map) return;
+
+    const featureGroup = L.featureGroup();
+
+    results.forEach((p) => {
+      const centroid = p.data?.geometry?.centroid_ll;
+      if (!centroid || !centroid[0]) return;
+
+      const collision = p.data?.infrastructure?.power_lines?.detected;
+      const ta = p.data?.compensation?.track_a?.total || 0;
+      const tb = p.data?.compensation?.track_b?.total || 0;
+      const color = collision ? "#ff0000" : "#00aa00";
+
+      const popup = `<div style="font-size: 12px; font-family: Arial; min-width: 200px;">
+        <strong>${p.parcel_id}</strong><br/>
+        Kolizja: ${collision ? "✅ TAK" : "❌ NIE"}<br/>
+        Napięcie: ${p.data?.infrastructure?.power_lines?.voltage || "—"}<br/>
+        Pow: ${Math.round(p.data?.geometry?.area_m2 || 0)} m²<br/>
+        <hr style="margin: 5px 0; border: none; border-top: 1px solid #ddd;" />
+        Track A: <strong style="color: #27ae60">${Math.round(ta)} PLN</strong><br/>
+        Track B: <strong style="color: #f39c12">${Math.round(tb)} PLN</strong><br/>
+        <strong style="color: ${color}">Razem: ${Math.round(ta + tb)} PLN</strong>
+      </div>`;
+
+      const marker = L.circleMarker([centroid[1], centroid[0]], {
+        radius: collision ? 8 : 6,
+        fillColor: color,
+        color: color,
+        weight: 2,
+        opacity: 1,
+        fillOpacity: collision ? 0.85 : 0.6,
+      }).bindPopup(popup);
+
+      featureGroup.addLayer(marker);
+    });
+
+    featureGroup.addTo(map);
+    return () => featureGroup.remove();
+  }, [map, results]);
+
+  return null;
+}
+
+// ── Infrastruktura terenu - warstwa GESUT ──────────────────────────────────
+function InfrastructureLayer() {
+  const map = useMap();
+
+  useEffect(() => {
+    const gesutLayer = L.tileLayer.wms(
+      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
+      {
+        layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy",
+        format: "image/png",
+        transparent: true,
+        opacity: 0.6,
+        attribution: "GESUT GUGiK",
+        zIndex: 5,
+      }
+    );
+    gesutLayer.addTo(map);
+
+    return () => map.removeLayer(gesutLayer);
+  }, [map]);
+
+  return null;
+}
+
+// ── PDF Report Generator ────────────────────────────────────────────────────
+function generateParcelPDF(parcel, batchData) {
+  try {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let yPos = 20;
+
+    // Header
+    doc.setFontSize(18);
+    doc.setFont(undefined, "bold");
+    doc.text("RAPORT ODSZKODOWANIA - KSWS", pageWidth / 2, yPos, { align: "center" });
+
+    // Date
+    yPos += 10;
+    doc.setFontSize(10);
+    doc.setFont(undefined, "normal");
+    const now = new Date();
+    doc.text(`Data: ${now.toLocaleDateString("pl-PL")} ${now.toLocaleTimeString("pl-PL")}`, pageWidth / 2, yPos, { align: "center" });
+
+    // Separator
+    yPos += 15;
+    doc.setDrawColor(37, 117, 252);
+    doc.line(20, yPos, pageWidth - 20, yPos);
+
+    // Parcel ID Section
+    yPos += 8;
+    doc.setFontSize(12);
+    doc.setFont(undefined, "bold");
+    doc.text("IDENTYFIKACJA DZIAŁKI", 20, yPos);
+
+    yPos += 8;
+    doc.setFontSize(10);
+    doc.setFont(undefined, "normal");
+    const parcelInfo = [
+      [`Identyfikator działki:`, parcel.parcel_id],
+      [`Kolizja z liniami energetycznymi:`, parcel.data?.infrastructure?.power_lines?.detected ? "TAK" : "NIE"],
+      [`Napięcie linii [kV]:`, parcel.data?.infrastructure?.power_lines?.voltage || "—"],
+    ];
+
+    parcelInfo.forEach(([label, value]) => {
+      doc.setFont(undefined, "bold");
+      doc.text(label, 20, yPos);
+      doc.setFont(undefined, "normal");
+      doc.text(String(value), 100, yPos);
+      yPos += 6;
+    });
+
+    // Geometry Section
+    yPos += 8;
+    doc.setFontSize(12);
+    doc.setFont(undefined, "bold");
+    doc.text("PARAMETRY GEOMETRYCZNE", 20, yPos);
+
+    yPos += 8;
+    doc.setFont(undefined, "normal");
+    const area = parcel.data?.geometry?.area_m2 || 0;
+    const price = parcel.data?.market_data?.average_price_m2 || 0;
+    const value = parcel.data?.ksws?.property_value_total || 0;
+    const lineLength = parcel.data?.infrastructure?.power_lines?.length_m || 0;
+    const bandWidth = parcel.data?.ksws?.band_width_m || 0;
+    const bandArea = parcel.data?.ksws?.band_area_m2 || 0;
+
+    const geoInfo = [
+      [`Pow. działki [m²]:`, Math.round(area).toLocaleString()],
+      [`Cena rynkowa [PLN/m²]:`, Math.round(price).toLocaleString()],
+      [`Wartość nieruchomości [PLN]:`, Math.round(value).toLocaleString()],
+      [`Dł. linii energetycznej [m]:`, Math.round(lineLength).toLocaleString()],
+      [`Szerokość pasa ochronnego [m]:`, Math.round(bandWidth).toLocaleString()],
+      [`Pow. pasa ochronnego [m²]:`, Math.round(bandArea).toLocaleString()],
+    ];
+
+    geoInfo.forEach(([label, val]) => {
+      doc.setFont(undefined, "bold");
+      doc.text(label, 20, yPos);
+      doc.setFont(undefined, "normal");
+      doc.text(String(val), 100, yPos);
+      yPos += 6;
+    });
+
+    // Compensation Section
+    yPos += 8;
+    doc.setFontSize(12);
+    doc.setFont(undefined, "bold");
+    doc.text("ODSZKODOWANIE KSWS", 20, yPos);
+
+    yPos += 8;
+    doc.setFont(undefined, "normal");
+    const ta = parcel.data?.compensation?.track_a?.total || 0;
+    const tb = parcel.data?.compensation?.track_b?.total || 0;
+    const total = ta + tb;
+
+    const compInfo = [
+      [`Track A [PLN]:`, Math.round(ta).toLocaleString()],
+      [`Track B [PLN]:`, Math.round(tb).toLocaleString()],
+      [`RAZEM [PLN]:`, Math.round(total).toLocaleString()],
+    ];
+
+    compInfo.forEach(([label, val], idx) => {
+      doc.setFont(undefined, "bold");
+      if (idx === 2) {
+        doc.setFontSize(11);
+        doc.setTextColor(39, 174, 96);
+      }
+      doc.text(label, 20, yPos);
+      doc.setFont(undefined, "bold");
+      doc.text(String(val), 100, yPos);
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(10);
+      yPos += 8;
+    });
+
+    // Summary Box
+    yPos += 8;
+    doc.setDrawColor(37, 117, 252);
+    doc.setFillColor(245, 249, 255);
+    doc.rect(20, yPos - 5, pageWidth - 40, 30, "F");
+    doc.setDrawColor(37, 117, 252);
+    doc.rect(20, yPos - 5, pageWidth - 40, 30);
+
+    doc.setFontSize(11);
+    doc.setFont(undefined, "bold");
+    doc.setTextColor(37, 117, 252);
+    doc.text("PODSUMOWANIE", 25, yPos + 2);
+
+    doc.setFontSize(10);
+    doc.setFont(undefined, "normal");
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Status kolizji: ${parcel.data?.infrastructure?.power_lines?.detected ? "WYKRYTA" : "BRAK"}`, 25, yPos + 10);
+    doc.text(`Całkowita kwota odszkodowania: ${Math.round(total).toLocaleString()} PLN`, 25, yPos + 17);
+
+    // Footer
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text("Raport wygenerowany automatycznie przez Kalkulator KSWS", pageWidth / 2, pageHeight - 10, { align: "center" });
+
+    // Save
+    doc.save(`${parcel.parcel_id}_KSWS_Report.pdf`);
+    toast.success(`PDF dla ${parcel.parcel_id} pobrany!`);
+  } catch (err) {
+    console.error("PDF Error:", err);
+    toast.error("Błąd przy generowaniu PDF");
+  }
+}
+
+// ── Batch CSV Component ─────────────────────────────────────────────────────
+function BatchCSVSection() {
+  const [batchResults, setBatchResults] = useState(null);
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [csvFile, setCsvFile] = useState(null);
+  const [batchError, setBatchError] = useState(null);
+
+  useEffect(() => {
+    loadBatchData();
+  }, []);
+
+  const loadBatchData = async () => {
+    try {
+      setBatchError(null);
+      const res = await fetch("/api/history/20260311_194524");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (json.ok && json.data?.results) {
+        setBatchResults(json.data);
+        // Zapisz pełne dane do historii
+        saveBatchToHistory(json.data);
+      }
+    } catch (err) {
+      setBatchError(err.message);
+    }
+  };
+
+  const saveBatchToHistory = (batchData) => {
+    try {
+      const batchHistory = JSON.parse(localStorage.getItem("batch_history") || "[]");
+      const trackA = batchData.results.reduce((s, p) => s + (p.data?.compensation?.track_a?.total || 0), 0);
+      const trackB = batchData.results.reduce((s, p) => s + (p.data?.compensation?.track_b?.total || 0), 0);
+      const newBatch = {
+        id: `batch_${new Date().getTime()}`,
+        date: nowPL(),
+        parcel_count: batchData.parcel_count,
+        successful: batchData.successful,
+        full_data: batchData.results, // PEŁNE DANE
+        summary: {
+          trackA: trackA,
+          trackB: trackB,
+          total: trackA + trackB,
+          collision: batchData.results.filter(p => p.data?.infrastructure?.power_lines?.detected).length,
+        }
+      };
+      const updated = [newBatch, ...batchHistory].slice(0, 10);
+      localStorage.setItem("batch_history", JSON.stringify(updated));
+      console.log("✅ Batch saved to history:", newBatch.id);
+    } catch (e) {
+      console.error("Error saving batch history:", e);
+    }
+  };
+
+  const handleUpload = async (e) => {
+    e.preventDefault();
+    if (!csvFile) {
+      toast.error("Wybierz plik CSV");
+      return;
+    }
+    setBatchLoading(true);
+    setBatchError(null);
+    const form = new FormData();
+    form.append("file", csvFile);
+    try {
+      const res = await fetch("/api/analyze/batch", { method: "POST", body: form });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Błąd");
+      setBatchResults(data.data);
+      // Zapisz do historii
+      if (data.data?.results) {
+        saveBatchToHistory(data.data);
+      }
+      setCsvFile(null);
+      toast.success("Batch załadowany i zapisany do historii!");
+    } catch (err) {
+      setBatchError(err.message);
+      toast.error("Błąd: " + err.message);
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
+  const downloadCSV = () => {
+    if (!batchResults?.results) return;
+    const rows = batchResults.results.map(p => [
+      p.parcel_id,
+      p.data?.infrastructure?.power_lines?.detected ? "TAK" : "NIE",
+      p.data?.infrastructure?.power_lines?.voltage || "—",
+      Math.round(p.data?.geometry?.area_m2 || 0),
+      Math.round(p.data?.market_data?.average_price_m2 || 0),
+      Math.round(p.data?.ksws?.property_value_total || 0),
+      Math.round(p.data?.infrastructure?.power_lines?.length_m || 0),  // Dł_Linii_m
+      Math.round(p.data?.ksws?.band_width_m || 0),
+      Math.round(p.data?.ksws?.band_area_m2 || 0),
+      Math.round(p.data?.compensation?.track_a?.total || 0),
+      Math.round(p.data?.compensation?.track_b?.total || 0),
+      Math.round((p.data?.compensation?.track_a?.total || 0) + (p.data?.compensation?.track_b?.total || 0)),
+    ]);
+    const headers = ["Parcel_ID", "Kolizja", "Napięcie", "Pow_m2", "Cena_PLN_m2", "Wartość_PLN", "Dł_Linii_m", "Szer_Pasa_m", "Pow_Pasa_m2", "Track_A", "Track_B", "Razem"];
+    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv]));
+    a.download = `batch_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    toast.success("CSV pobrany!");
+  };
+
+  const downloadBatchPDF = () => {
+    if (!batchResults?.results) return;
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      let yPos = 20;
+
+      // Header
+      doc.setFontSize(18);
+      doc.setFont(undefined, "bold");
+      doc.text("RAPORT ZBIORCZY - BATCH KSWS", pageWidth / 2, yPos, { align: "center" });
+
+      // Date
+      yPos += 10;
+      doc.setFontSize(10);
+      doc.setFont(undefined, "normal");
+      const now = new Date();
+      doc.text(`Data: ${now.toLocaleDateString("pl-PL")} ${now.toLocaleTimeString("pl-PL")}`, pageWidth / 2, yPos, { align: "center" });
+
+      // Separator
+      yPos += 12;
+      doc.setDrawColor(37, 117, 252);
+      doc.line(20, yPos, pageWidth - 20, yPos);
+
+      // Summary Stats
+      yPos += 10;
+      doc.setFontSize(12);
+      doc.setFont(undefined, "bold");
+      doc.text("PODSUMOWANIE ANALIZY", 20, yPos);
+
+      yPos += 8;
+      doc.setFontSize(10);
+      doc.setFont(undefined, "normal");
+
+      const totalTrackA = stats.trackA;
+      const totalTrackB = stats.trackB;
+      const collision = batchResults.results.filter(p => p.data?.infrastructure?.power_lines?.detected).length;
+
+      const summaryInfo = [
+        [`Liczba działek:`, stats.total],
+        [`Działek z kolizją:`, collision],
+        [`Działek bez kolizji:`, stats.total - collision],
+        [`Track A razem [PLN]:`, Math.round(totalTrackA).toLocaleString()],
+        [`Track B razem [PLN]:`, Math.round(totalTrackB).toLocaleString()],
+        [`RAZEM ODSZKODOWANIE [PLN]:`, Math.round(totalTrackA + totalTrackB).toLocaleString()],
+      ];
+
+      summaryInfo.forEach(([label, value], idx) => {
+        doc.setFont(undefined, "bold");
+        if (idx === 5) {
+          doc.setFontSize(11);
+          doc.setTextColor(39, 174, 96);
+        }
+        doc.text(label, 20, yPos);
+        doc.setFont(undefined, "bold");
+        doc.text(String(value), 100, yPos);
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(10);
+        yPos += 7;
+      });
+
+      // Detailed Table
+      yPos += 10;
+      if (yPos > pageHeight - 60) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      doc.setFontSize(11);
+      doc.setFont(undefined, "bold");
+      doc.text("SZCZEGÓŁY DZIAŁEK", 20, yPos);
+
+      yPos += 8;
+      doc.setFontSize(9);
+      doc.setFont(undefined, "normal");
+
+      const tableData = batchResults.results.map(p => [
+        p.parcel_id,
+        p.data?.infrastructure?.power_lines?.detected ? "✓" : "—",
+        p.data?.infrastructure?.power_lines?.voltage || "—",
+        Math.round(p.data?.geometry?.area_m2 || 0),
+        Math.round(p.data?.compensation?.track_a?.total || 0),
+        Math.round(p.data?.compensation?.track_b?.total || 0),
+        Math.round((p.data?.compensation?.track_a?.total || 0) + (p.data?.compensation?.track_b?.total || 0)),
+      ]);
+
+      const headers = ["ID", "Kolizja", "kV", "Pow[m²]", "Track A", "Track B", "Razem"];
+      const startY = yPos;
+      let currentY = startY;
+      const rowHeight = 6;
+      const cellPadding = 2;
+
+      // Draw header
+      doc.setFillColor(26, 32, 53);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont(undefined, "bold");
+      const colWidths = [30, 15, 15, 20, 20, 20, 25];
+      let xPos = 20;
+      headers.forEach((header, idx) => {
+        doc.text(header, xPos + cellPadding, currentY + rowHeight - 1, { maxWidth: colWidths[idx] - 2 * cellPadding });
+        xPos += colWidths[idx];
+      });
+      currentY += rowHeight;
+
+      // Draw rows
+      doc.setTextColor(0, 0, 0);
+      doc.setFont(undefined, "normal");
+      tableData.forEach((row, idx) => {
+        if (currentY > pageHeight - 20) {
+          doc.addPage();
+          currentY = 20;
+          // Redraw header on new page
+          doc.setFillColor(26, 32, 53);
+          doc.setTextColor(255, 255, 255);
+          doc.setFont(undefined, "bold");
+          xPos = 20;
+          headers.forEach((header, hIdx) => {
+            doc.text(header, xPos + cellPadding, currentY + rowHeight - 1, { maxWidth: colWidths[hIdx] - 2 * cellPadding });
+            xPos += colWidths[hIdx];
+          });
+          currentY += rowHeight;
+          doc.setTextColor(0, 0, 0);
+          doc.setFont(undefined, "normal");
+        }
+
+        if (idx % 2 === 0) {
+          doc.setFillColor(250, 250, 250);
+          doc.rect(20, currentY - 2, pageWidth - 40, rowHeight, "F");
+        }
+
+        xPos = 20;
+        row.forEach((cell, cellIdx) => {
+          const align = cellIdx === 0 ? "left" : "right";
+          doc.text(String(cell), xPos + cellPadding, currentY + rowHeight - 1, { maxWidth: colWidths[cellIdx] - 2 * cellPadding, align });
+          xPos += colWidths[cellIdx];
+        });
+        currentY += rowHeight;
+      });
+
+      // Footer
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text("Raport wygenerowany automatycznie przez Kalkulator KSWS", pageWidth / 2, pageHeight - 10, { align: "center" });
+
+      doc.save(`Batch_KSWS_Report_${new Date().toISOString().split("T")[0]}.pdf`);
+      toast.success("Raport PDF pobrany!");
+    } catch (err) {
+      console.error("PDF Error:", err);
+      toast.error("Błąd przy generowaniu PDF");
+    }
+  };
+
+  const stats = batchResults?.results ? {
+    total: batchResults.parcel_count || batchResults.results.length,
+    collision: batchResults.results.filter(p => p.data?.infrastructure?.power_lines?.detected).length,
+    trackA: batchResults.results.reduce((s, p) => s + (p.data?.compensation?.track_a?.total || 0), 0),
+    trackB: batchResults.results.reduce((s, p) => s + (p.data?.compensation?.track_b?.total || 0), 0),
+  } : null;
+
+  return (
+    <div className="ksws-card">
+      <div className="ksws-card-header">
+        <span className="ksws-card-header-icon">📄</span>
+        <div>
+          <div className="ksws-card-header-title">Batch CSV Analysis</div>
+          <div className="ksws-card-header-sub">Analiza wielu działek · załaduj CSV</div>
+        </div>
+      </div>
+      <div className="ksws-card-body">
+        {batchError && <div style={{ padding: "10px", background: "#ffe6e6", color: "#c0392b", borderRadius: "5px", marginBottom: "15px" }}>❌ {batchError}</div>}
+
+        <form onSubmit={handleUpload} style={{ marginBottom: "20px", padding: "15px", background: "#f9f9f9", borderRadius: "8px" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+            <input type="file" accept=".csv" onChange={(e) => setCsvFile(e.target.files?.[0])} style={{ flex: 1, minWidth: "150px" }} />
+            <button type="submit" disabled={!csvFile || batchLoading} className="ksws-btn ksws-btn-primary" style={{ whiteSpace: "nowrap" }}>
+              {batchLoading ? "⏳ Upload..." : "🚀 Upload CSV"}
+            </button>
+            <button type="button" onClick={downloadCSV} disabled={!batchResults?.results} className="ksws-btn" style={{ whiteSpace: "nowrap" }}>
+              ⬇️ CSV
+            </button>
+            <button type="button" onClick={downloadBatchPDF} disabled={!batchResults?.results} className="ksws-btn" style={{ whiteSpace: "nowrap", background: "#27ae60", color: "white", border: "none" }}>
+              📄 PDF Raport
+            </button>
+          </div>
+        </form>
+
+        {stats && (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px", marginBottom: "20px" }}>
+              <div style={{ background: "white", padding: "15px", borderRadius: "8px", border: "1px solid #eee", textAlign: "center" }}>
+                <div style={{ fontSize: "1.8em", fontWeight: "800" }}>{stats.total}</div>
+                <div style={{ fontSize: "0.8em", color: "#888" }}>Razem</div>
+              </div>
+              <div style={{ background: "white", padding: "15px", borderRadius: "8px", border: "1px solid #eee", textAlign: "center" }}>
+                <div style={{ fontSize: "1.8em", fontWeight: "800", color: "#f39c12" }}>{stats.collision}</div>
+                <div style={{ fontSize: "0.8em", color: "#888" }}>Kolizja</div>
+              </div>
+              <div style={{ background: "white", padding: "15px", borderRadius: "8px", border: "1px solid #eee", textAlign: "center" }}>
+                <div style={{ fontSize: "1.5em", fontWeight: "800", color: "#27ae60" }}>{fmtPLN(stats.trackA)}</div>
+                <div style={{ fontSize: "0.8em", color: "#888" }}>Track A</div>
+              </div>
+              <div style={{ background: "white", padding: "15px", borderRadius: "8px", border: "1px solid #eee", textAlign: "center" }}>
+                <div style={{ fontSize: "1.5em", fontWeight: "800", color: "#f39c12" }}>{fmtPLN(stats.trackB)}</div>
+                <div style={{ fontSize: "0.8em", color: "#888" }}>Track B</div>
+              </div>
+            </div>
+
+            <div style={{ background: "linear-gradient(135deg, #27ae60, #2ecc71)", color: "white", padding: "20px", borderRadius: "8px", textAlign: "center", marginBottom: "20px" }}>
+              <div style={{ fontSize: "0.9em", marginBottom: "5px" }}>💰 RAZEM</div>
+              <div style={{ fontSize: "2em", fontWeight: "800" }}>{fmtPLN(stats.trackA + stats.trackB)}</div>
+            </div>
+
+            {/* MAPA ZBIORCZA Z WARSTWĄ UZBROJENIA TERENU */}
+            <div style={{ background: "white", borderRadius: "8px", border: "1px solid #eee", padding: "20px", marginBottom: "20px" }}>
+              <h3 style={{ marginTop: 0, marginBottom: "15px" }}>🗺️ Mapa geograficzna - wszystkie {stats.total} działek</h3>
+              <MapContainer center={[52.0, 20.0]} zoom={7} style={{ height: "550px", width: "100%", borderRadius: "6px", marginBottom: "15px", border: "1px solid #ddd" }}>
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap contributors' />
+                <InfrastructureLayer />
+                <BatchParcelsLayer results={batchResults.results} />
+              </MapContainer>
+              <div style={{ padding: "12px", background: "#f9f9f9", borderRadius: "6px", fontSize: "0.85em", color: "#555", lineHeight: "1.6" }}>
+                <div style={{ marginBottom: "8px", fontWeight: "600" }}>Legenda:</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <strong style={{ color: "#ff0000" }}>🔴 {stats.collision}</strong> działek z <strong>kolizją</strong>
+                  </div>
+                  <div>
+                    <strong style={{ color: "#00aa00" }}>🟢 {stats.total - stats.collision}</strong> działek <strong>bez kolizji</strong>
+                  </div>
+                  <div style={{ gridColumn: "1 / -1", marginTop: "5px", paddingTop: "8px", borderTop: "1px solid #ddd" }}>
+                    <strong style={{ color: "#2575fc" }}>📡 Warstwa uzbrojenia terenu</strong> - drogi, gazociągi, wodociągi, przewody energetyczne (GESUT GUGiK)
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ overflowX: "auto", background: "white", borderRadius: "8px", border: "1px solid #eee" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8em" }}>
+                <thead>
+                  <tr style={{ background: "#1a2035", color: "white", position: "sticky", top: 0 }}>
+                    <th style={{ padding: "10px", textAlign: "left" }}>ID</th>
+                    <th style={{ padding: "10px", textAlign: "center" }}>Kolizja</th>
+                    <th style={{ padding: "10px", textAlign: "right" }}>Napięcie [kV]</th>
+                    <th style={{ padding: "10px", textAlign: "right" }}>Pow_m2</th>
+                    <th style={{ padding: "10px", textAlign: "right" }}>Cena_PLN/m²</th>
+                    <th style={{ padding: "10px", textAlign: "right" }}>Wartość_PLN</th>
+                    <th style={{ padding: "10px", textAlign: "right" }}>Dł_Linii_m</th>
+                    <th style={{ padding: "10px", textAlign: "right" }}>Szer_Pasa_m</th>
+                    <th style={{ padding: "10px", textAlign: "right" }}>Pow_Pasa_m2</th>
+                    <th style={{ padding: "10px", textAlign: "right" }}>Track_A_PLN</th>
+                    <th style={{ padding: "10px", textAlign: "right" }}>Track_B_PLN</th>
+                    <th style={{ padding: "10px", textAlign: "right" }}>Razem_PLN</th>
+                    <th style={{ padding: "10px", textAlign: "center" }}>PDF</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {batchResults.results.map((p, i) => {
+                    const ta = p.data?.compensation?.track_a?.total || 0;
+                    const tb = p.data?.compensation?.track_b?.total || 0;
+                    const area = p.data?.geometry?.area_m2 || 0;
+                    const price = p.data?.market_data?.average_price_m2 || 0;
+                    const value = p.data?.ksws?.property_value_total || 0;
+                    const lineLength = p.data?.infrastructure?.power_lines?.length_m || 0;
+                    const bandWidth = p.data?.ksws?.band_width_m || 0;
+                    const bandArea = p.data?.ksws?.band_area_m2 || 0;
+                    const collision = p.data?.infrastructure?.power_lines?.detected;
+
+                    return (
+                      <tr key={i} style={{ borderBottom: "1px solid #f0f0f0", background: i % 2 === 0 ? "#fafafa" : "white" }}>
+                        <td style={{ padding: "8px", fontWeight: "bold" }}>
+                          <a href={`https://www.geoportal.gov.pl/pl/mapy-i-dane/usluga-wyszukiwania-dzialek-ewidencyjnych/?par_id=${encodeURIComponent(p.parcel_id || "")}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2575fc", textDecoration: "none" }} title="Otwórz w Geoportalu">
+                            {p.parcel_id} 🔗
+                          </a>
+                        </td>
+                        <td style={{ padding: "8px", textAlign: "center" }}>{collision ? "✅" : "❌"}</td>
+                        <td style={{ padding: "8px", textAlign: "right" }}>{p.data?.infrastructure?.power_lines?.voltage || "—"}</td>
+                        <td style={{ padding: "8px", textAlign: "right" }}>{Math.round(area).toLocaleString()}</td>
+                        <td style={{ padding: "8px", textAlign: "right" }}>{Math.round(price).toLocaleString()}</td>
+                        <td style={{ padding: "8px", textAlign: "right" }}>{Math.round(value).toLocaleString()}</td>
+                        <td style={{ padding: "8px", textAlign: "right" }}>{Math.round(lineLength).toLocaleString()}</td>
+                        <td style={{ padding: "8px", textAlign: "right" }}>{Math.round(bandWidth).toLocaleString()}</td>
+                        <td style={{ padding: "8px", textAlign: "right" }}>{Math.round(bandArea).toLocaleString()}</td>
+                        <td style={{ padding: "8px", textAlign: "right", color: "#27ae60", fontWeight: "bold" }}>{Math.round(ta).toLocaleString()}</td>
+                        <td style={{ padding: "8px", textAlign: "right", color: "#f39c12", fontWeight: "bold" }}>{Math.round(tb).toLocaleString()}</td>
+                        <td style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>{Math.round(ta + tb).toLocaleString()}</td>
+                        <td style={{ padding: "8px", textAlign: "center" }}>
+                          <button
+                            onClick={() => generateParcelPDF(p, batchResults)}
+                            style={{ padding: "4px 10px", background: "#2575fc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.85em" }}
+                          >
+                            📄
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ════ HISTORIA BATCHÓW ════ */}
+      <div className="ksws-card">
+        <div className="ksws-card-header">
+          <span className="ksws-card-header-icon">📋</span>
+          <div>
+            <div className="ksws-card-header-title">Historia Batch CSV</div>
+            <div className="ksws-card-header-sub">Poprzednie analizy batchów</div>
+          </div>
+        </div>
+        <div className="ksws-card-body">
+          {(() => {
+            try {
+              const batchHist = JSON.parse(localStorage.getItem("batch_history") || "[]");
+              if (!batchHist.length) {
+                return <div style={{ padding: "20px", textAlign: "center", color: "#999" }}>📭 Brak historii batchów</div>;
+              }
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {batchHist.map((b, idx) => (
+                    <div key={idx} style={{ background: "#f9f9f9", padding: "15px", borderRadius: "8px", border: "1px solid #eee", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>📅 {b.date}</div>
+                        <div style={{ fontSize: "0.9em", color: "#666", marginBottom: "5px" }}>📦 Działek: {b.parcel_count}</div>
+                        <div style={{ fontSize: "0.9em", color: "#27ae60", fontWeight: "bold" }}>💰 Track A: {Math.round(b.summary?.trackA || 0).toLocaleString()} PLN</div>
+                        <div style={{ fontSize: "0.9em", color: "#f39c12", fontWeight: "bold" }}>💰 Track B: {Math.round(b.summary?.trackB || 0).toLocaleString()} PLN</div>
+                        <div style={{ fontSize: "0.85em", color: "#555", marginTop: "5px" }}>🎯 Razem: {Math.round(b.summary?.total || 0).toLocaleString()} PLN</div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const updated = batchHist.filter((_, i) => i !== idx);
+                          localStorage.setItem("batch_history", JSON.stringify(updated));
+                          window.location.reload();
+                        }}
+                        style={{ padding: "8px 16px", background: "#e74c3c", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", whiteSpace: "nowrap" }}
+                        title="Usuń z historii"
+                      >
+                        🗑️ Usuń
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              );
+            } catch (e) {
+              return <div style={{ color: "#c0392b" }}>Błąd historii: {e.message}</div>;
+            }
+          })()}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── localStorage history helpers ──────────────────────────────────────────────
 const HISTORY_KEY = "ksws_history";
@@ -299,9 +1037,13 @@ export default function KalkulatorPage() {
   const [allResults, setAllResults] = useState(null);
   const [mapCenter, setMapCenter] = useState(DEFAULT_CENTER);
   const [mapZoom, setMapZoom] = useState(DEFAULT_ZOOM);
+  const [powerGeoJSON, setPowerGeoJSON] = useState(null);
 
   // ── History ──────────────────────────────────────────────────────────────────
   const [history, setHistory] = useState(loadHistory);
+
+  // ── Error state (ULDK niedostępny itp.) ──────────────────────────────────────
+  const [apiError, setApiError] = useState(null);
 
   // ── runAnalysis ──────────────────────────────────────────────────────────────
   const runAnalysis = async (e) => {
@@ -313,6 +1055,7 @@ export default function KalkulatorPage() {
     }
     setLoading(true);
     setResult(null);
+    setApiError(null);
     try {
       const res = await fetch("/api/analyze", {
         method: "POST",
@@ -342,18 +1085,30 @@ export default function KalkulatorPage() {
       if (
         first.data_status === "ERROR" ||
         first.master_record?.status === "ERROR"
-      )
-        throw new Error(
-          first.master_record?.message || first.error || "Działka nie znaleziona"
-        );
+      ) {
+        const backendMsg = first.master_record?.message || first.error || "";
+        const isUldkDown = backendMsg.includes("niedostępny") || backendMsg.includes("timeout");
+        setApiError({ msg: backendMsg, isUldkDown });
+        throw new Error(backendMsg || "Działka nie znaleziona — sprawdź format ID");
+      }
 
       setAllResults(data.parcels);
       setResult(first);
 
       const centroid = first.master_record?.geometry?.centroid_ll;
       if (Array.isArray(centroid) && centroid[0] != null) {
-        setMapCenter([Number(centroid[1]), Number(centroid[0])]);
+        const lat = Number(centroid[1]);
+        const lon = Number(centroid[0]);
+        setMapCenter([lat, lon]);
         setMapZoom(16);
+      }
+
+      // Użyj GeoJSON linii energetycznych z backendu (Overpass już pobrany przez backend)
+      const backendPowerGeoJSON = first.master_record?.infrastructure?.power_lines?.geojson;
+      if (backendPowerGeoJSON?.features?.length > 0) {
+        setPowerGeoJSON(backendPowerGeoJSON);
+      } else {
+        setPowerGeoJSON(null);
       }
 
       // Save to history
@@ -369,7 +1124,13 @@ export default function KalkulatorPage() {
 
       toast.success("Analiza zakończona ✓");
     } catch (err) {
-      toast.error(err.message || "Wystąpił błąd.");
+      const msg = err.message || "Wystąpił błąd.";
+      toast.error(msg, { autoClose: 8000 });
+      // Jeśli nie ustawiono apiError wcześniej (np. błąd sieci), ustaw teraz
+      if (!apiError) {
+        const isNet = msg.includes("fetch") || msg.includes("Failed") || msg.includes("network");
+        setApiError({ msg, isUldkDown: isNet });
+      }
     } finally {
       setLoading(false);
     }
@@ -562,6 +1323,11 @@ export default function KalkulatorPage() {
             </div>
           )}
 
+          {/* ════ BATCH CSV PAGE ════ */}
+          {activeNav === "batch" && (
+            <BatchCSVSection />
+          )}
+
           {/* ════ ANALIZA PAGE ════ */}
           {activeNav === "analiza" && (<>
 
@@ -586,7 +1352,7 @@ export default function KalkulatorPage() {
                       className="ksws-form-input"
                       value={parcelIds}
                       onChange={(e) => setParcelIds(e.target.value)}
-                      placeholder="np. 141906_5.0029.60 lub Szapsk 302/6"
+                      placeholder="TERYT: 141906_5.0029.60  lub podaj obręb + numer w polach poniżej"
                     />
                   </div>
 
@@ -818,13 +1584,71 @@ export default function KalkulatorPage() {
             </div>
           )}
 
+          {/* ════ BANER BŁĘDU — ULDK niedostępny ════ */}
+          {apiError && !result && (
+            <div style={{
+              background: apiError.isUldkDown ? "#fff8e1" : "#fdecea",
+              border: `1px solid ${apiError.isUldkDown ? "#f39c12" : "#e74c3c"}`,
+              borderLeft: `5px solid ${apiError.isUldkDown ? "#f39c12" : "#e74c3c"}`,
+              borderRadius: 10,
+              padding: "18px 24px",
+              marginBottom: 16,
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 16,
+            }}>
+              <div style={{ fontSize: 28, lineHeight: 1 }}>
+                {apiError.isUldkDown ? "⏳" : "❌"}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, color: "#1a2035", marginBottom: 6 }}>
+                  {apiError.isUldkDown ? "ULDK GUGiK chwilowo niedostępny" : "Błąd wyszukiwania działki"}
+                </div>
+                <div style={{ fontSize: "0.85rem", color: "#555", marginBottom: 12 }}>
+                  {apiError.isUldkDown
+                    ? "Serwer rządowy ULDK (uldk.gugik.gov.pl) nie odpowiedział. To zjawisko przejściowe — spróbuj ponownie."
+                    : apiError.msg}
+                </div>
+                <div style={{ fontSize: "0.8rem", color: "#666", marginBottom: 12, background: "rgba(0,0,0,0.03)", padding: "10px", borderRadius: "5px" }}>
+                  <strong>💡 Sposoby podania działki:</strong><br/>
+                  1️⃣ Format TERYT (jeśli znasz pełny identyfikator): <code style={{ background: "#fff", padding: "2px 4px", borderRadius: 3 }}>141906_5.0029.60</code><br/>
+                  2️⃣ Obręb + numer działki: podaj w polach poniżej np. Obręb: "Niedarzyn" + numer: "114/2"<br/>
+                  3️⃣ Jeśli działka ma ukośnik (np. 142010_2.0011.401/2) — spróbuj bez ukośnika: "142010_2.0011.401"
+                </div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button
+                    className="ksws-btn ksws-btn-primary"
+                    onClick={runAnalysis}
+                    disabled={loading}
+                    style={{ padding: "8px 20px", fontSize: "0.85rem" }}
+                  >
+                    🔄 Spróbuj ponownie
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ════════════════════ WYNIKI ════════════════════ */}
           {result && (
             <>
               {/* ── NAGŁÓWEK WYNIKOWY (ciemna karta) ── */}
               <div className="ksws-result-header">
                 <div className="ksws-result-header-left">
-                  <div className="ksws-result-header-id">{result.parcel_id}</div>
+                  <div className="ksws-result-header-id">
+                    {result.parcel_id}
+                    {result.parcel_id && (
+                      <a
+                        href={`https://geoportal.gov.pl/?zoom=18&x=${result.data?.geometry?.centroid_ll?.[0] || 20}&y=${result.data?.geometry?.centroid_ll?.[1] || 52}&baselayer=ORTOFOTOMAPA`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Otwórz działkę w Geoportalu"
+                        style={{ marginLeft: "12px", fontSize: "0.7em", color: "#2575fc", textDecoration: "none", border: "1px solid #2575fc", padding: "4px 8px", borderRadius: "3px", display: "inline-block" }}
+                      >
+                        🗺️ Geoportal
+                      </a>
+                    )}
+                  </div>
                   <div className="ksws-result-header-meta">
                     {locationStr} · {nowPL()}
                   </div>
@@ -1017,12 +1841,6 @@ export default function KalkulatorPage() {
                     >
                       🏔 Outdoor
                     </button>
-                    <button
-                      className={`ksws-tab-btn${activeTab === "map3d" ? " active" : ""}`}
-                      onClick={() => setActiveTab("map3d")}
-                    >
-                      🧊 3D
-                    </button>
                   </div>
 
                   <div className="ksws-tab-content">
@@ -1042,11 +1860,8 @@ export default function KalkulatorPage() {
                             maxZoom={19}
                           />
 
-                          {/* Overpass OSM — linie i słupy energetyczne (dane OSM) */}
-                          <OverpassPowerLayer
-                            center={mapCenter}
-                            bboxPadding={0.025}
-                          />
+                          {/* Overpass OSM — linie i słupy energetyczne (pre-loaded) */}
+                          <PreloadedPowerLayer geoJSON={powerGeoJSON} />
 
                           {/* Granica działki (GeoJSON) */}
                           <GeoJSONLayers
@@ -1133,28 +1948,6 @@ export default function KalkulatorPage() {
                       </div>
                     )}
 
-                    {activeTab === "map3d" && (
-                      <div className="ksws-map-container-3d">
-                        <Map3D
-                          parcels={(allResults || (result ? [result] : [])).map(p => {
-                            const mr = p.master_record || {};
-                            const g = mr.geometry || {};
-                            // Map3D expects parcel.geometry as GeoJSON Feature geometry + centroid_ll
-                            const geojson = g.geojson_ll || g.geojson || null;
-                            return {
-                              parcel_id: p.parcel_id,
-                              geometry: geojson
-                                ? { ...geojson, area_m2: g.area_m2, centroid_ll: g.centroid_ll }
-                                : null,
-                              infrastructure: mr.infrastructure || {},
-                            };
-                          }).filter(p => p.geometry)}
-                          infrastructureTypes={["elektro","gaz","woda","teleko"]}
-                          center={mapCenter[1] != null ? [mapCenter[1], mapCenter[0]] : [20.156, 52.685]}
-                          zoom={mapZoom}
-                        />
-                      </div>
-                    )}
                   </div>
                 </div>
 
