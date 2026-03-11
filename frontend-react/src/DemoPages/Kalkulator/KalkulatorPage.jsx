@@ -525,17 +525,8 @@ function BatchCSVSection() {
   const [csvFile, setCsvFile] = useState(null);
   const [batchError, setBatchError] = useState(null);
 
-  useEffect(() => {
-    // Załaduj ostatni batch z historii localStorage (nie z hardcoded ID)
-    try {
-      const hist = JSON.parse(localStorage.getItem("batch_history") || "[]");
-      if (hist.length > 0 && hist[0].full_data) {
-        setBatchResults({ results: hist[0].full_data, parcel_count: hist[0].parcel_count, successful: hist[0].successful });
-      }
-    } catch (e) {
-      console.error("Batch history load error:", e);
-    }
-  }, []);
+  // CSV tab ZAWSZE startuje czysto — poprzednie wyniki są w "Historia Batch CSV" poniżej
+  // Nie ładujemy automatycznie ostatniego batcha
 
   const saveBatchToHistory = (batchData) => {
     try {
@@ -1305,8 +1296,37 @@ export default function KalkulatorPage() {
                         className="ksws-history-full-item"
                         style={{ flexDirection: "column", gap: "8px", padding: "16px", cursor: "pointer" }}
                         onClick={() => {
-                          setParcelIds(item.parcel_id);
-                          setActiveNav("analiza");
+                          // Załaduj zapisany raport z historii (bez ponownego fetchowania z API)
+                          if (item.full_master_record) {
+                            const mr = item.full_master_record;
+                            const fakeResult = {
+                              parcel_id: item.parcel_id,
+                              data_status: "REAL",
+                              master_record: mr,
+                            };
+                            setResult(fakeResult);
+                            setAllResults([fakeResult]);
+                            setParcelIds(item.parcel_id);
+                            // Ustaw mapę na centroid działki
+                            const centroid = mr.geometry?.centroid_ll;
+                            if (Array.isArray(centroid) && centroid[0] != null) {
+                              setMapCenter([Number(centroid[1]), Number(centroid[0])]);
+                              setMapZoom(16);
+                            }
+                            // Ustaw GeoJSON linii energetycznych
+                            const plGeo = mr.infrastructure?.power_lines?.geojson;
+                            if (plGeo?.features?.length > 0) {
+                              setPowerGeoJSON(plGeo);
+                            } else {
+                              setPowerGeoJSON(null);
+                            }
+                            setActiveNav("analiza");
+                            toast.success("Załadowano raport z historii ✓");
+                          } else {
+                            // Fallback: brak zapisanego raportu → uruchom nową analizę
+                            setParcelIds(item.parcel_id);
+                            setActiveNav("analiza");
+                          }
                         }}
                       >
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
