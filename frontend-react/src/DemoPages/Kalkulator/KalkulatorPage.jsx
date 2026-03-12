@@ -95,15 +95,17 @@ function ParcelMiniMap({ geojson, centroid, collision, height = 260 }) {
       { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.5 }
     ).addTo(map);
 
-    // ── obrys działki: zielony fill + ciemna granica — jak geoportal ──
+    // ── obrys działki: jaskrawy kontur bez wypełnienia — widoczny na ortofoto ──
     if (geojson?.coordinates) {
+      const borderColor = collision ? "#ff6d00" : "#00e5ff"; // pomarańcz = kolizja, cyjan = ok
       const layer = L.geoJSON(geojson, {
         style: {
-          color: "#1a2035",     // ciemna granica (jak czarny obrys w geoportalu)
-          weight: 2.5,
-          fillColor: "#27ae60", // zielony fill
-          fillOpacity: 0.28,
+          color: borderColor,
+          weight: 3,
+          fillColor: borderColor,
+          fillOpacity: 0.06,   // prawie przezroczysty — widać podkład
           dashArray: null,
+          opacity: 1,
         }
       }).addTo(map);
       try { map.fitBounds(layer.getBounds(), { padding: [10, 10], maxZoom: 18 }); }
@@ -134,10 +136,12 @@ function ParcelMiniMap({ geojson, centroid, collision, height = 260 }) {
       {ready && (
         <div style={{
           position: "absolute", bottom: "7px", left: "8px", zIndex: 999,
-          background: collision ? "rgba(220,53,69,0.85)" : "rgba(25,135,84,0.85)",
-          color: "white", padding: "2px 9px", borderRadius: "8px",
+          background: collision ? "rgba(255,109,0,0.9)" : "rgba(0,229,255,0.15)",
+          color: collision ? "white" : "#00e5ff",
+          border: `1px solid ${collision ? "rgba(255,109,0,0.6)" : "rgba(0,229,255,0.6)"}`,
+          padding: "2px 9px", borderRadius: "8px",
           fontSize: "0.66em", fontWeight: "700", pointerEvents: "none",
-          backdropFilter: "blur(3px)",
+          backdropFilter: "blur(4px)",
         }}>
           {collision ? "⚡ kolizja" : "✓ ok"}
         </div>
