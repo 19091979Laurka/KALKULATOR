@@ -953,37 +953,129 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
 
         {stats && (
           <>
-            {/* ── KPI SUMMARY ROW ── */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(155px, 1fr))", gap: "12px", marginBottom: "16px" }}>
-              {[
-                { icon: "📦", label: "Działek razem",    value: stats.total,                         sub: "załadowanych z CSV",      color: "#3498db" },
-                { icon: "⚡", label: "Z kolizją",         value: stats.collision,                     sub: "wykryta infrastruktura",   color: "#e74c3c" },
-                { icon: "✅", label: "Bez kolizji",       value: stats.total - stats.collision,       sub: "brak linii w pasie",       color: "#27ae60" },
-                { icon: "⚖️", label: "Track A — sąd",    value: fmtPLN(stats.trackA), isAmount: true, sub: "ścieżka sądowa",          color: "#2c3e50" },
-                { icon: "🤝", label: "Track B — negocjacje", value: fmtPLN(stats.trackB), isAmount: true, sub: "próg negocjacyjny",     color: "#f39c12" },
-              ].map((k, i) => (
-                <div key={i} style={{
-                  background: "white", borderRadius: "12px",
-                  padding: "18px 16px", boxShadow: "0 2px 10px rgba(0,0,0,0.07)",
-                  borderTop: `4px solid ${k.color}`,
-                  display: "flex", flexDirection: "column", gap: "4px",
-                }}>
-                  <div style={{ fontSize: "20px", marginBottom: "2px" }}>{k.icon}</div>
-                  <div style={{ fontSize: "0.67em", textTransform: "uppercase", letterSpacing: "1px", color: "#7f8c8d", fontWeight: "700" }}>{k.label}</div>
-                  <div style={{ fontSize: k.isAmount ? "1.05em" : "1.7em", fontWeight: "900", color: "#1a1a2e", lineHeight: 1.1 }}>{k.value}</div>
-                  <div style={{ fontSize: "0.68em", color: "#b2bec3", marginTop: "2px" }}>{k.sub}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ background: "linear-gradient(135deg, #1a1a2e, #2c3e50)", color: "white", padding: "18px 28px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", boxShadow: "0 4px 15px rgba(0,0,0,0.2)", flexWrap: "wrap", gap: "12px" }}>
-              <div>
-                <div style={{ fontSize: "0.72em", textTransform: "uppercase", letterSpacing: "1.5px", color: "rgba(255,255,255,0.55)", marginBottom: "4px" }}>💰 Razem odszkodowanie (Track A + B)</div>
-                <div style={{ fontSize: "2em", fontWeight: "900", color: "#f39c12", textShadow: "0 2px 8px rgba(243,156,18,0.3)" }}>{fmtPLN(stats.trackA + stats.trackB)}</div>
+            {/* ════ DASHBOARD WRAPPER ════ */}
+            <div style={{ background: "#f0f3f8", borderRadius: "16px", padding: "20px", marginBottom: "20px" }}>
+
+              {/* ── Row 1: KPI cards (5 kolumn) ── */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))", gap: "14px", marginBottom: "16px" }}>
+                {[
+                  { label: "Działek razem",     value: stats.total,               sub: "załadowanych z CSV",    icon: "📦", accent: "#3498db", big: true },
+                  { label: "Z kolizją",          value: stats.collision,           sub: "wykryta linia",         icon: "⚡", accent: "#e74c3c", big: true },
+                  { label: "Bez kolizji",        value: stats.total-stats.collision, sub: "brak infrastruktury", icon: "✅", accent: "#27ae60", big: true },
+                  { label: "Track A (sądowy)",   value: fmtPLN(stats.trackA),     sub: "ścieżka sądowa",        icon: "⚖️", accent: "#2c3e50", big: false },
+                  { label: "Track B (negocjacje)", value: fmtPLN(stats.trackB),   sub: "próg negocjacyjny",     icon: "🤝", accent: "#f39c12", big: false },
+                ].map((k, i) => (
+                  <div key={i} style={{
+                    background: "white", borderRadius: "12px", padding: "18px 16px",
+                    boxShadow: "0 1px 6px rgba(0,0,0,0.06)", position: "relative", overflow: "hidden",
+                  }}>
+                    {/* accent line left */}
+                    <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "4px", background: k.accent, borderRadius: "12px 0 0 12px" }} />
+                    <div style={{ paddingLeft: "8px" }}>
+                      <div style={{ fontSize: "18px", marginBottom: "6px" }}>{k.icon}</div>
+                      <div style={{ fontSize: "0.65em", textTransform: "uppercase", letterSpacing: "1.2px", color: "#95a5a6", fontWeight: "700", marginBottom: "4px" }}>{k.label}</div>
+                      <div style={{ fontSize: k.big ? "2em" : "1.1em", fontWeight: "800", color: "#1a2035", lineHeight: 1.1, marginBottom: "3px" }}>{k.value}</div>
+                      <div style={{ fontSize: "0.65em", color: "#b2bec3" }}>{k.sub}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div style={{ textAlign: "right", fontSize: "0.8em", color: "rgba(255,255,255,0.5)", lineHeight: 1.8 }}>
-                <div>Track A: <strong style={{ color: "#74b9ff" }}>{fmtPLN(stats.trackA)}</strong></div>
-                <div>Track B: <strong style={{ color: "#fdcb6e" }}>{fmtPLN(stats.trackB)}</strong></div>
-                <div>Działek: <strong style={{ color: "white" }}>{stats.total}</strong> ({stats.collision} z kolizją)</div>
+
+              {/* ── Row 2: Chart + Summary ── */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "14px" }}>
+
+                {/* ── Compensation per parcel — horizontal bars (jak w dashboardzie) ── */}
+                <div style={{ background: "white", borderRadius: "12px", padding: "20px", boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
+                  <div style={{ fontSize: "0.75em", fontWeight: "700", color: "#1a2035", marginBottom: "14px", letterSpacing: "0.3px" }}>
+                    📊 Odszkodowanie wg działki
+                  </div>
+                  {(() => {
+                    const maxRazem = Math.max(...batchResults.results.map(p =>
+                      (p.data?.compensation?.track_a?.total || 0) + (p.data?.compensation?.track_b?.total || 0)
+                    ), 1);
+                    const show = batchResults.results.slice(0, 12);
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
+                        {show.map((p, i) => {
+                          const ta = p.data?.compensation?.track_a?.total || 0;
+                          const tb = p.data?.compensation?.track_b?.total || 0;
+                          const razem = ta + tb;
+                          const pctA = maxRazem > 0 ? (ta / maxRazem * 100) : 0;
+                          const pctB = maxRazem > 0 ? (tb / maxRazem * 100) : 0;
+                          const collision = !!p.data?.infrastructure?.power_lines?.detected;
+                          const shortId = (p.parcel_id || "").split(".").pop() || p.parcel_id;
+                          return (
+                            <div key={i} style={{ display: "grid", gridTemplateColumns: "90px 1fr 90px", gap: "8px", alignItems: "center" }}>
+                              <div style={{ fontSize: "0.72em", color: "#636e72", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.parcel_id}>
+                                <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", background: collision ? "#e74c3c" : "#27ae60", marginRight: "5px", verticalAlign: "middle" }} />
+                                {shortId}
+                              </div>
+                              <div style={{ background: "#f4f6f8", borderRadius: "4px", height: "20px", position: "relative", overflow: "hidden" }}>
+                                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pctA}%`, background: "#3498db", borderRadius: "4px 0 0 4px", transition: "width 0.3s" }} />
+                                <div style={{ position: "absolute", left: `${pctA}%`, top: 0, bottom: 0, width: `${pctB}%`, background: "#f39c12", transition: "width 0.3s" }} />
+                              </div>
+                              <div style={{ fontSize: "0.73em", fontWeight: "700", color: "#1a2035", textAlign: "right" }}>
+                                {Math.round(razem / 1000).toLocaleString()}k PLN
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {batchResults.results.length > 12 && (
+                          <div style={{ fontSize: "0.68em", color: "#95a5a6", textAlign: "center", paddingTop: "6px" }}>
+                            + {batchResults.results.length - 12} kolejnych działek
+                          </div>
+                        )}
+                        <div style={{ display: "flex", gap: "16px", marginTop: "8px", paddingTop: "8px", borderTop: "1px solid #f0f0f0" }}>
+                          <span style={{ fontSize: "0.68em", color: "#636e72", display: "flex", alignItems: "center", gap: "5px" }}>
+                            <span style={{ display: "inline-block", width: "12px", height: "8px", background: "#3498db", borderRadius: "2px" }} /> Track A (sąd)
+                          </span>
+                          <span style={{ fontSize: "0.68em", color: "#636e72", display: "flex", alignItems: "center", gap: "5px" }}>
+                            <span style={{ display: "inline-block", width: "12px", height: "8px", background: "#f39c12", borderRadius: "2px" }} /> Track B (negocjacje)
+                          </span>
+                          <span style={{ fontSize: "0.68em", color: "#636e72", display: "flex", alignItems: "center", gap: "5px" }}>
+                            <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", background: "#e74c3c" }} /> Kolizja
+                          </span>
+                          <span style={{ fontSize: "0.68em", color: "#636e72", display: "flex", alignItems: "center", gap: "5px" }}>
+                            <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", background: "#27ae60" }} /> Bez kol.
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* ── Summary — Payment received style ── */}
+                <div style={{ background: "white", borderRadius: "12px", padding: "20px", boxShadow: "0 1px 6px rgba(0,0,0,0.06)", minWidth: "220px", display: "flex", flexDirection: "column", gap: "0" }}>
+                  <div style={{ fontSize: "0.75em", fontWeight: "700", color: "#1a2035", marginBottom: "16px" }}>💰 Łączne roszczenie</div>
+                  <div style={{ marginBottom: "20px" }}>
+                    <div style={{ fontSize: "0.62em", textTransform: "uppercase", letterSpacing: "1px", color: "#95a5a6", fontWeight: "700", marginBottom: "2px" }}>Razem (A+B)</div>
+                    <div style={{ fontSize: "1.65em", fontWeight: "900", color: "#1a2035", lineHeight: 1.1 }}>{fmtPLN(stats.trackA + stats.trackB)}</div>
+                  </div>
+                  <div style={{ borderTop: "1px solid #f0f2f5", paddingTop: "14px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: "0.62em", color: "#95a5a6", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.8px" }}>⚖️ Track A</div>
+                        <div style={{ fontSize: "1em", fontWeight: "800", color: "#2c3e50" }}>{fmtPLN(stats.trackA)}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: "1px" }}>
+                        {[3,5,4,6,5,7,4].map((h,i)=><div key={i} style={{width:"4px", height:`${h*3}px`, background:"#3498db", borderRadius:"2px", opacity:0.7}} />)}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: "0.62em", color: "#95a5a6", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.8px" }}>🤝 Track B</div>
+                        <div style={{ fontSize: "1em", fontWeight: "800", color: "#e67e22" }}>{fmtPLN(stats.trackB)}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: "1px" }}>
+                        {[5,7,6,8,7,9,6].map((h,i)=><div key={i} style={{width:"4px", height:`${h*3}px`, background:"#f39c12", borderRadius:"2px", opacity:0.7}} />)}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={downloadBatchPDF}
+                    style={{ marginTop: "auto", paddingTop: "16px", background: "#1a2035", color: "white", border: "none", borderRadius: "8px", padding: "10px 16px", cursor: "pointer", fontWeight: "700", fontSize: "0.82em", marginTop: "18px" }}
+                  >📊 Raport zbiorczy</button>
+                </div>
               </div>
             </div>
 
@@ -1101,27 +1193,19 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
                       ))}
                     </div>
 
-                    {/* — Track A / B / RAZEM — */}
-                    <div style={{
-                      padding: "10px 16px", borderTop: "1px solid #f0f0f0",
-                      display: "grid", gridTemplateColumns: "1fr 1fr 1.3fr", gap: "8px",
-                    }}>
-                      <div style={{ background: "#f0fff4", borderRadius: "7px", padding: "8px 10px", textAlign: "center" }}>
-                        <div style={{ fontSize: "0.66em", color: "#888", marginBottom: "2px" }}>⚖️ Track A (sądowy)</div>
-                        <div style={{ fontSize: "0.93em", fontWeight: "800", color: "#27ae60" }}>{Math.round(ta).toLocaleString()} PLN</div>
+                    {/* — Track A / B / RAZEM — clean dashboard style ── */}
+                    <div style={{ padding: "10px 16px", borderTop: "1px solid #f0f2f5", background: "#fafbfc", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0" }}>
+                      <div style={{ padding: "8px 10px", borderRight: "1px solid #f0f0f0" }}>
+                        <div style={{ fontSize: "0.62em", textTransform: "uppercase", letterSpacing: "0.8px", color: "#95a5a6", fontWeight: "700", marginBottom: "3px" }}>⚖️ Track A</div>
+                        <div style={{ fontSize: "0.96em", fontWeight: "800", color: "#2c3e50" }}>{Math.round(ta).toLocaleString()}<span style={{ fontSize: "0.65em", fontWeight: "400", color: "#95a5a6" }}> PLN</span></div>
                       </div>
-                      <div style={{ background: "#fff8f0", borderRadius: "7px", padding: "8px 10px", textAlign: "center" }}>
-                        <div style={{ fontSize: "0.66em", color: "#888", marginBottom: "2px" }}>🤝 Track B (negocjacje)</div>
-                        <div style={{ fontSize: "0.93em", fontWeight: "800", color: "#f39c12" }}>{Math.round(tb).toLocaleString()} PLN</div>
+                      <div style={{ padding: "8px 10px", borderRight: "1px solid #f0f0f0" }}>
+                        <div style={{ fontSize: "0.62em", textTransform: "uppercase", letterSpacing: "0.8px", color: "#95a5a6", fontWeight: "700", marginBottom: "3px" }}>🤝 Track B</div>
+                        <div style={{ fontSize: "0.96em", fontWeight: "800", color: "#e67e22" }}>{Math.round(tb).toLocaleString()}<span style={{ fontSize: "0.65em", fontWeight: "400", color: "#95a5a6" }}> PLN</span></div>
                       </div>
-                      <div style={{
-                        background: collision
-                          ? "linear-gradient(135deg, #c0392b, #e74c3c)"
-                          : "linear-gradient(135deg, #1e8449, #27ae60)",
-                        borderRadius: "7px", padding: "8px 10px", textAlign: "center",
-                      }}>
-                        <div style={{ fontSize: "0.66em", color: "rgba(255,255,255,0.75)", marginBottom: "2px" }}>💰 RAZEM</div>
-                        <div style={{ fontSize: "1.05em", fontWeight: "900", color: "white" }}>{Math.round(razem).toLocaleString()} PLN</div>
+                      <div style={{ padding: "8px 10px" }}>
+                        <div style={{ fontSize: "0.62em", textTransform: "uppercase", letterSpacing: "0.8px", color: "#95a5a6", fontWeight: "700", marginBottom: "3px" }}>💰 Razem</div>
+                        <div style={{ fontSize: "1.05em", fontWeight: "900", color: collision ? "#e74c3c" : "#27ae60" }}>{Math.round(razem).toLocaleString()}<span style={{ fontSize: "0.65em", fontWeight: "400", color: "#95a5a6" }}> PLN</span></div>
                       </div>
                     </div>
                   </div>
