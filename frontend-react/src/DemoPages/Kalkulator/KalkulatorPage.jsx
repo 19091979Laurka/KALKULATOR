@@ -789,12 +789,10 @@ function BatchCSVSection() {
       <div className="ksws-card-body">
         {batchError && <div style={{ padding: "10px", background: "#ffe6e6", color: "#c0392b", borderRadius: "5px", marginBottom: "15px" }}>❌ {batchError}</div>}
 
-        <form onSubmit={handleUpload} style={{ marginBottom: "20px", padding: "15px", background: "#f9f9f9", borderRadius: "8px" }}>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+        <form onSubmit={handleUpload} style={{ marginBottom: "20px" }}>
+          {/* KROK 1: Wybierz plik */}
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", padding: "15px", background: "#f9f9f9", borderRadius: "8px" }}>
             <input type="file" accept=".csv" onChange={(e) => setCsvFile(e.target.files?.[0])} style={{ flex: 1, minWidth: "150px" }} />
-            <button type="submit" disabled={!csvFile || batchLoading} className="ksws-btn ksws-btn-primary" style={{ whiteSpace: "nowrap" }}>
-              {batchLoading ? "⏳ Upload..." : "🚀 Upload CSV"}
-            </button>
             <button type="button" onClick={downloadCSV} disabled={!batchResults?.results} className="ksws-btn" style={{ whiteSpace: "nowrap" }}>
               ⬇️ CSV
             </button>
@@ -802,6 +800,35 @@ function BatchCSVSection() {
               📄 PDF Raport
             </button>
           </div>
+
+          {/* KROK 2: Po wyborze pliku → duży przycisk URUCHOM ANALIZĘ */}
+          {csvFile && (
+            <div style={{ marginTop: "12px", padding: "16px", background: "linear-gradient(135deg, #1a1a2e, #16213e)", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
+              <div style={{ color: "#ccc", fontSize: "0.9rem" }}>
+                <span style={{ color: "#f39c12", fontWeight: 700 }}>📋 {csvFile.name}</span>
+                <span style={{ marginLeft: "10px", opacity: 0.7 }}>({(csvFile.size / 1024).toFixed(1)} KB)</span>
+              </div>
+              <button
+                type="submit"
+                disabled={batchLoading}
+                style={{
+                  padding: "12px 32px",
+                  fontSize: "1.05rem",
+                  fontWeight: 700,
+                  background: batchLoading ? "#555" : "linear-gradient(135deg, #e74c3c, #c0392b)",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: batchLoading ? "wait" : "pointer",
+                  whiteSpace: "nowrap",
+                  boxShadow: "0 4px 15px rgba(231,76,60,0.4)",
+                  transition: "transform 0.1s",
+                }}
+              >
+                {batchLoading ? "⏳ Analizuję..." : "🚀 Uruchom analizę"}
+              </button>
+            </div>
+          )}
         </form>
 
         {stats && (
