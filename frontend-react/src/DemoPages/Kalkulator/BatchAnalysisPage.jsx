@@ -1,569 +1,146 @@
 import React, { useState, useEffect } from "react";
-import {
-  Card, CardBody, CardTitle, Button, Progress, Badge, Spinner,
-  Table, Row, Col, Alert, Input, Label, FormGroup, Modal, ModalHeader,
-  ModalBody, ModalFooter
-} from "reactstrap";
-import { MapContainer, TileLayer, GeoJSON as GeoJSONComponent } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import { toast } from "react-toastify";
-import PageTitleAlt2 from "../../Layout/AppMain/PageTitleAlt2";
-import Map3D from "../../Components/Map3D";
-import ReportGenerator from "../../Components/ReportGenerator";
 import "./BatchAnalysisPage.css";
 
-// Leaflet icon fix
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-});
-
-const fmt = (v, dec = 0) =>
-  v != null && !isNaN(v)
-    ? Number(v).toLocaleString("pl-PL", { minimumFractionDigits: dec, maximumFractionDigits: dec })
-    : "—";
-const fmtPLN = (v) => (v != null && !isNaN(v) ? `${fmt(v)} PLN` : "—");
-
-export const BatchAnalysisPage = () => {
-  const [csvFile, setCsvFile] = useState(null);
-  const [loading, setLoading] = useState(false);
+const BatchAnalysisPage = () => {
   const [results, setResults] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [selectedBatch, setSelectedBatch] = useState(null);
-  const [detailsModal, setDetailsModal] = useState(false);
-  const [sortBy, setSortBy] = useState("parcel_id");
-  const [activeTab, setActiveTab] = useState("map2d"); // "map2d" | "map3d" | "table" | "history"
-  const [selectedParcelId, setSelectedParcelId] = useState(null);
-  const [selectedParcelData, setSelectedParcelData] = useState(null);
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [infraFilters, setInfraFilters] = useState({
-    elektro: true,
-    gaz: true,
-    woda: true,
-    teleko: true
-  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Load history on mount
   useEffect(() => {
-    loadHistory();
+    console.log("✅ BatchAnalysisPage mounted");
+    loadData();
   }, []);
 
-  const loadHistory = async () => {
+  const loadData = async () => {
+    console.log("🔄 Loading data...");
     try {
-      const res = await fetch("/api/history");
-      const data = await res.json();
-      if (data.ok) {
-        setHistory(data.history || []);
-      }
-    } catch (e) {
-      console.error("Error loading history:", e);
-    }
-  };
+      setLoading(true);
+      setError(null);
 
-  const handleCSVUpload = async (e) => {
-    e.preventDefault();
-    if (!csvFile) {
-      toast.error("Wybierz plik CSV");
-      return;
-    }
-
-    setLoading(true);
-    const formData = new FormData();
-    formData.append("file", csvFile);
-
-    try {
-      const res = await fetch("/api/analyze/batch", {
-        method: "POST",
-        body: formData,
-      });
+      const res = await fetch("/api/history/20260311_194524");
+      console.log("📡 Response status:", res.status);
 
       if (!res.ok) {
-        throw new Error(await res.text());
+        throw new Error(`HTTP ${res.status}`);
       }
 
-      const data = await res.json();
-      setResults(data);
-      setCsvFile(null);
-      loadHistory();
-      toast.success(`✅ Analizowano ${data.summary.total} działek`);
-    } catch (error) {
-      toast.error(`❌ Błąd: ${error.message}`);
+      const json = await res.json();
+      console.log("✅ Data loaded:", json.data?.results?.length, "parcels");
+
+      if (json.ok && json.data?.results) {
+        setResults(json.data);
+      }
+    } catch (err) {
+      console.error("❌ Error:", err);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadBatchDetails = async (batch_id) => {
-    try {
-      const res = await fetch(`/api/history/${batch_id}`);
-      const data = await res.json();
-      if (data.ok) {
-        setSelectedBatch(data.data);
-        setDetailsModal(true);
-      }
-    } catch (e) {
-      toast.error("Błąd pobierania szczegółów");
-    }
-  };
+  if (loading) {
+    return <div style={{ padding: "40px" }}>⏳ Ładowanie...</div>;
+  }
 
-  const handleParcelClick = (parcelId, parcelData) => {
-    setSelectedParcelId(parcelId);
-    setSelectedParcelData(parcelData);
-    setShowReportModal(true);
-  };
-
-  const toggleInfraFilter = (type) => {
-    setInfraFilters(prev => ({
-      ...prev,
-      [type]: !prev[type]
-    }));
-  };
-
-  const downloadResultsCSV = () => {
-    if (!results?.parcels) return;
-
-    const rows = results.parcels.map(p => {
-      const d = p.data?.compensation || {};
-      const inf = p.data?.infrastructure?.power_lines || {};
-      return {
-        "Dz. Nr": p.parcel_id,
-        "Konflikt": inf.detected ? "TAK" : "NIE",
-        "Napięcie": inf.voltage || "—",
-        "Zajęta pow. [m²]": d.band_area_m2 || "—",
-        "Linia długość [m]": inf.length_m || "—",
-        "Track A [PLN]": fmtPLN(d.track_a_total),
-        "Track B [PLN]": fmtPLN(d.track_b_total),
-      };
-    });
-
-    const csv = [
-      Object.keys(rows[0]).join(","),
-      ...rows.map(r => Object.values(r).map(v => `"${v}"`).join(","))
-    ].join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `wyniki_${new Date().toISOString().slice(0,10)}.csv`;
-    link.click();
-  };
-
-  const getVoltageColor = (voltage) => {
-    const colors = { WN: "#e74c3c", SN: "#f39c12", nN: "#27ae60", brak: "#95a5a6" };
-    return colors[voltage] || colors.brak;
-  };
-
-  // Collective map
-  const collectiveGeoJSON = () => {
-    if (!results?.parcels) return { type: "FeatureCollection", features: [] };
-
-    return {
-      type: "FeatureCollection",
-      features: results.parcels
-        .filter(p => p.data?.geometry?.geojson)
-        .map((p, idx) => ({
-          ...p.data.geometry.geojson,
-          properties: {
-            ...p.data.geometry.geojson.properties,
-            parcelId: p.parcel_id,
-            voltage: p.data.infrastructure?.power_lines?.voltage || "brak",
-            has_conflict: p.data.infrastructure?.power_lines?.detected,
-            index: idx
-          }
-        }))
-    };
-  };
-
-  const CollectiveMap = () => {
-    const geoJSON = collectiveGeoJSON();
-
-    const onEachFeature = (feature, layer) => {
-      const voltage = feature.properties?.voltage || "brak";
-      const color = getVoltageColor(voltage);
-
-      layer.setStyle({
-        color: color,
-        weight: 2,
-        fillOpacity: 0.3,
-      });
-
-      const popup = `
-        <div style="font-size: 12px;">
-          <strong>${feature.properties.parcelId}</strong><br/>
-          Napięcie: ${voltage}<br/>
-          Konflikt: ${feature.properties.has_conflict ? "TAK ⚠️" : "NIE ✅"}
-        </div>
-      `;
-      layer.bindPopup(popup);
-    };
-
+  if (error) {
     return (
-      <MapContainer center={[52.0, 20.0]} zoom={7} style={{ height: "500px", width: "100%" }}>
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; OpenStreetMap contributors'
-        />
-        {geoJSON.features.length > 0 && <GeoJSONComponent data={geoJSON} onEachFeature={onEachFeature} />}
-      </MapContainer>
+      <div style={{ padding: "40px", color: "red" }}>
+        <h2>❌ Błąd: {error}</h2>
+        <button onClick={loadData}>Spróbuj ponownie</button>
+      </div>
     );
-  };
+  }
 
-  // Results table
-  const renderTable = (parcels) => {
-    const sorted = [...(parcels || [])].sort((a, b) => {
-      const aVal = a.parcel_id || "";
-      const bVal = b.parcel_id || "";
-      return aVal.localeCompare(bVal);
-    });
+  if (!results) {
+    return <div style={{ padding: "40px" }}>📥 Brak danych</div>;
+  }
 
-    return (
-      <table className="batch-table">
-        <thead>
-          <tr>
-            <th>Dz. Nr</th>
-            <th>Konflikt?</th>
-            <th>Napięcie</th>
-            <th>Zajęta pow. [m²]</th>
-            <th>Linia [m]</th>
-            <th>Track A [PLN]</th>
-            <th>Track B [PLN]</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((p, idx) => {
-            const inf = p.data?.infrastructure?.power_lines || {};
-            const comp = p.data?.compensation || {};
-            const hasConflict = inf.detected;
-
-            return (
-              <tr key={idx} style={{ backgroundColor: p.status === "ERROR" ? "#fadbd8" : "transparent" }}>
-                <td><strong>{p.parcel_id}</strong></td>
-                <td>
-                  <span className={`batch-table-badge ${hasConflict ? "danger" : "success"}`}>
-                    {hasConflict ? "TAK ⚠️" : "NIE ✅"}
-                  </span>
-                </td>
-                <td>
-                  <div
-                    className="batch-table-color-box"
-                    style={{ backgroundColor: getVoltageColor(inf.voltage) }}
-                  />
-                  {inf.voltage || "—"}
-                </td>
-                <td className="text-right">{fmt(comp.band_area_m2, 1)}</td>
-                <td className="text-right">{fmt(inf.length_m, 1)}</td>
-                <td className="text-right"><strong>{fmtPLN(comp.track_a_total)}</strong></td>
-                <td className="text-right"><strong>{fmtPLN(comp.track_b_total)}</strong></td>
-                <td>
-                  <span className={`batch-table-badge ${p.status === "ERROR" ? "danger" : "info"}`}>
-                    {p.status}
-                  </span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    );
+  const stats = {
+    total: results.parcel_count || results.results?.length || 0,
+    ok: results.successful || 0,
+    collision: (results.results || []).filter(p => p.data?.infrastructure?.power_lines?.detected).length,
+    trackA: (results.results || []).reduce((s, p) => s + (p.data?.compensation?.track_a?.total || 0), 0),
+    trackB: (results.results || []).reduce((s, p) => s + (p.data?.compensation?.track_b?.total || 0), 0),
   };
 
   return (
-    <div className="batch-analysis-wrapper">
-      <div className="batch-header">
-        <h1>📊 Analiza zbiorcza działek</h1>
-        <p>Wgraj CSV, analizuj wszystkie działki naraz, pobierz wyniki</p>
-      </div>
+    <div style={{ padding: "30px", maxWidth: "1400px", margin: "0 auto" }}>
+      <h1>📊 Batch Analysis KSWS - {stats.total} Działek</h1>
 
-      <div className="batch-content">
-        {/* Upload Card */}
-        <div className="batch-upload-card">
-          <h3>📋 Upload CSV</h3>
-          <label className="batch-upload-label">
-            Format: parcel_id, obreb, county, municipality
-          </label>
-
-          <form onSubmit={handleCSVUpload}>
-            <div className="batch-file-input-wrapper">
-              <input
-                id="csvInput"
-                type="file"
-                accept=".csv"
-                className="batch-file-input"
-                onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
-                disabled={loading}
-              />
-              <label htmlFor="csvInput" className="batch-file-button">
-                📁 Wybierz plik CSV
-              </label>
-              {csvFile && (
-                <div className="batch-file-name">
-                  ✓ {csvFile.name}
-                </div>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              className="batch-analyze-button"
-              disabled={loading || !csvFile}
-            >
-              {loading ? (
-                <>
-                  <Spinner size="sm" /> Analizowanie...
-                </>
-              ) : (
-                <>🚀 Analizuj działki</>
-              )}
-            </button>
-          </form>
+      {/* STATS CARDS */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "15px", marginBottom: "30px" }}>
+        <div style={{ background: "white", padding: "20px", borderRadius: "8px", border: "1px solid #eee", borderLeft: "4px solid #2575fc", textAlign: "center" }}>
+          <div style={{ fontSize: "2em", fontWeight: "800" }}>{stats.total}</div>
+          <div style={{ fontSize: "0.85em", color: "#888" }}>Razem</div>
         </div>
-
-        {/* History Card */}
-        <div className="batch-history-card">
-          <h3>📚 Historia analiz</h3>
-          {history.length === 0 ? (
-            <div className="batch-history-empty">
-              Brak historii analiz<br/>
-              <small>Wgrywajcie pliki CSV aby je zobaczyć</small>
-            </div>
-          ) : (
-            <div className="batch-history-list">
-              {history.map((h) => (
-                <div key={h.batch_id} className="batch-history-item">
-                  <div className="batch-history-item-header">
-                    <div className="batch-history-item-name">{h.file_name}</div>
-                    <div className="batch-history-item-badge">
-                      {h.successful}/{h.total}
-                    </div>
-                  </div>
-                  <div className="batch-history-item-date">
-                    {new Date(h.timestamp).toLocaleString("pl-PL")}
-                  </div>
-                  <div className="batch-history-item-details">
-                    <div className="batch-history-item-stat">
-                      <span className="batch-history-item-stat-label">✓ Pomyślne:</span>
-                      <span className="batch-history-item-stat-value">{h.successful}</span>
-                    </div>
-                    <div className="batch-history-item-stat">
-                      <span className="batch-history-item-stat-label">✗ Błędy:</span>
-                      <span className="batch-history-item-stat-value">{h.total - h.successful}</span>
-                    </div>
-                  </div>
-                  <button
-                    className="batch-history-item-button"
-                    onClick={() => loadBatchDetails(h.batch_id)}
-                  >
-                    Szczegóły →
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+        <div style={{ background: "white", padding: "20px", borderRadius: "8px", border: "1px solid #eee", borderLeft: "4px solid #27ae60", textAlign: "center" }}>
+          <div style={{ fontSize: "2em", fontWeight: "800", color: "#27ae60" }}>{stats.ok}</div>
+          <div style={{ fontSize: "0.85em", color: "#888" }}>OK</div>
+        </div>
+        <div style={{ background: "white", padding: "20px", borderRadius: "8px", border: "1px solid #eee", borderLeft: "4px solid #f39c12", textAlign: "center" }}>
+          <div style={{ fontSize: "2em", fontWeight: "800", color: "#f39c12" }}>{stats.collision}</div>
+          <div style={{ fontSize: "0.85em", color: "#888" }}>Kolizja</div>
+        </div>
+        <div style={{ background: "white", padding: "20px", borderRadius: "8px", border: "1px solid #eee", borderLeft: "4px solid #27ae60", textAlign: "center" }}>
+          <div style={{ fontSize: "1.5em", fontWeight: "800", color: "#27ae60" }}>{Math.round(stats.trackA).toLocaleString()}</div>
+          <div style={{ fontSize: "0.75em", color: "#888" }}>Track A</div>
+        </div>
+        <div style={{ background: "white", padding: "20px", borderRadius: "8px", border: "1px solid #eee", borderLeft: "4px solid #f39c12", textAlign: "center" }}>
+          <div style={{ fontSize: "1.5em", fontWeight: "800", color: "#f39c12" }}>{Math.round(stats.trackB).toLocaleString()}</div>
+          <div style={{ fontSize: "0.75em", color: "#888" }}>Track B</div>
         </div>
       </div>
 
-      {/* Results Section */}
-      {results && (
-        <div className="batch-results-section">
-          {/* Summary Stats */}
-          <div className="batch-results-card">
-            <div className="batch-results-header">
-              <h3>✅ Wyniki analizy</h3>
-              <button className="batch-download-button" onClick={downloadResultsCSV}>
-                📥 Pobierz CSV
-              </button>
-            </div>
+      {/* TOTAL BOX */}
+      <div style={{ background: "linear-gradient(135deg, #27ae60, #2ecc71)", color: "white", padding: "30px", borderRadius: "10px", textAlign: "center", marginBottom: "30px" }}>
+        <div style={{ fontSize: "1.2em", marginBottom: "10px" }}>💰 RAZEM ODSZKODOWANIA</div>
+        <div style={{ fontSize: "3em", fontWeight: "800" }}>{Math.round(stats.trackA + stats.trackB).toLocaleString()} PLN</div>
+      </div>
 
-            <div className="batch-summary-stats">
-              <div className="batch-stat-box">
-                <div className="batch-stat-label">Wszystkie działki</div>
-                <div className="batch-stat-value">{fmt(results.summary.total)}</div>
-              </div>
-              <div className="batch-stat-box success">
-                <div className="batch-stat-label">✓ Analizowane</div>
-                <div className="batch-stat-value">{fmt(results.summary.successful)}</div>
-              </div>
-              <div className="batch-stat-box error">
-                <div className="batch-stat-label">✗ Błędy</div>
-                <div className="batch-stat-value">{fmt(results.summary.failed)}</div>
-              </div>
-            </div>
+      {/* DATA TABLE */}
+      <div style={{ background: "white", borderRadius: "8px", border: "1px solid #eee", overflow: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85em" }}>
+          <thead>
+            <tr style={{ background: "#1a2035", color: "white", position: "sticky", top: 0 }}>
+              <th style={{ padding: "12px", textAlign: "left" }}>Działka</th>
+              <th style={{ padding: "12px" }}>Kolizja</th>
+              <th style={{ padding: "12px" }}>Napięcie</th>
+              <th style={{ padding: "12px", textAlign: "right" }}>Pow [m²]</th>
+              <th style={{ padding: "12px", textAlign: "right" }}>Cena [PLN/m²]</th>
+              <th style={{ padding: "12px", textAlign: "right" }}>Track A</th>
+              <th style={{ padding: "12px", textAlign: "right" }}>Track B</th>
+              <th style={{ padding: "12px", textAlign: "right" }}>Razem</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(results.results || []).map((p, i) => {
+              const area = p.data?.geometry?.area_m2 || 0;
+              const price = p.data?.market_data?.average_price_m2 || 0;
+              const trackA = p.data?.compensation?.track_a?.total || 0;
+              const trackB = p.data?.compensation?.track_b?.total || 0;
+              const voltage = p.data?.infrastructure?.power_lines?.voltage || "—";
+              const collision = p.data?.infrastructure?.power_lines?.detected;
 
-            <div style={{ marginTop: "20px" }}>
-              <div style={{ fontSize: "0.9rem", color: "#7f8c8d", marginBottom: "8px" }}>
-                Postęp: {((results.summary.successful / results.summary.total) * 100).toFixed(0)}%
-              </div>
-              <div className="batch-progress-bar">
-                <div
-                  className="batch-progress-fill"
-                  style={{ width: `${(results.summary.successful / results.summary.total) * 100}%` }}
-                />
-              </div>
-            </div>
-          </div>
+              return (
+                <tr key={i} style={{ borderBottom: "1px solid #f0f0f0", background: i % 2 === 0 ? "#fafafa" : "white" }}>
+                  <td style={{ padding: "10px" }}><strong>{p.parcel_id}</strong></td>
+                  <td style={{ padding: "10px", textAlign: "center" }}>{collision ? "✅" : "❌"}</td>
+                  <td style={{ padding: "10px", textAlign: "center" }}>{voltage}</td>
+                  <td style={{ padding: "10px", textAlign: "right" }}>{Math.round(area)}</td>
+                  <td style={{ padding: "10px", textAlign: "right" }}>{Math.round(price)}</td>
+                  <td style={{ padding: "10px", textAlign: "right", color: "#27ae60", fontWeight: "bold" }}>{Math.round(trackA)}</td>
+                  <td style={{ padding: "10px", textAlign: "right", color: "#f39c12", fontWeight: "bold" }}>{Math.round(trackB)}</td>
+                  <td style={{ padding: "10px", textAlign: "right", fontWeight: "bold" }}>{Math.round(trackA + trackB)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-          {/* TAB SWITCHER */}
-          <div className="batch-tab-switcher">
-            <button
-              className={`batch-tab-button ${activeTab === "map2d" ? "active" : ""}`}
-              onClick={() => setActiveTab("map2d")}
-            >
-              🗺️ Mapa 2D
-            </button>
-            <button
-              className={`batch-tab-button ${activeTab === "map3d" ? "active" : ""}`}
-              onClick={() => setActiveTab("map3d")}
-            >
-              🎭 Mapa 3D
-            </button>
-            <button
-              className={`batch-tab-button ${activeTab === "table" ? "active" : ""}`}
-              onClick={() => setActiveTab("table")}
-            >
-              📊 Tabela
-            </button>
-          </div>
-
-          {/* Map 2D */}
-          {activeTab === "map2d" && (
-            <div className="batch-map-card">
-              <h3>🗺️ Mapa zbiorcza (2D)</h3>
-              <div className="batch-map-container">
-                <CollectiveMap />
-              </div>
-              <div className="batch-map-legend">
-                <div className="batch-map-legend-item">
-                  <div className="batch-map-legend-color" style={{ backgroundColor: "#e74c3c" }}></div>
-                  <span>WN (Wysoki napór)</span>
-                </div>
-                <div className="batch-map-legend-item">
-                  <div className="batch-map-legend-color" style={{ backgroundColor: "#f39c12" }}></div>
-                  <span>SN (Średni napór)</span>
-                </div>
-                <div className="batch-map-legend-item">
-                  <div className="batch-map-legend-color" style={{ backgroundColor: "#27ae60" }}></div>
-                  <span>nN (Niski napór)</span>
-                </div>
-                <div className="batch-map-legend-item">
-                  <div className="batch-map-legend-color" style={{ backgroundColor: "#95a5a6" }}></div>
-                  <span>Brak infrastruktury</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Map 3D */}
-          {activeTab === "map3d" && results?.parcels && (
-            <div className="batch-map-card">
-              <h3>🎭 Mapa 3D - Infrastruktura</h3>
-              <div style={{ marginBottom: "15px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 15px", background: infraFilters.elektro ? "#d5f4e6" : "#ecf0f1", borderRadius: "8px", cursor: "pointer", fontWeight: "500" }}>
-                  <input type="checkbox" checked={infraFilters.elektro} onChange={() => toggleInfraFilter("elektro")} />
-                  ⚡ Elektro
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 15px", background: infraFilters.gaz ? "#fff3cd" : "#ecf0f1", borderRadius: "8px", cursor: "pointer", fontWeight: "500" }}>
-                  <input type="checkbox" checked={infraFilters.gaz} onChange={() => toggleInfraFilter("gaz")} />
-                  🔥 Gaz
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 15px", background: infraFilters.woda ? "#d6eaf8" : "#ecf0f1", borderRadius: "8px", cursor: "pointer", fontWeight: "500" }}>
-                  <input type="checkbox" checked={infraFilters.woda} onChange={() => toggleInfraFilter("woda")} />
-                  💧 Woda
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 15px", background: infraFilters.teleko ? "#f0ebf8" : "#ecf0f1", borderRadius: "8px", cursor: "pointer", fontWeight: "500" }}>
-                  <input type="checkbox" checked={infraFilters.teleko} onChange={() => toggleInfraFilter("teleko")} />
-                  📡 Teleko
-                </label>
-              </div>
-              <div style={{ height: "600px", borderRadius: "12px", overflow: "hidden", boxShadow: "0 4px 15px rgba(0,0,0,0.1)" }}>
-                <Map3D
-                  parcels={results.parcels.map(p => ({
-                    parcel_id: p.parcel_id,
-                    ...p.data
-                  }))}
-                  infrastructureTypes={Object.keys(infraFilters).filter(k => infraFilters[k])}
-                  center={[20.2, 52.69]}
-                  zoom={1}
-                  onParcelClick={handleParcelClick}
-                  selectedParcelId={selectedParcelId}
-                />
-              </div>
-              <div style={{ marginTop: "15px", padding: "15px", background: "#f8f9fa", borderRadius: "8px", fontSize: "0.9rem", color: "#7f8c8d" }}>
-                <strong>💡 Podpowiedź:</strong> Kliknij na działkę aby zobaczyć szczegóły. Drag = Obracanie, Scroll = Zoom
-              </div>
-            </div>
-          )}
-
-          {/* Table */}
-          {activeTab === "table" && (
-            <div className="batch-table-card">
-              <h3>📊 Szczegóły działek</h3>
-              <div style={{ overflowX: "auto" }}>
-                {renderTable(results.parcels)}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Details Modal */}
-      <Modal isOpen={detailsModal} toggle={() => setDetailsModal(false)} size="lg" className="batch-details-modal">
-        <div className="batch-modal-header">
-          <h5>📋 Historia: {selectedBatch?.batch_id}</h5>
-        </div>
-        <div className="batch-modal-body">
-          {selectedBatch && renderTable(selectedBatch.results)}
-        </div>
-        <div style={{ padding: "20px", textAlign: "right", borderTop: "1px solid #ecf0f1" }}>
-          <button
-            style={{
-              background: "#95a5a6",
-              color: "white",
-              border: "none",
-              padding: "10px 20px",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600"
-            }}
-            onClick={() => setDetailsModal(false)}
-          >
-            Zamknij
-          </button>
-        </div>
-      </Modal>
-
-      {/* Report Modal */}
-      <Modal isOpen={showReportModal} toggle={() => setShowReportModal(false)} size="lg" className="batch-report-modal" scrollable>
-        <div className="batch-modal-header">
-          <h5>📄 Raport: {selectedParcelId}</h5>
-          <button
-            style={{
-              background: "none",
-              border: "none",
-              color: "white",
-              fontSize: "1.5rem",
-              cursor: "pointer",
-              padding: "0"
-            }}
-            onClick={() => setShowReportModal(false)}
-          >
-            ✕
-          </button>
-        </div>
-        <div className="batch-modal-body">
-          {selectedParcelData && (
-            <ReportGenerator
-              parcelData={selectedParcelData}
-              onDownload={(info) => {
-                toast.success(`✅ Raport ${info.format.toUpperCase()} pobrany`);
-              }}
-            />
-          )}
-        </div>
-      </Modal>
+      <p style={{ textAlign: "center", color: "#999", marginTop: "15px" }}>
+        Pokazano {results.results?.length || 0} działek
+      </p>
     </div>
   );
 };

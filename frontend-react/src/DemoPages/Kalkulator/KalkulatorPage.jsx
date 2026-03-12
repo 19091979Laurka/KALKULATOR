@@ -30,14 +30,15 @@ function MiniMapLayers({ geojson, collision }) {
   return null;
 }
 
-// ── ParcelMiniMap — plain L.map() (no react-leaflet) — zero float issues ─────
-function ParcelMiniMap({ geojson, centroid, collision }) {
+// ── ParcelMiniMap — satelita + obrys działki jak geoportal ───────────────────
+// plain L.map() na DOM div → zero react-leaflet z-index leaks
+function ParcelMiniMap({ geojson, centroid, collision, height = 260 }) {
   const [ready, setReady] = useState(false);
-  const wrapRef  = useRef(null);   // outer wrapper — observed for visibility
-  const mapDivRef = useRef(null);  // inner div — Leaflet mounts here
-  const leafMap  = useRef(null);   // L.Map instance
+  const wrapRef   = useRef(null);
+  const mapDivRef = useRef(null);
+  const leafMap   = useRef(null);
 
-  // ── 1. Lazy-init: only when card enters viewport ──
+  // lazy: init only when card scrolls into view
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -49,11 +50,10 @@ function ParcelMiniMap({ geojson, centroid, collision }) {
     return () => obs.disconnect();
   }, []);
 
-  // ── 2. Create Leaflet map once `ready` flips true ──
   useEffect(() => {
     if (!ready || !mapDivRef.current || leafMap.current) return;
 
-    // compute center
+    // centroid [lon, lat] → Leaflet [lat, lon]
     let center = [52.069, 19.480];
     if (Array.isArray(centroid) && centroid.length >= 2 && centroid[0] != null) {
       center = [Number(centroid[1]), Number(centroid[0])];
@@ -68,60 +68,65 @@ function ParcelMiniMap({ geojson, centroid, collision }) {
       } catch(_) {}
     }
 
-    // init plain L.map — no react-leaflet involved
     const map = L.map(mapDivRef.current, {
-      center, zoom: 14,
+      center, zoom: 15,
       zoomControl: false, attributionControl: false,
       scrollWheelZoom: false, dragging: true, doubleClickZoom: false,
     });
 
-    // Topo base + OIM power-lines overlay
+    // ── satelita jak geoportal (Esri WorldImagery) ──
     L.tileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
-      { maxZoom: 18 }
-    ).addTo(map);
-    L.tileLayer(
-      "https://tiles.openinframap.org/power/{z}/{x}/{y}.png",
-      { opacity: 0.9, maxZoom: 19 }
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 19 }
     ).addTo(map);
 
-    // draw parcel polygon
+    // ── obrys działki: zielony fill + ciemna granica — jak geoportal ──
     if (geojson?.coordinates) {
-      const color = collision ? "#e74c3c" : "#27ae60";
       const layer = L.geoJSON(geojson, {
-        style: { color, weight: 2.5, fillColor: color, fillOpacity: 0.22 }
+        style: {
+          color: "#1a2035",     // ciemna granica (jak czarny obrys w geoportalu)
+          weight: 2.5,
+          fillColor: "#27ae60", // zielony fill
+          fillOpacity: 0.28,
+          dashArray: null,
+        }
       }).addTo(map);
-      try { map.fitBounds(layer.getBounds(), { padding: [6, 6] }); }
-      catch(_) { map.setView(center, 14); }
+      try { map.fitBounds(layer.getBounds(), { padding: [10, 10], maxZoom: 18 }); }
+      catch(_) { map.setView(center, 15); }
+    } else {
+      map.setView(center, 15);
     }
 
     leafMap.current = map;
     return () => { if (leafMap.current) { leafMap.current.remove(); leafMap.current = null; } };
-  }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const MAP_H = 200;
-  const accentBg = collision ? "rgba(231,76,60,0.88)" : "rgba(39,174,96,0.88)";
+  }, [ready]); // eslint-disable-line
 
   return (
-    <div ref={wrapRef} style={{ position: "relative", height: `${MAP_H}px`, overflow: "hidden", background: "#dde3ea" }}>
-      {/* placeholder while not in viewport yet */}
+    <div
+      ref={wrapRef}
+      style={{ position: "relative", width: "100%", height: `${height}px`, overflow: "hidden", background: "#c8d0d8", borderRadius: "0 0 14px 14px" }}
+    >
+      {/* placeholder */}
       {!ready && (
-        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "8px", color: "#95a5a6" }}>
-          <div style={{ fontSize: "1.8em" }}>🗺️</div>
-          <div style={{ fontSize: "0.72em" }}>Ładowanie mapy…</div>
+        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", color: "#7f8c8d" }}>
+          <div style={{ fontSize: "1.6em" }}>🛰️</div>
+          <div style={{ fontSize: "0.7em", fontWeight: "600" }}>Satelita · ładowanie…</div>
         </div>
       )}
-      {/* Leaflet target — always in DOM so ref is stable */}
-      <div ref={mapDivRef} style={{ height: "100%", width: "100%", display: ready ? "block" : "none" }} />
-      {/* overlay badges */}
-      {ready && <>
-        <div style={{ position:"absolute", bottom:"8px", left:"10px", zIndex:999, background:accentBg, color:"white", padding:"3px 10px", borderRadius:"10px", fontSize:"0.68em", fontWeight:"700", pointerEvents:"none" }}>
+      {/* Leaflet target */}
+      <div ref={mapDivRef} style={{ height: "100%", width: "100%", visibility: ready ? "visible" : "hidden" }} />
+      {/* collision badge */}
+      {ready && (
+        <div style={{
+          position: "absolute", bottom: "7px", left: "8px", zIndex: 999,
+          background: collision ? "rgba(220,53,69,0.85)" : "rgba(25,135,84,0.85)",
+          color: "white", padding: "2px 9px", borderRadius: "8px",
+          fontSize: "0.66em", fontWeight: "700", pointerEvents: "none",
+          backdropFilter: "blur(3px)",
+        }}>
           {collision ? "⚡ kolizja" : "✓ ok"}
         </div>
-        <div style={{ position:"absolute", bottom:"8px", right:"8px", zIndex:999, background:"rgba(0,0,0,0.45)", color:"rgba(255,255,255,0.8)", padding:"2px 7px", borderRadius:"6px", fontSize:"0.6em", pointerEvents:"none" }}>
-          topo · OIM
-        </div>
-      </>}
+      )}
     </div>
   );
 }
@@ -1291,7 +1296,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
                   </div>
                   <button
                     onClick={downloadBatchPDF}
-                    style={{ marginTop: "auto", paddingTop: "16px", background: "#1a2035", color: "white", border: "none", borderRadius: "8px", padding: "10px 16px", cursor: "pointer", fontWeight: "700", fontSize: "0.82em", marginTop: "18px" }}
+                    style={{ background: "#1a2035", color: "white", border: "none", borderRadius: "8px", padding: "10px 16px", cursor: "pointer", fontWeight: "700", fontSize: "0.82em", marginTop: "18px" }}
                   >📊 Raport zbiorczy</button>
                 </div>
               </div>
@@ -1317,124 +1322,131 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
                 const accentColor = collision ? "#e74c3c" : "#27ae60";
                 const VOLT = { WN: "WN >110 kV", SN: "SN 1-110 kV", nN: "nN <1 kV" };
 
+                /* fixed map height for 2-column layout */
+                const MAP_COL_H = 260;
+
                 return (
-                  /* ════ KARTA DZIAŁKI — vertical layout, map as bottom strip ════ */
+                  /* ═══ KARTA DZIAŁKI: neutral card, map RIGHT jak geoportal ═══ */
                   <div key={i} style={{
                     background: "white",
-                    borderRadius: "16px",
-                    boxShadow: "0 4px 22px rgba(0,0,0,0.09)",
-                    border: "1px solid #e4e7ee",
+                    borderRadius: "14px",
+                    boxShadow: "0 3px 18px rgba(0,0,0,0.08)",
+                    border: "1px solid #dde1ea",
                     overflow: "hidden",
-                    isolation: "isolate",          /* new stacking ctx → stops Leaflet z-index leak */
+                    isolation: "isolate",
                   }}>
-                    {/* ── 1. TOP GRADIENT BAR ── */}
-                    <div style={{ height: "5px", background: collision
-                      ? "linear-gradient(90deg,#c0392b,#e74c3c,#c0392b)"
-                      : "linear-gradient(90deg,#1abc9c,#27ae60,#1abc9c)"
-                    }} />
+                    {/* ─ TOP BAR: zawsze navy (Szuwara) + złoty detal ─ */}
+                    <div style={{ height: "4px", background: "linear-gradient(90deg,#1a2035 60%,#b8963e)" }} />
 
-                    {/* ── 2. HEADER: numer · ID · status · PDF ── */}
+                    {/* ─ HEADER: numer · ID · badge kolizji · PDF ─ */}
                     <div style={{
-                      padding: "12px 20px",
-                      background: collision ? "#fdf4f4" : "#f4fdf6",
-                      display: "flex", alignItems: "center", gap: "12px",
-                      borderBottom: "1px solid #eef0f4", flexWrap: "wrap",
+                      padding: "11px 18px",
+                      background: "#f8f9fc",
+                      display: "flex", alignItems: "center", gap: "10px",
+                      borderBottom: "1px solid #eaedf3", flexWrap: "wrap",
                     }}>
-                      {/* circle badge */}
+                      {/* circle number */}
                       <div style={{
-                        width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
-                        background: collision ? "#e74c3c" : "#27ae60",
-                        color: "white", fontWeight: "900", fontSize: "0.75em",
+                        width: "30px", height: "30px", borderRadius: "50%", flexShrink: 0,
+                        background: "#1a2035", color: "white",
+                        fontWeight: "900", fontSize: "0.72em",
                         display: "flex", alignItems: "center", justifyContent: "center",
                       }}>#{i + 1}</div>
 
-                      {/* ID + geoportal */}
+                      {/* ID */}
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: "800", fontSize: "1em", color: "#1a2035", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <div style={{ fontWeight: "800", fontSize: "0.97em", color: "#1a2035", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {p.parcel_id}
                         </div>
                         <a href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${p.parcel_id || ""}`}
                           target="_blank" rel="noopener noreferrer"
-                          style={{ fontSize: "0.7em", color: "#3498db", textDecoration: "none", fontWeight: "600" }}>
+                          style={{ fontSize: "0.68em", color: "#3498db", textDecoration: "none", fontWeight: "600" }}>
                           🔗 geoportal.gov.pl
                         </a>
                       </div>
 
-                      {/* KOLIZJA badge */}
+                      {/* kolizja badge (tylko badge, nie cały card) */}
                       <span style={{
-                        padding: "4px 13px", borderRadius: "50px", fontSize: "0.73em", fontWeight: "800",
-                        background: collision ? "#e74c3c" : "#27ae60", color: "white", letterSpacing: "0.5px",
-                        whiteSpace: "nowrap", flexShrink: 0,
+                        padding: "3px 12px", borderRadius: "50px", fontSize: "0.7em", fontWeight: "800",
+                        background: collision ? "#dc3545" : "#198754",
+                        color: "white", whiteSpace: "nowrap", flexShrink: 0,
                       }}>
                         {collision ? "⚡ KOLIZJA" : "✓ BEZ KOLIZJI"}
                       </span>
 
-                      {/* PDF button */}
                       <button onClick={() => generateParcelPDF(p)} style={{
-                        padding: "7px 18px", background: "#1a2035", color: "white",
-                        border: "none", borderRadius: "8px", cursor: "pointer",
-                        fontSize: "0.78em", fontWeight: "700", whiteSpace: "nowrap", flexShrink: 0,
-                      }}>📄 Raport PDF</button>
+                        padding: "6px 16px", background: "#1a2035", color: "white",
+                        border: "none", borderRadius: "7px", cursor: "pointer",
+                        fontSize: "0.75em", fontWeight: "700", whiteSpace: "nowrap", flexShrink: 0,
+                      }}>📄 Raport</button>
                     </div>
 
-                    {/* ── 3. DATA BOXES — single row auto-fill ── */}
-                    <div style={{
-                      padding: "14px 20px 10px",
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
-                      gap: "9px",
-                    }}>
-                      {[
-                        { label: "Pow. działki",  value: `${Math.round(area).toLocaleString()} m²`,          icon: "📐", color: "#3498db" },
-                        { label: "Cena gruntu",   value: `${price.toFixed(2)} zł/m²`,                       icon: "💰", color: "#8e44ad" },
-                        { label: "Wartość nier.", value: `${Math.round(value).toLocaleString()} PLN`,         icon: "🏠", color: "#2c3e50" },
-                        { label: "Napięcie",      value: VOLT[voltage] || (voltage !== "—" ? voltage : "—"), icon: "⚡", color: "#e74c3c" },
-                        { label: "Dł. linii",     value: lineLength > 0 ? `${Math.round(lineLength)} m` : "—", icon: "📏", color: "#16a085", hint: msrc },
-                        { label: "Szer. pasa",    value: bandWidth > 0 ? `${bandWidth} m` : "—",             icon: "↔️", color: "#27ae60" },
-                        { label: "Pow. pasa",     value: bandArea > 0 ? `${Math.round(bandArea).toLocaleString()} m²` : "—", icon: "🔲", color: "#f39c12" },
-                      ].map((item, j) => (
-                        <div key={j} title={item.hint || ""} style={{
-                          background: "#f7f8fc",
-                          borderRadius: "9px",
-                          padding: "9px 11px",
-                          border: "1px solid #ebebf2",
-                          borderLeft: `3px solid ${item.color}`,
-                        }}>
-                          <div style={{ fontSize: "0.6em", color: "#aab0bc", marginBottom: "3px", textTransform: "uppercase", letterSpacing: "0.7px", fontWeight: "700" }}>{item.icon} {item.label}</div>
-                          <div style={{ fontSize: "0.88em", fontWeight: "800", color: "#1a2035", lineHeight: 1.2 }}>{item.value}</div>
-                          {item.hint && <div style={{ fontSize: "0.58em", color: "#e67e22", marginTop: "2px" }}>⚠ {item.hint}</div>}
+                    {/* ─ BODY: 2 kolumny (dane lewo / mapa prawo) ─ */}
+                    <div style={{ display: "flex", alignItems: "stretch" }}>
+
+                      {/* LEWA: dane + track boxes */}
+                      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", padding: "14px 16px" }}>
+
+                        {/* 7 data mini-boxes */}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: "8px", marginBottom: "12px" }}>
+                          {[
+                            { label: "Pow. działki",  value: `${Math.round(area).toLocaleString()} m²`,          icon: "📐", c: "#3498db" },
+                            { label: "Cena gruntu",   value: `${price.toFixed(2)} zł/m²`,                       icon: "💰", c: "#8e44ad" },
+                            { label: "Wartość nier.", value: `${Math.round(value).toLocaleString()} PLN`,         icon: "🏠", c: "#1a2035" },
+                            { label: "Napięcie",      value: VOLT[voltage] || (voltage !== "—" ? voltage : "—"), icon: "⚡", c: "#e67e22" },
+                            { label: "Dł. linii",     value: lineLength > 0 ? `${Math.round(lineLength)} m` : "—", icon: "📏", c: "#16a085", hint: msrc },
+                            { label: "Szer. pasa",    value: bandWidth > 0 ? `${bandWidth} m` : "—",             icon: "↔️", c: "#27ae60" },
+                            { label: "Pow. pasa",     value: bandArea > 0 ? `${Math.round(bandArea).toLocaleString()} m²` : "—", icon: "🔲", c: "#f39c12" },
+                          ].map((item, j) => (
+                            <div key={j} title={item.hint || ""} style={{
+                              background: "#f8f9fc", borderRadius: "8px", padding: "8px 10px",
+                              border: "1px solid #eaedf3", borderLeft: `3px solid ${item.c}`,
+                            }}>
+                              <div style={{ fontSize: "0.58em", color: "#9aa5b4", marginBottom: "2px", textTransform: "uppercase", letterSpacing: "0.7px", fontWeight: "700" }}>
+                                {item.icon} {item.label}
+                              </div>
+                              <div style={{ fontSize: "0.85em", fontWeight: "800", color: "#1a2035" }}>{item.value}</div>
+                              {item.hint && <div style={{ fontSize: "0.56em", color: "#e67e22", marginTop: "1px" }}>⚠ {item.hint}</div>}
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
 
-                    {/* ── 4. TRACK A / B / RAZEM — 3-column footer ── */}
-                    <div style={{
-                      padding: "0 20px 14px",
-                      display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "9px",
-                    }}>
-                      {/* Track A */}
-                      <div style={{ background: "#eef4ff", borderRadius: "10px", padding: "11px 14px", border: "1px solid #dce6ff" }}>
-                        <div style={{ fontSize: "0.57em", textTransform: "uppercase", letterSpacing: "1.2px", color: "#3498db", fontWeight: "700", marginBottom: "3px" }}>⚖️ TRACK A · SĄD</div>
-                        <div style={{ fontSize: "1.1em", fontWeight: "900", color: "#2c3e50" }}>{Math.round(ta).toLocaleString()} <span style={{ fontSize: "0.55em", fontWeight: "600", color: "#95a5a6" }}>PLN</span></div>
+                        {/* Track A / B / RAZEM — 3 boxy */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginTop: "auto" }}>
+                          <div style={{ background: "#eef4ff", borderRadius: "9px", padding: "10px 12px", border: "1px solid #dce6ff" }}>
+                            <div style={{ fontSize: "0.56em", textTransform: "uppercase", letterSpacing: "1px", color: "#3498db", fontWeight: "700", marginBottom: "3px" }}>⚖️ TRACK A · SĄD</div>
+                            <div style={{ fontSize: "1.05em", fontWeight: "900", color: "#2c3e50" }}>
+                              {Math.round(ta).toLocaleString()} <span style={{ fontSize: "0.52em", color: "#95a5a6" }}>PLN</span>
+                            </div>
+                          </div>
+                          <div style={{ background: "#fff8ec", borderRadius: "9px", padding: "10px 12px", border: "1px solid #fde8c0" }}>
+                            <div style={{ fontSize: "0.56em", textTransform: "uppercase", letterSpacing: "1px", color: "#f39c12", fontWeight: "700", marginBottom: "3px" }}>🤝 TRACK B · NEG.</div>
+                            <div style={{ fontSize: "1.05em", fontWeight: "900", color: "#e67e22" }}>
+                              {Math.round(tb).toLocaleString()} <span style={{ fontSize: "0.52em", color: "#95a5a6" }}>PLN</span>
+                            </div>
+                          </div>
+                          <div style={{ background: "linear-gradient(135deg,#1a2035,#2c3e50)", borderRadius: "9px", padding: "10px 12px" }}>
+                            <div style={{ fontSize: "0.56em", textTransform: "uppercase", letterSpacing: "1px", color: "#b8963e", fontWeight: "700", marginBottom: "3px" }}>💰 RAZEM A+B</div>
+                            <div style={{ fontSize: "1.1em", fontWeight: "900", color: "white" }}>
+                              {Math.round(razem).toLocaleString()} <span style={{ fontSize: "0.52em", opacity: 0.7 }}>PLN</span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      {/* Track B */}
-                      <div style={{ background: "#fff8ec", borderRadius: "10px", padding: "11px 14px", border: "1px solid #fde8c0" }}>
-                        <div style={{ fontSize: "0.57em", textTransform: "uppercase", letterSpacing: "1.2px", color: "#f39c12", fontWeight: "700", marginBottom: "3px" }}>🤝 TRACK B · NEG.</div>
-                        <div style={{ fontSize: "1.1em", fontWeight: "900", color: "#e67e22" }}>{Math.round(tb).toLocaleString()} <span style={{ fontSize: "0.55em", fontWeight: "600", color: "#95a5a6" }}>PLN</span></div>
-                      </div>
-                      {/* RAZEM */}
+
+                      {/* PRAWA: mini mapa satelita (plain Leaflet, fixed 260px) */}
                       <div style={{
-                        background: collision ? "linear-gradient(135deg,#e74c3c,#c0392b)" : "linear-gradient(135deg,#27ae60,#1abc9c)",
-                        borderRadius: "10px", padding: "11px 14px",
+                        width: "260px", flexShrink: 0,
+                        height: `${MAP_COL_H}px`,
+                        borderLeft: "1px solid #eaedf3",
+                        overflow: "hidden",
+                        position: "relative",
                       }}>
-                        <div style={{ fontSize: "0.57em", textTransform: "uppercase", letterSpacing: "1.2px", color: "rgba(255,255,255,0.75)", fontWeight: "700", marginBottom: "3px" }}>💰 RAZEM A+B</div>
-                        <div style={{ fontSize: "1.15em", fontWeight: "900", color: "white" }}>{Math.round(razem).toLocaleString()} <span style={{ fontSize: "0.55em", fontWeight: "600", opacity: 0.8 }}>PLN</span></div>
+                        <ParcelMiniMap
+                          geojson={geojson} centroid={centroid}
+                          collision={collision} height={MAP_COL_H}
+                        />
                       </div>
-                    </div>
-
-                    {/* ── 5. MINI MAP — horizontal strip, fixed height, isolated ── */}
-                    <div style={{ borderTop: "2px solid #eef0f4" }}>
-                      <ParcelMiniMap geojson={geojson} centroid={centroid} collision={collision} />
                     </div>
                   </div>
                 );
