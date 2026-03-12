@@ -12,8 +12,9 @@ import React, { useState } from 'react';
 const ReportGenerator = ({ parcelData, onDownload = null }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportFormat, setReportFormat] = useState('pdf');
+  const [darkMode, setDarkMode] = useState(true);
 
-  const generateHTMLReport = (data) => {
+  const generateHTMLReport = (data, isDark = false) => {
     const formatCurrency = (value) => {
       return (Math.round(value * 100) / 100).toLocaleString('pl-PL', {
         minimumFractionDigits: 2,
@@ -23,6 +24,38 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
 
     const formatNumber = (value) => {
       return value.toLocaleString('pl-PL');
+    };
+
+    const colors = isDark ? {
+      bg: '#1a1a2e',
+      bgCard: '#16213e',
+      text: '#e0e0e0',
+      textSecondary: '#a0a0a0',
+      border: '#2d3561',
+      headerGradient: 'linear-gradient(135deg, #0f3460 0%, #533483 100%)',
+      headerText: '#e0e0e0',
+      accent: '#00d4ff',
+      accentAlt: '#ff6b6b',
+      success: '#26d07c',
+      warning: '#ffa500',
+      warningBg: '#3d2817',
+      successBg: '#1a3d2a',
+      successText: '#26d07c'
+    } : {
+      bg: '#f5f7fa',
+      bgCard: 'white',
+      text: '#2c3e50',
+      textSecondary: '#7f8c8d',
+      border: '#ecf0f1',
+      headerGradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      headerText: 'white',
+      accent: '#667eea',
+      accentAlt: '#e74c3c',
+      success: '#27ae60',
+      warning: '#f39c12',
+      warningBg: '#fff3cd',
+      successBg: '#d5f4e6',
+      successText: '#27ae60'
     };
 
     const parcelId = data.parcel_id || '—';
@@ -68,23 +101,23 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f5f7fa;
-            color: #2c3e50;
+            background: ${colors.bg};
+            color: ${colors.text};
             line-height: 1.6;
         }
         .report-container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 40px 20px;
-            background: white;
+            background: ${colors.bg};
         }
         .report-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: ${colors.headerGradient};
+            color: ${colors.headerText};
             padding: 40px;
             border-radius: 12px;
             margin-bottom: 30px;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
         }
         .report-header h1 { font-size: 2.5rem; margin-bottom: 10px; }
         .report-header p { font-size: 1.1rem; opacity: 0.95; margin-bottom: 5px; }
@@ -105,22 +138,22 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
             margin-bottom: 30px;
         }
         .card {
-            background: white;
+            background: ${colors.bgCard};
             border-radius: 12px;
             padding: 30px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-            border: 1px solid #ecf0f1;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            border: 1px solid ${colors.border};
         }
         .card h2 {
             font-size: 1.5rem;
-            color: #2c3e50;
+            color: ${colors.accent};
             margin-bottom: 20px;
             padding-bottom: 15px;
-            border-bottom: 3px solid #667eea;
+            border-bottom: 3px solid ${colors.accent};
         }
         .card h3 {
             font-size: 1.1rem;
-            color: #34495e;
+            color: ${colors.text};
             margin-top: 20px;
             margin-bottom: 15px;
         }
@@ -129,7 +162,7 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
             border-collapse: collapse;
             margin: 15px 0;
         }
-        .data-table tr { border-bottom: 1px solid #ecf0f1; }
+        .data-table tr { border-bottom: 1px solid ${colors.border}; }
         .data-table td {
             padding: 12px 0;
             display: flex;
@@ -137,14 +170,14 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
         }
         .data-table .label {
             font-weight: 600;
-            color: #7f8c8d;
+            color: ${colors.textSecondary};
         }
         .data-table .value {
-            color: #2c3e50;
+            color: ${colors.text};
             font-weight: 500;
         }
         .data-table .value.highlight {
-            color: #e74c3c;
+            color: ${colors.accentAlt};
             font-weight: 700;
         }
         .stats-grid {
@@ -154,28 +187,28 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
             margin: 20px 0;
         }
         .stat-box {
-            background: linear-gradient(135deg, #ecf0f1 0%, #bdc3c7 100%);
+            background: ${isDark ? 'rgba(0, 212, 255, 0.1)' : 'linear-gradient(135deg, #ecf0f1 0%, #bdc3c7 100%)'};
             padding: 20px;
             border-radius: 10px;
             text-align: center;
-            border-left: 4px solid #95a5a6;
+            border-left: 4px solid ${colors.accent};
         }
         .stat-box.success {
-            background: linear-gradient(135deg, #d5f4e6 0%, #a9dfbf 100%);
-            border-left-color: #27ae60;
+            background: ${isDark ? 'rgba(38, 208, 124, 0.1)' : 'linear-gradient(135deg, #d5f4e6 0%, #a9dfbf 100%)'};
+            border-left-color: ${colors.success};
         }
         .stat-label {
             font-size: 0.85rem;
-            color: #7f8c8d;
+            color: ${colors.textSecondary};
             font-weight: 500;
             margin-bottom: 8px;
         }
         .stat-value {
             font-size: 2rem;
             font-weight: 700;
-            color: #2c3e50;
+            color: ${colors.text};
         }
-        .stat-value.success { color: #27ae60; }
+        .stat-value.success { color: ${colors.success}; }
         .full-width { grid-column: 1 / -1; }
         .track-comparison {
             display: grid;
@@ -186,55 +219,56 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
         .track-box {
             padding: 20px;
             border-radius: 10px;
-            border-left: 5px solid #667eea;
+            border-left: 5px solid ${colors.accent};
         }
         .track-box.track-a {
-            background: #ecf0f1;
-            border-left-color: #2c3e50;
+            background: ${isDark ? 'rgba(102, 126, 234, 0.1)' : '#ecf0f1'};
+            border-left-color: ${colors.accent};
         }
         .track-box.track-b {
-            background: #fff3cd;
-            border-left-color: #f39c12;
+            background: ${isDark ? 'rgba(255, 165, 0, 0.1)' : '#fff3cd'};
+            border-left-color: ${colors.warning};
         }
         .track-title {
             font-size: 1.1rem;
             font-weight: 700;
             margin-bottom: 15px;
+            color: ${colors.text};
         }
         .track-value {
             font-size: 2.2rem;
             font-weight: 700;
-            color: #2c3e50;
+            color: ${colors.accent};
             margin: 10px 0;
         }
         .warning-box {
-            background: #fff3cd;
-            border: 2px solid #f39c12;
+            background: ${colors.warningBg};
+            border: 2px solid ${colors.warning};
             border-radius: 10px;
             padding: 20px;
             margin: 20px 0;
-            color: #7d6608;
+            color: ${isDark ? colors.warning : '#7d6608'};
         }
         .warning-box h4 { margin-bottom: 10px; }
         .success-box {
-            background: #d5f4e6;
-            border: 2px solid #27ae60;
+            background: ${colors.successBg};
+            border: 2px solid ${colors.success};
             border-radius: 10px;
             padding: 20px;
             margin: 20px 0;
-            color: #196f3d;
+            color: ${colors.successText};
         }
         .footer {
             text-align: center;
             padding: 30px;
-            color: #95a5a6;
+            color: ${colors.textSecondary};
             font-size: 0.85rem;
-            border-top: 1px solid #ecf0f1;
+            border-top: 1px solid ${colors.border};
             margin-top: 60px;
         }
         @media print {
-            body { background: white; }
-            .card { box-shadow: none; border: 1px solid #ecf0f1; page-break-inside: avoid; }
+            body { background: ${colors.bg}; }
+            .card { box-shadow: none; border: 1px solid ${colors.border}; page-break-inside: avoid; }
             .report-container { padding: 20px; }
         }
     </style>
@@ -371,7 +405,7 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
     setIsGenerating(true);
 
     try {
-      const htmlContent = generateHTMLReport(parcelData);
+      const htmlContent = generateHTMLReport(parcelData, darkMode);
 
       if (reportFormat === 'html') {
         // Pobierz HTML
@@ -422,7 +456,25 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
       boxShadow: '0 4px 15px rgba(0, 0, 0, 0.08)',
       marginBottom: '30px'
     }}>
-      <h3 style={{ marginBottom: '15px', color: '#2c3e50' }}>📄 Generuj Raport</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+        <h3 style={{ margin: 0, color: '#2c3e50' }}>📄 Generuj Raport</h3>
+        <label style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          cursor: 'pointer',
+          fontSize: '0.9rem',
+          color: '#2c3e50'
+        }}>
+          <input
+            type="checkbox"
+            checked={darkMode}
+            onChange={(e) => setDarkMode(e.target.checked)}
+            style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+          />
+          🌙 Ciemny motyw
+        </label>
+      </div>
 
       <div style={{
         display: 'grid',
