@@ -1132,13 +1132,13 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
         )}
       </div>
 
-      {/* ════ HISTORIA BATCHÓW ════ */}
+      {/* ════ HISTORIA BATCHÓW — OFERTY HURTOWE ════ */}
       <div className="ksws-card">
         <div className="ksws-card-header">
-          <span className="ksws-card-header-icon">📋</span>
+          <span className="ksws-card-header-icon">🗂️</span>
           <div>
-            <div className="ksws-card-header-title">Historia Batch CSV</div>
-            <div className="ksws-card-header-sub">Poprzednie analizy batchów</div>
+            <div className="ksws-card-header-title">Oferty Hurtowe — Historia CSV</div>
+            <div className="ksws-card-header-sub">Poprzednie analizy batchowe · kliknij kartę aby wczytać</div>
           </div>
         </div>
         <div className="ksws-card-body">
@@ -1146,51 +1146,114 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
             try {
               const batchHist = JSON.parse(localStorage.getItem("batch_history") || "[]");
               if (!batchHist.length) {
-                return <div style={{ padding: "20px", textAlign: "center", color: "#999" }}>📭 Brak historii batchów</div>;
+                return (
+                  <div style={{ padding: "40px", textAlign: "center", color: "#b2bec3", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+                    <div style={{ fontSize: "3em" }}>📭</div>
+                    <div style={{ fontWeight: "700", fontSize: "1.1em", color: "#636e72" }}>Brak historii batchów</div>
+                    <div style={{ fontSize: "0.85em" }}>Załaduj plik CSV i uruchom analizę, aby zapisać w historii</div>
+                  </div>
+                );
               }
               return (
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  {batchHist.map((b, idx) => (
-                    <div key={idx} style={{ background: "#f9f9f9", padding: "15px", borderRadius: "8px", border: "1px solid #eee", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div>
-                        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>📅 {b.date}</div>
-                        <div style={{ fontSize: "0.9em", color: "#666", marginBottom: "5px" }}>📦 Działek: {b.parcel_count}</div>
-                        <div style={{ fontSize: "0.9em", color: "#27ae60", fontWeight: "bold" }}>💰 Track A: {Math.round(b.summary?.trackA || 0).toLocaleString()} PLN</div>
-                        <div style={{ fontSize: "0.9em", color: "#f39c12", fontWeight: "bold" }}>💰 Track B: {Math.round(b.summary?.trackB || 0).toLocaleString()} PLN</div>
-                        <div style={{ fontSize: "0.85em", color: "#555", marginTop: "5px" }}>🎯 Razem: {Math.round(b.summary?.total || 0).toLocaleString()} PLN</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: "16px" }}>
+                  {batchHist.map((b, idx) => {
+                    const total = b.summary?.total || (b.summary?.trackA || 0) + (b.summary?.trackB || 0);
+                    const collision = b.summary?.collision || 0;
+                    const noCollision = (b.parcel_count || 0) - collision;
+                    return (
+                      <div key={idx} style={{
+                        background: "white", borderRadius: "14px",
+                        boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+                        border: "1px solid #eef0f3", overflow: "hidden",
+                        transition: "box-shadow 0.2s, transform 0.15s",
+                        cursor: "pointer",
+                      }}
+                        onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.13)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "none"; }}
+                      >
+                        {/* Card top accent + header */}
+                        <div style={{ height: "4px", background: "linear-gradient(90deg,#a91079,#d81b60,#f39c12)" }} />
+                        <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid #f4f4f4" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div>
+                              <div style={{ fontSize: "0.7em", textTransform: "uppercase", letterSpacing: "1px", color: "#95a5a6", fontWeight: "700", marginBottom: "3px" }}>
+                                📅 {b.date}
+                              </div>
+                              <div style={{ fontSize: "1.05em", fontWeight: "800", color: "#1a2035" }}>
+                                Oferta Hurtowa #{batchHist.length - idx}
+                              </div>
+                              <div style={{ fontSize: "0.78em", color: "#636e72", marginTop: "2px" }}>
+                                {b.parcel_count || 0} działek · KSWS Track A/B
+                              </div>
+                            </div>
+                            <span style={{
+                              padding: "4px 12px", borderRadius: "50px", fontSize: "0.72em", fontWeight: "700",
+                              background: total > 100000 ? "#fef0c7" : "#e8f8f5",
+                              color: total > 100000 ? "#e67e22" : "#27ae60", border: "1px solid currentColor",
+                            }}>
+                              {total > 100000 ? "⭐ Wysoka wartość" : "✓ Gotowe"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* KPI mini grid */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "14px 20px", gap: "8px", borderBottom: "1px solid #f4f4f4" }}>
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: "1.4em", fontWeight: "900", color: "#1a2035" }}>{b.parcel_count || 0}</div>
+                            <div style={{ fontSize: "0.65em", color: "#95a5a6", textTransform: "uppercase", letterSpacing: "0.8px", fontWeight: "600" }}>Działek</div>
+                          </div>
+                          <div style={{ textAlign: "center", borderLeft: "1px solid #f0f0f0", borderRight: "1px solid #f0f0f0" }}>
+                            <div style={{ fontSize: "1.4em", fontWeight: "900", color: "#e74c3c" }}>{collision}</div>
+                            <div style={{ fontSize: "0.65em", color: "#95a5a6", textTransform: "uppercase", letterSpacing: "0.8px", fontWeight: "600" }}>Kolizji</div>
+                          </div>
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: "1.4em", fontWeight: "900", color: "#27ae60" }}>{noCollision}</div>
+                            <div style={{ fontSize: "0.65em", color: "#95a5a6", textTransform: "uppercase", letterSpacing: "0.8px", fontWeight: "600" }}>Bez kol.</div>
+                          </div>
+                        </div>
+
+                        {/* Compensation amounts */}
+                        <div style={{ padding: "14px 20px", borderBottom: "1px solid #f4f4f4" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                            <div style={{ background: "#f0fff4", borderRadius: "8px", padding: "10px 12px" }}>
+                              <div style={{ fontSize: "0.63em", textTransform: "uppercase", letterSpacing: "0.8px", color: "#7f8c8d", fontWeight: "600", marginBottom: "3px" }}>⚖️ Track A — Sąd</div>
+                              <div style={{ fontSize: "0.92em", fontWeight: "800", color: "#27ae60" }}>{Math.round(b.summary?.trackA || 0).toLocaleString()} PLN</div>
+                            </div>
+                            <div style={{ background: "#fff8f0", borderRadius: "8px", padding: "10px 12px" }}>
+                              <div style={{ fontSize: "0.63em", textTransform: "uppercase", letterSpacing: "0.8px", color: "#7f8c8d", fontWeight: "600", marginBottom: "3px" }}>🤝 Track B — Negocjacje</div>
+                              <div style={{ fontSize: "0.92em", fontWeight: "800", color: "#e67e22" }}>{Math.round(b.summary?.trackB || 0).toLocaleString()} PLN</div>
+                            </div>
+                          </div>
+                          <div style={{ background: "linear-gradient(135deg, #1a2035, #2c3e50)", borderRadius: "8px", padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={{ fontSize: "0.68em", textTransform: "uppercase", letterSpacing: "1px", color: "rgba(255,255,255,0.55)", fontWeight: "600" }}>💰 RAZEM</div>
+                            <div style={{ fontSize: "1.15em", fontWeight: "900", color: "#f39c12" }}>{Math.round(total).toLocaleString()} PLN</div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div style={{ padding: "12px 20px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                          <button
+                            onClick={() => {
+                              if (b.full_data && b.full_data.length) {
+                                setBatchResults({ results: b.full_data, parcel_count: b.parcel_count || b.full_data.length, successful: b.successful || b.full_data.length });
+                                toast.success(`Załadowano ofertę: ${b.parcel_count || b.full_data.length} działek`);
+                              } else { toast.error("Brak pełnych danych w tej historii"); }
+                            }}
+                            style={{ flex: 1, padding: "9px 16px", background: "linear-gradient(135deg,#2575fc,#0a4fcc)", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "700", fontSize: "0.85em", whiteSpace: "nowrap" }}
+                          >📂 Wczytaj analizę</button>
+                          <button
+                            onClick={() => {
+                              const updated = batchHist.filter((_, i) => i !== idx);
+                              localStorage.setItem("batch_history", JSON.stringify(updated));
+                              window.location.reload();
+                            }}
+                            style={{ padding: "9px 14px", background: "transparent", color: "#e74c3c", border: "1px solid #e74c3c", borderRadius: "8px", cursor: "pointer", fontSize: "0.85em", whiteSpace: "nowrap" }}
+                            title="Usuń z historii"
+                          >🗑️</button>
+                        </div>
                       </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                        <button
-                          onClick={() => {
-                            if (b.full_data && b.full_data.length) {
-                              setBatchResults({
-                                results: b.full_data,
-                                parcel_count: b.parcel_count || b.full_data.length,
-                                successful: b.successful || b.full_data.length,
-                              });
-                              toast.success(`Załadowano batch: ${b.parcel_count || b.full_data.length} działek`);
-                            } else {
-                              toast.error("Brak pełnych danych w tej historii");
-                            }
-                          }}
-                          style={{ padding: "8px 16px", background: "#2575fc", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", whiteSpace: "nowrap" }}
-                        >
-                          📂 Załaduj
-                        </button>
-                        <button
-                          onClick={() => {
-                            const updated = batchHist.filter((_, i) => i !== idx);
-                            localStorage.setItem("batch_history", JSON.stringify(updated));
-                            window.location.reload();
-                          }}
-                          style={{ padding: "6px 12px", background: "#e74c3c", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "0.85em", whiteSpace: "nowrap" }}
-                          title="Usuń z historii"
-                        >
-                          🗑️ Usuń
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             } catch (e) {
