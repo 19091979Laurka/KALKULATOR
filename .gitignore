@@ -7,6 +7,28 @@ debug_apis.py
 test_uldk.py
 test_results.json
 
-# React frontend (ArchitectUI)
+# React frontend
 frontend-react/node_modules
 frontend-react/build
+frontend-react/dist
+
+# Env — NIGDY nie commituj!
+.env
+.env.*
+!.env.example
+
+# Dane lokalne (batch history, snapshoty)
+data/history/
+data/cache/
+SNAPSHOT_*
+*.snapshot
+
+# Raporty tymczasowe
+raport_*.html
+
+# Claude worktrees i historia
+.claude/worktrees/
+.history/
+
+# OS
+Thumbs.db

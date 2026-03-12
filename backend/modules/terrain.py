@@ -62,6 +62,7 @@ async def fetch_terrain(
 
         if raw and raw.get("ok"):
             result["parcel_id"] = raw.get("teryt") or parcel_id
+
             result["geometry"] = raw.get("geometry")
             result["voivodeship"] = raw.get("voivodeship")
             result["county"] = raw.get("county")
@@ -115,7 +116,16 @@ async def fetch_terrain(
             else:
                 result["error"] = "Brak geometrii w bazie ULDK"
         else:
-            result["error"] = "Działka nie znaleziona w bazie ULDK"
+            # Rozróżnij: niedostępność serwisu vs. brak działki
+            raw_err = (raw or {}).get("error", "") if raw else ""
+            if raw_err and ("niedostępny" in raw_err or "timeout" in raw_err.lower() or "ConnectionError" in raw_err):
+                result["error"] = f"ULDK GUGiK chwilowo niedostępny — spróbuj ponownie za kilka sekund"
+            else:
+                result["error"] = (
+                    f"Działka '{parcel_id}' nie znaleziona w bazie ULDK. "
+                    f"Sprawdź format: pełny TERYT (np. 141906_5.0029.60) "
+                    f"lub podaj Obręb w polu 'Obręb' (np. Niedarzyn) i numer działki (np. 114/2)"
+                )
 
     except Exception as e:
         logger.error(f"terrain.fetch_terrain error: {e}")

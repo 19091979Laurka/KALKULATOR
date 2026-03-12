@@ -27,8 +27,8 @@ def _bbox_from_geojson(geom: Dict) -> Tuple[float, float, float, float]:
     return (min(lats), min(lons), max(lats), max(lons))
 
 
-def _buffer_bbox(s: float, w: float, n: float, e: float, delta: float = 0.002) -> str:
-    """Overpass bbox(south,west,north,east) z buforem ~200m."""
+def _buffer_bbox(s: float, w: float, n: float, e: float, delta: float = 0.01) -> str:
+    """Overpass bbox(south,west,north,east) z buforem ~1km zamiast 200m."""
     return f"{max(-90, s - delta)},{max(-180, w - delta)},{min(90, n + delta)},{min(180, e + delta)}"
 
 
@@ -134,57 +134,67 @@ async def fetch_power_lines(
 );
 out geom;
 """
-    try:
-        loop = asyncio.get_event_loop()
-        resp = await loop.run_in_executor(
-            None,
-            lambda: requests.post(
-                OVERPASS_URL,
-                data={"data": query},
-                timeout=OVERPASS_TIMEOUT,
-                headers={"User-Agent": "Kalkulator-Roszczen/1.0"},
-            ),
-        )
-        if resp.status_code != 200:
-            logger.warning("Overpass HTTP %s", resp.status_code)
+    # Retry logic for rate limiting
+    for attempt in range(1, 4):
+        try:
+            loop = asyncio.get_event_loop()
+            resp = await loop.run_in_executor(
+                None,
+                lambda: requests.post(
+                    OVERPASS_URL,
+                    data={"data": query},
+                    timeout=OVERPASS_TIMEOUT,
+                    headers={"User-Agent": "Kalkulator-Roszczen/1.0"},
+                ),
+            )
+            if resp.status_code == 200:
+                # Success - process response
+                data = resp.json()
+                elements = data.get("elements", [])
+                lines = []
+                features = []
+                total_length = 0.0
+
+                for el in elements:
+                    if el.get("type") != "way":
+                        continue
+                    nodes = el.get("geometry", [])
+                    if len(nodes) < 2:
+                        continue
+                    coords = [[n["lon"], n["lat"]] for n in nodes]
+                    geojson = {"type": "LineString", "coordinates": coords}
+                    tags = el.get("tags", {})
+                    voltage = _parse_voltage(tags)
+                    length_m = _line_length_meters(geojson, parcel_geom) if parcel_geom else 0.0
+                    total_length += length_m
+                    lines.append({"geometry": geojson, "voltage": voltage, "length_m": length_m})
+                    features.append({"type": "Feature", "geometry": geojson, "properties": {"voltage": voltage, "length_m": length_m}})
+
+                result["lines"] = lines
+                result["line_length_m"] = round(total_length, 1)
+                result["line_geojson"] = {"type": "FeatureCollection", "features": features}
+                result["ok"] = len(lines) > 0
+                logger.info("Overpass OK: %d linii, length_m=%.1f", len(lines), total_length)
+                return result
+
+            elif resp.status_code == 429:  # Rate limit
+                if attempt < 3:
+                    wait = 10 * attempt
+                    logger.warning("Overpass 429, retrying in %ds...", wait)
+                    await asyncio.sleep(wait)
+                    continue
+                else:
+                    logger.warning("Overpass 429 after retries")
+                    return result
+            else:
+                logger.warning("Overpass HTTP %s", resp.status_code)
+                return result
+
+        except Exception as e:
+            logger.error("Overpass error (attempt %d): %s", attempt, e)
+            if attempt < 3:
+                await asyncio.sleep(5)
+                continue
             return result
-
-        data = resp.json()
-        elements = data.get("elements", [])
-
-        lines = []
-        features = []
-        total_length = 0.0
-
-        for el in elements:
-            if el.get("type") != "way":
-                continue
-            nodes = el.get("geometry", [])
-            if len(nodes) < 2:
-                continue
-            coords = [[n["lon"], n["lat"]] for n in nodes]
-            geojson = {"type": "LineString", "coordinates": coords}
-            tags = el.get("tags", {})
-            voltage = _parse_voltage(tags)
-            length_m = _line_length_meters(geojson, parcel_geom) if parcel_geom else 0.0
-            total_length += length_m
-
-            lines.append({"geometry": geojson, "voltage": voltage, "length_m": length_m})
-            features.append({
-                "type": "Feature",
-                "geometry": geojson,
-                "properties": {"voltage": voltage, "length_m": length_m},
-            })
-
-        result["lines"] = lines
-        result["line_length_m"] = round(total_length, 1)
-        result["line_geojson"] = {"type": "FeatureCollection", "features": features}
-        result["ok"] = True
-        logger.info("Overpass OK: %d linii, length_m=%.1f", len(lines), total_length)
-
-    except requests.exceptions.Timeout:
-        logger.warning("Overpass timeout")
-    except Exception as e:
-        logger.error("Overpass error: %s", e)
 
     return result

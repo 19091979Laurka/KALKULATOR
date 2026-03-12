@@ -25,18 +25,19 @@ class ULDKClient(ULDKClientFixed):
             "srid": srid,
         }
         logger.info("ULDK GetParcelByIdOrNr request: id=%r srid=%s", search_str, srid)
+        resp = self._get_with_retry(params)
+        if resp is None:
+            return {"ok": False, "error": "ULDK niedostępny — spróbuj ponownie za chwilę", "source": "ULDK/GUGiK"}
         try:
-            response = requests.get(self.BASE_URL, params=params, timeout=15)
-            logger.info("ULDK GetParcelByIdOrNr response: status=%s len=%s", response.status_code, len(response.text or ""))
-            response.raise_for_status()
-            parsed = self._parse_response(response.text, None)
+            logger.info("ULDK GetParcelByIdOrNr response: status=%s len=%s", resp.status_code, len(resp.text or ""))
+            parsed = self._parse_response(resp.text, None)
             if parsed and parsed.get("ok"):
                 logger.info("ULDK GetParcelByIdOrNr OK: teryt=%s commune=%s", parsed.get("teryt"), parsed.get("commune"))
                 return parsed
             logger.warning("ULDK GetParcelByIdOrNr no result: id=%r", search_str)
             return {
                 "ok": False,
-                "error": f"ULDK: no results for '{search_str}'",
+                "error": f"ULDK: brak wyników dla '{search_str}'",
                 "source": "ULDK/GUGiK",
             }
         except Exception as e:
