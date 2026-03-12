@@ -71,6 +71,19 @@ async def index():
     if html_file.exists(): return FileResponse(html_file)
     return {"message": "KALKULATOR API v3.0 — BRAK FRONTENDU"}
 
+# Serwowanie statycznych assetów React (JS, CSS, images) — musi być po /api/ routach
+@app.get("/{full_path:path}")
+async def spa_fallback(full_path: str):
+    """SPA fallback — React Router obsługuje routing po stronie klienta."""
+    # Próbuj plik statyczny
+    static_file = FRONTEND_DIR / full_path
+    if static_file.exists() and static_file.is_file():
+        return FileResponse(static_file)
+    # Fallback → index.html (React Router)
+    html_file = FRONTEND_DIR / "index.html"
+    if html_file.exists(): return FileResponse(html_file)
+    return {"error": "not found"}
+
 @app.post("/api/analyze")
 async def analyze(req: AnalyzeRequest):
     """
