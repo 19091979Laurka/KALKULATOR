@@ -1,0 +1,155 @@
+/* ================================================================
+   KSWS Layout Wrapper - Header + Sidebar + Content Structure
+   ================================================================ */
+
+.ksws-layout-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+}
+
+/* ── HEADER (Fixed) ─────────────────────────────────────────── */
+.ksws-header {
+  flex: 0 0 60px;
+  height: 60px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8ed;
+  display: flex;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* Dark mode header */
+body.light-theme .ksws-header {
+  background: #ffffff;
+  border-bottom-color: #e2e8ed;
+}
+
+:root .ksws-header {
+  background: var(--bg-secondary, #ffffff);
+  border-bottom-color: var(--border, #e2e8ed);
+}
+
+/* ── MAIN WRAPPER (Flex row for sidebar + content) ──────────── */
+.ksws-main-wrapper {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── SIDEBAR (Fixed left, dark) ───────────────────────────── */
+.ksws-sidebar {
+  flex: 0 0 280px;
+  width: 280px;
+  background: #16213e;
+  border-right: 1px solid #2d3561;
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: calc(100vh - 60px);
+  position: relative;
+  z-index: 50;
+}
+
+/* Light mode sidebar */
+body.light-theme .ksws-sidebar {
+  background: #ffffff;
+  border-right-color: #e2e8ed;
+}
+
+:root .ksws-sidebar {
+  background: var(--bg-secondary, #ffffff);
+  border-right-color: var(--border, #e2e8ed);
+}
+
+/* ── CONTENT AREA (Fills remaining space) ──────────────────── */
+.ksws-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #1a1a2e;
+  padding: 30px 20px;
+}
+
+/* Light mode content */
+body.light-theme .ksws-content {
+  background: #edf2f4;
+  padding: 30px 20px;
+}
+
+:root .ksws-content {
+  background: var(--bg-primary, #edf2f4);
+  padding: 30px 20px;
+}
+
+/* ── RESPONSIVE (Mobile: stack sidebar on top or hide) ──────── */
+@media (max-width: 1024px) {
+  .ksws-sidebar {
+    flex: 0 0 250px;
+    width: 250px;
+  }
+
+  .ksws-content {
+    padding: 20px 15px;
+  }
+}
+
+@media (max-width: 768px) {
+  .ksws-main-wrapper {
+    flex-direction: column;
+  }
+
+  .ksws-sidebar {
+    flex: 0 0 auto;
+    width: 100%;
+    height: auto;
+    max-height: 400px;
+    overflow: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border, #e2e8ed);
+  }
+
+  .ksws-content {
+    padding: 15px 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .ksws-header {
+    flex: 0 0 50px;
+    height: 50px;
+  }
+
+  .ksws-sidebar {
+    display: none;
+  }
+
+  .ksws-content {
+    padding: 10px;
+  }
+}
+
+/* ── Scrollbar Styling ────────────────────────────────────────── */
+.ksws-sidebar::-webkit-scrollbar,
+.ksws-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.ksws-sidebar::-webkit-scrollbar-track,
+.ksws-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ksws-sidebar::-webkit-scrollbar-thumb,
+.ksws-content::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+
+.ksws-sidebar::-webkit-scrollbar-thumb:hover,
+.ksws-content::-webkit-scrollbar-thumb:hover {
+  background: #888;
+}
