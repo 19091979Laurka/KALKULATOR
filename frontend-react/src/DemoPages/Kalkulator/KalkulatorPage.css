@@ -4,9 +4,9 @@
    ═════════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* Szuwara brand palette — beige warm earth */
-  --szuwara-navy:      #5c3d2e;   /* ciepły ciemny brąz — sidebar, headers */
-  --szuwara-navy-deep: #3d2319;   /* głębszy brąz */
+  /* Szuwara brand palette — jasne piaskowe */
+  --szuwara-navy:      #D5BDAF;   /* jasny piasek — sidebar */
+  --szuwara-navy-deep: #C9AD9F;   /* nieco ciemniejszy piasek */
   --szuwara-gold:      #b8963e;   /* złoto Szuwara — bez zmian */
   --szuwara-gold-light:#d4af62;   /* jaśniejsze złoto */
   --szuwara-gold-dark: #8c6e27;   /* ciemniejsze złoto */
@@ -16,10 +16,10 @@
   --beige-2: #D6CCC2;   /* obramowania */
   --beige-3: #F5EBE0;   /* tło kart */
   --beige-4: #E3D5CA;   /* hover, secondary */
-  --beige-5: #D5BDAF;   /* akcenty muted */
+  --beige-5: #D5BDAF;   /* sidebar, akcenty */
 
   /* Layout */
-  --ksws-sidebar-bg: var(--szuwara-navy);
+  --ksws-sidebar-bg: var(--beige-5);
   --ksws-sidebar-width: 260px;
 
   /* Akcenty */
@@ -28,18 +28,18 @@
   --ksws-magenta-gradient: linear-gradient(135deg, #b8963e 0%, #d4af62 100%);
 
   --ksws-green: #27ae60;
-  --ksws-blue: #7a5c4e;
+  --ksws-blue: #8c7b72;
   --ksws-orange: #e67e22;
   --ksws-red: #e74c3c;
   --ksws-gold: var(--szuwara-gold);
   --ksws-bg: var(--beige-1);
   --ksws-white: var(--beige-3);
   --ksws-border: var(--beige-2);
-  --ksws-text-dark: #3d2319;
+  --ksws-text-dark: #4a3728;
   --ksws-text-muted: #9e8b83;
-  --ksws-shadow-sm: 0 2px 4px rgba(92,61,46,0.07);
-  --ksws-shadow-md: 0 4px 12px rgba(92,61,46,0.11);
-  --ksws-shadow-lg: 0 8px 24px rgba(92,61,46,0.14);
+  --ksws-shadow-sm: 0 2px 4px rgba(180,155,140,0.15);
+  --ksws-shadow-md: 0 4px 12px rgba(180,155,140,0.20);
+  --ksws-shadow-lg: 0 8px 24px rgba(180,155,140,0.25);
 }
 
 /* ── RESET / BASE ─────────────────────────────────────────────────────────── */
@@ -57,7 +57,7 @@
   width: var(--ksws-sidebar-width);
   min-height: 100vh;
   background: var(--ksws-sidebar-bg);
-  color: white;
+  color: #4a3728;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -101,7 +101,7 @@
 .ksws-sidebar-logo-title {
   font-size: 1.22rem;
   font-weight: 800;
-  color: #ffffff;
+  color: #4a3728;
   letter-spacing: 2px;
   text-transform: uppercase;
   margin: 0 0 3px 0;
@@ -127,7 +127,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 24px;
-  color: rgba(255,255,255,0.65);
+  color: rgba(74,55,40,0.70);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -138,16 +138,16 @@
 }
 
 .ksws-sidebar-nav-item:hover {
-  color: rgba(255,255,255,0.90);
-  background: rgba(255,255,255,0.06);
-  border-left-color: rgba(255,255,255,0.25);
+  color: #4a3728;
+  background: rgba(184,150,62,0.10);
+  border-left-color: rgba(184,150,62,0.40);
 }
 
 .ksws-sidebar-nav-item.active {
-  color: #ffffff;
-  background: rgba(184,150,62,0.15);
+  color: #4a3728;
+  background: rgba(184,150,62,0.20);
   border-left-color: var(--szuwara-gold);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .ksws-sidebar-nav-icon {
@@ -158,9 +158,9 @@
 
 .ksws-sidebar-footer {
   padding: 14px 20px;
-  border-top: 1px solid rgba(184,150,62,0.2);
+  border-top: 1px solid rgba(184,150,62,0.25);
   font-size: 0.68rem;
-  color: rgba(255,255,255,0.35);
+  color: rgba(74,55,40,0.50);
   line-height: 1.6;
 }
 
