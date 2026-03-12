@@ -136,10 +136,12 @@ def std_table(rows, widths, hdr_bg=None, zebra=True):
 # ── WYKRESY ────────────────────────────────────────────────────────────────────
 
 def chart_3d_bars(parcels):
-    """3D bar — Track A vs B per parcel + total."""
-    n = len(parcels)
+    """3D bar — Track A vs B per parcel + total. Max 15 parcels displayed."""
+    MAX_BARS = 15
+    display = parcels[:MAX_BARS]
+    n = len(display)
     labels, vals_a, vals_b = [], [], []
-    for p in parcels:
+    for p in display:
         comp = p.get("compensation", {})
         ta = (comp.get("track_a") or {}).get("total", 0)
         tb = (comp.get("track_b") or {}).get("total", 0)
@@ -150,13 +152,16 @@ def chart_3d_bars(parcels):
         vals_a.append(ta / 1000 if ta else 0)
         vals_b.append(tb / 1000 if tb else 0)
 
-    if n > 1:
+    # Always add SUMA from ALL parcels
+    all_a = sum((((p.get("compensation") or {}).get("track_a") or {}).get("total") or 0) for p in parcels) / 1000
+    all_b = sum((((p.get("compensation") or {}).get("track_b") or {}).get("total") or 0) for p in parcels) / 1000
+    if len(parcels) > 1:
         labels.append("SUMA")
-        vals_a.append(sum(vals_a))
-        vals_b.append(sum(vals_b))
+        vals_a.append(all_a)
+        vals_b.append(all_b)
         n += 1
 
-    fig = plt.figure(figsize=(max(9, n*2.2), 5.5), facecolor="#F4F6F8")
+    fig = plt.figure(figsize=(min(22, max(9, n*2.0)), 5.5), facecolor="#F4F6F8")
     ax = fig.add_subplot(111, projection="3d", facecolor="#F4F6F8")
 
     x = np.arange(n) * 2.5
@@ -191,7 +196,8 @@ def chart_3d_bars(parcels):
 
 
 def chart_3d_parcel(parcels):
-    """3D diagram showing parcel + WN corridor with pylon."""
+    """3D diagram showing parcel + WN corridor with pylon. Max 6 parcels."""
+    display = parcels[:6]
     fig = plt.figure(figsize=(12, 6.5), facecolor="#EEF2F7")
     ax = fig.add_subplot(111, projection="3d", facecolor="#D6EAF8")
 
@@ -201,7 +207,7 @@ def chart_3d_parcel(parcels):
     pole_h = 20
 
     all_x = []
-    for pi, p in enumerate(parcels):
+    for pi, p in enumerate(display):
         geom = p.get("geometry", {})
         area  = geom.get("area_m2",   2000)
         perim = geom.get("perimeter_m", 200)
@@ -262,7 +268,8 @@ def chart_3d_parcel(parcels):
     ax.set_xlabel("Długość [m]", fontsize=9, labelpad=8)
     ax.set_ylabel("Szerokość [m]", fontsize=9, labelpad=8)
     ax.set_zlabel("Wys. [m]", fontsize=9, labelpad=5)
-    ax.set_title(f"Wizualizacja 3D — Działki z korytarzem linii WN (pas={band_w} m)",
+    suffix = f" (pierwsze 6 z {len(parcels)})" if len(parcels) > 6 else ""
+    ax.set_title(f"Wizualizacja 3D — Działki z korytarzem linii WN (pas={band_w} m){suffix}",
                  fontsize=11, fontweight="bold", color="#2C3E7A", pad=14)
     ax.view_init(elev=24, azim=-50)
     ax.grid(True, alpha=0.15)
@@ -275,15 +282,24 @@ def chart_3d_parcel(parcels):
 
 
 def chart_donut_band(parcels):
-    """Donuts showing band coverage per parcel."""
-    n = len(parcels)
-    fig, axes = plt.subplots(1, n, figsize=(5*n, 4.5), facecolor="#F4F6F8")
-    if n == 1:
-        axes = [axes]
-    fig.suptitle("Pokrycie działek pasem ochronnym", fontsize=11,
-                 fontweight="bold", color="#2C3E7A")
+    """Donuts showing band coverage per parcel. Max 9 parcels in 3x3 grid."""
+    MAX_D = 9
+    display = parcels[:MAX_D]
+    n = len(display)
+    cols = min(3, n)
+    rows = math.ceil(n / cols)
+    fig, axes = plt.subplots(rows, cols, figsize=(5*cols, 4.5*rows), facecolor="#F4F6F8",
+                              squeeze=False)
+    axes_flat = [axes[r][c] for r in range(rows) for c in range(cols)]
+    # Hide unused axes
+    for ax in axes_flat[n:]:
+        ax.set_visible(False)
+    fig.suptitle(
+        f"Pokrycie działek pasem ochronnym (pierwsze {n} z {len(parcels)})" if len(parcels) > MAX_D
+        else "Pokrycie działek pasem ochronnym",
+        fontsize=11, fontweight="bold", color="#2C3E7A")
 
-    for ax, p in zip(axes, parcels):
+    for ax, p in zip(axes_flat, display):
         geom = p.get("geometry", {})
         ksws = p.get("ksws", {})
         area     = geom.get("area_m2", 1)
@@ -606,9 +622,11 @@ def generate_pdf(
     story.append(RLImage(viz_bytes, width=16*cm, height=9*cm))
     story.append(Spacer(1, 4*mm))
 
+    donut_n = min(9, len(parcels_data))
+    donut_cols = min(3, donut_n)
+    donut_rows = math.ceil(donut_n / donut_cols)
     donut_bytes = chart_donut_band(parcels_data)
-    story.append(RLImage(donut_bytes, width=min(16*cm, 8*cm*len(parcels_data)),
-                         height=5*cm))
+    story.append(RLImage(donut_bytes, width=16*cm, height=min(16*cm, 5*cm*donut_rows)))
 
     story.append(PageBreak())
 

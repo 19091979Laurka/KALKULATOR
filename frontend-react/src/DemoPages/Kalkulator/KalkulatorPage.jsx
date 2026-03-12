@@ -530,7 +530,7 @@ function BatchCSVSection() {
       Math.round(p.data?.geometry?.area_m2 || 0),
       Math.round(p.data?.market_data?.average_price_m2 || 0),
       Math.round(p.data?.ksws?.property_value_total || 0),
-      Math.round(p.data?.infrastructure?.power_lines?.length_m || 0),  // Dł_Linii_m
+      Math.round(p.data?.ksws?.line_length_m || p.data?.infrastructure?.power_lines?.length_m || 0),  // Dł_Linii_m
       Math.round(p.data?.ksws?.band_width_m || 0),
       Math.round(p.data?.ksws?.band_area_m2 || 0),
       Math.round(p.data?.compensation?.track_a?.total || 0),
@@ -673,28 +673,32 @@ function BatchCSVSection() {
 
         {stats && (
           <>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px", marginBottom: "20px" }}>
-              <div style={{ background: "white", padding: "15px", borderRadius: "8px", border: "1px solid #eee", textAlign: "center" }}>
-                <div style={{ fontSize: "1.8em", fontWeight: "800" }}>{stats.total}</div>
-                <div style={{ fontSize: "0.8em", color: "#888" }}>Razem</div>
+            {/* ── KPI SUMMARY ROW ── */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px", marginBottom: "16px" }}>
+              <div style={{ background: "white", padding: "14px", borderRadius: "10px", border: "1px solid #e0e0e0", textAlign: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.05)" }}>
+                <div style={{ fontSize: "2em", fontWeight: "900", color: "#1a1a2e" }}>{stats.total}</div>
+                <div style={{ fontSize: "0.74em", color: "#888", marginTop: "3px" }}>📦 Działek razem</div>
               </div>
-              <div style={{ background: "white", padding: "15px", borderRadius: "8px", border: "1px solid #eee", textAlign: "center" }}>
-                <div style={{ fontSize: "1.8em", fontWeight: "800", color: "#f39c12" }}>{stats.collision}</div>
-                <div style={{ fontSize: "0.8em", color: "#888" }}>Kolizja</div>
+              <div style={{ background: "white", padding: "14px", borderRadius: "10px", border: "2px solid #e74c3c", textAlign: "center", boxShadow: "0 2px 6px rgba(231,76,60,0.1)" }}>
+                <div style={{ fontSize: "2em", fontWeight: "900", color: "#e74c3c" }}>{stats.collision}</div>
+                <div style={{ fontSize: "0.74em", color: "#888", marginTop: "3px" }}>⚡ Z kolizją</div>
               </div>
-              <div style={{ background: "white", padding: "15px", borderRadius: "8px", border: "1px solid #eee", textAlign: "center" }}>
-                <div style={{ fontSize: "1.5em", fontWeight: "800", color: "#27ae60" }}>{fmtPLN(stats.trackA)}</div>
-                <div style={{ fontSize: "0.8em", color: "#888" }}>Track A</div>
+              <div style={{ background: "white", padding: "14px", borderRadius: "10px", border: "2px solid #27ae60", textAlign: "center", boxShadow: "0 2px 6px rgba(39,174,96,0.1)" }}>
+                <div style={{ fontSize: "2em", fontWeight: "900", color: "#27ae60" }}>{stats.total - stats.collision}</div>
+                <div style={{ fontSize: "0.74em", color: "#888", marginTop: "3px" }}>✅ Bez kolizji</div>
               </div>
-              <div style={{ background: "white", padding: "15px", borderRadius: "8px", border: "1px solid #eee", textAlign: "center" }}>
-                <div style={{ fontSize: "1.5em", fontWeight: "800", color: "#f39c12" }}>{fmtPLN(stats.trackB)}</div>
-                <div style={{ fontSize: "0.8em", color: "#888" }}>Track B</div>
+              <div style={{ background: "white", padding: "14px", borderRadius: "10px", border: "1px solid #e0e0e0", textAlign: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.05)" }}>
+                <div style={{ fontSize: "1.1em", fontWeight: "800", color: "#27ae60", lineHeight: 1.2 }}>{fmtPLN(stats.trackA)}</div>
+                <div style={{ fontSize: "0.74em", color: "#888", marginTop: "3px" }}>⚖️ Track A (sądowy)</div>
+              </div>
+              <div style={{ background: "white", padding: "14px", borderRadius: "10px", border: "1px solid #e0e0e0", textAlign: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.05)" }}>
+                <div style={{ fontSize: "1.1em", fontWeight: "800", color: "#f39c12", lineHeight: 1.2 }}>{fmtPLN(stats.trackB)}</div>
+                <div style={{ fontSize: "0.74em", color: "#888", marginTop: "3px" }}>🤝 Track B (negocjacje)</div>
               </div>
             </div>
-
-            <div style={{ background: "linear-gradient(135deg, #27ae60, #2ecc71)", color: "white", padding: "20px", borderRadius: "8px", textAlign: "center", marginBottom: "20px" }}>
-              <div style={{ fontSize: "0.9em", marginBottom: "5px" }}>💰 RAZEM</div>
-              <div style={{ fontSize: "2em", fontWeight: "800" }}>{fmtPLN(stats.trackA + stats.trackB)}</div>
+            <div style={{ background: "linear-gradient(135deg, #1a1a2e, #2c3e50)", color: "white", padding: "18px 24px", borderRadius: "10px", textAlign: "center", marginBottom: "20px", boxShadow: "0 4px 15px rgba(0,0,0,0.15)" }}>
+              <div style={{ fontSize: "0.82em", color: "rgba(255,255,255,0.65)", marginBottom: "4px" }}>💰 RAZEM ODSZKODOWANIE (Track A + B)</div>
+              <div style={{ fontSize: "2.2em", fontWeight: "900", color: "#f39c12", textShadow: "0 2px 8px rgba(243,156,18,0.3)" }}>{fmtPLN(stats.trackA + stats.trackB)}</div>
             </div>
 
             {/* MAPA ZBIORCZA Z WARSTWĄ UZBROJENIA TERENU */}
@@ -725,68 +729,117 @@ function BatchCSVSection() {
               </div>
             </div>
 
-            <div style={{ overflowX: "auto", background: "white", borderRadius: "8px", border: "1px solid #eee" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8em" }}>
-                <thead>
-                  <tr style={{ background: "#1a2035", color: "white", position: "sticky", top: 0 }}>
-                    <th style={{ padding: "10px", textAlign: "left" }}>ID</th>
-                    <th style={{ padding: "10px", textAlign: "center" }}>Kolizja</th>
-                    <th style={{ padding: "10px", textAlign: "right" }}>Napięcie [kV]</th>
-                    <th style={{ padding: "10px", textAlign: "right" }}>Pow_m2</th>
-                    <th style={{ padding: "10px", textAlign: "right" }}>Cena_PLN/m²</th>
-                    <th style={{ padding: "10px", textAlign: "right" }}>Wartość_PLN</th>
-                    <th style={{ padding: "10px", textAlign: "right" }}>Dł_Linii_m</th>
-                    <th style={{ padding: "10px", textAlign: "right" }}>Szer_Pasa_m</th>
-                    <th style={{ padding: "10px", textAlign: "right" }}>Pow_Pasa_m2</th>
-                    <th style={{ padding: "10px", textAlign: "right" }}>Track_A_PLN</th>
-                    <th style={{ padding: "10px", textAlign: "right" }}>Track_B_PLN</th>
-                    <th style={{ padding: "10px", textAlign: "right" }}>Razem_PLN</th>
-                    <th style={{ padding: "10px", textAlign: "center" }}>PDF</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {batchResults.results.map((p, i) => {
-                    const ta = p.data?.compensation?.track_a?.total || 0;
-                    const tb = p.data?.compensation?.track_b?.total || 0;
-                    const area = p.data?.geometry?.area_m2 || 0;
-                    const price = p.data?.market_data?.average_price_m2 || 0;
-                    const value = p.data?.ksws?.property_value_total || 0;
-                    const lineLength = p.data?.infrastructure?.power_lines?.length_m || 0;
-                    const bandWidth = p.data?.ksws?.band_width_m || 0;
-                    const bandArea = p.data?.ksws?.band_area_m2 || 0;
-                    const collision = p.data?.infrastructure?.power_lines?.detected;
+            {/* ── KARTY DZIAŁEK ── */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {batchResults.results.map((p, i) => {
+                const ta = p.data?.compensation?.track_a?.total || 0;
+                const tb = p.data?.compensation?.track_b?.total || 0;
+                const area = p.data?.geometry?.area_m2 || 0;
+                const price = p.data?.market_data?.average_price_m2 || 0;
+                const value = p.data?.ksws?.property_value_total || 0;
+                const lineLength = p.data?.ksws?.line_length_m || p.data?.infrastructure?.power_lines?.length_m || 0;
+                const bandWidth = p.data?.ksws?.band_width_m || 0;
+                const bandArea = p.data?.ksws?.band_area_m2 || 0;
+                const collision = !!p.data?.infrastructure?.power_lines?.detected;
+                const voltage = p.data?.infrastructure?.power_lines?.voltage || "—";
+                const razem = ta + tb;
+                const msrc = p.data?.ksws?.measurement_source || "";
 
-                    return (
-                      <tr key={i} style={{ borderBottom: "1px solid #f0f0f0", background: i % 2 === 0 ? "#fafafa" : "white" }}>
-                        <td style={{ padding: "8px", fontWeight: "bold" }}>
-                          <a href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${p.parcel_id || ""}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2575fc", textDecoration: "none" }} title="Otwórz w Geoportalu">
-                            {p.parcel_id} 🔗
-                          </a>
-                        </td>
-                        <td style={{ padding: "8px", textAlign: "center" }}>{collision ? "✅" : "❌"}</td>
-                        <td style={{ padding: "8px", textAlign: "right" }}>{p.data?.infrastructure?.power_lines?.voltage || "—"}</td>
-                        <td style={{ padding: "8px", textAlign: "right" }}>{Math.round(area).toLocaleString()}</td>
-                        <td style={{ padding: "8px", textAlign: "right" }}>{Math.round(price).toLocaleString()}</td>
-                        <td style={{ padding: "8px", textAlign: "right" }}>{Math.round(value).toLocaleString()}</td>
-                        <td style={{ padding: "8px", textAlign: "right" }}>{Math.round(lineLength).toLocaleString()}</td>
-                        <td style={{ padding: "8px", textAlign: "right" }}>{Math.round(bandWidth).toLocaleString()}</td>
-                        <td style={{ padding: "8px", textAlign: "right" }}>{Math.round(bandArea).toLocaleString()}</td>
-                        <td style={{ padding: "8px", textAlign: "right", color: "#27ae60", fontWeight: "bold" }}>{Math.round(ta).toLocaleString()}</td>
-                        <td style={{ padding: "8px", textAlign: "right", color: "#f39c12", fontWeight: "bold" }}>{Math.round(tb).toLocaleString()}</td>
-                        <td style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>{Math.round(ta + tb).toLocaleString()}</td>
-                        <td style={{ padding: "8px", textAlign: "center" }}>
-                          <button
-                            onClick={() => generateParcelPDF(p)}
-                            style={{ padding: "4px 10px", background: "#2575fc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.85em" }}
-                          >
-                            📄
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                return (
+                  <div key={i} style={{
+                    background: "white",
+                    borderRadius: "10px",
+                    border: "1px solid #e8e8e8",
+                    borderLeft: `5px solid ${collision ? "#e74c3c" : "#27ae60"}`,
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                    overflow: "hidden",
+                  }}>
+                    {/* — nagłówek karty — */}
+                    <div style={{
+                      padding: "10px 16px",
+                      background: collision ? "#fff5f5" : "#f5fff8",
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      borderBottom: "1px solid #f0f0f0", gap: "10px", flexWrap: "wrap",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: "800", fontSize: "0.97em", color: "#1a1a2e" }}>
+                          #{i + 1} &nbsp;{p.parcel_id}
+                        </span>
+                        <a
+                          href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${p.parcel_id || ""}`}
+                          target="_blank" rel="noopener noreferrer"
+                          style={{ fontSize: "0.75em", color: "#2575fc", textDecoration: "none" }}
+                        >🔗 geoportal</a>
+                        <span style={{
+                          padding: "3px 10px", borderRadius: "12px", fontSize: "0.74em", fontWeight: "700",
+                          background: collision ? "#e74c3c" : "#27ae60", color: "white", letterSpacing: "0.5px",
+                        }}>
+                          {collision ? "⚡ KOLIZJA" : "✓ BEZ KOLIZJI"}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => generateParcelPDF(p)}
+                        style={{
+                          padding: "6px 14px", background: "#2575fc", color: "white",
+                          border: "none", borderRadius: "6px", cursor: "pointer",
+                          fontSize: "0.82em", fontWeight: "600", whiteSpace: "nowrap",
+                        }}
+                      >📄 Raport PDF</button>
+                    </div>
+
+                    {/* — siatka danych — */}
+                    <div style={{
+                      padding: "12px 16px",
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(115px, 1fr))",
+                      gap: "8px",
+                    }}>
+                      {[
+                        { label: "Pow. działki", value: `${Math.round(area).toLocaleString()} m²`, icon: "📐" },
+                        { label: "Cena gruntu", value: `${price.toFixed(2)} zł/m²`, icon: "💰" },
+                        { label: "Wartość nier.", value: `${Math.round(value).toLocaleString()} PLN`, icon: "🏠" },
+                        { label: "Napięcie", value: voltage ? `${voltage} kV` : "—", icon: "⚡" },
+                        { label: "Dł. linii", value: lineLength > 0 ? `${Math.round(lineLength)} m` : "—", icon: "📏", hint: msrc },
+                        { label: "Szer. pasa", value: bandWidth > 0 ? `${bandWidth} m` : "—", icon: "↔️" },
+                        { label: "Pow. pasa", value: bandArea > 0 ? `${Math.round(bandArea).toLocaleString()} m²` : "—", icon: "🔲" },
+                      ].map((item, j) => (
+                        <div key={j} title={item.hint || ""} style={{
+                          background: "#f8f9fa", borderRadius: "7px", padding: "8px 10px",
+                          borderBottom: item.hint ? "2px dashed #f39c12" : undefined,
+                        }}>
+                          <div style={{ fontSize: "0.67em", color: "#999", marginBottom: "2px" }}>{item.icon} {item.label}</div>
+                          <div style={{ fontSize: "0.88em", fontWeight: "700", color: "#1a1a2e" }}>{item.value}</div>
+                          {item.hint && <div style={{ fontSize: "0.62em", color: "#f39c12", marginTop: "2px" }}>⚠ {item.hint}</div>}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* — Track A / B / RAZEM — */}
+                    <div style={{
+                      padding: "10px 16px", borderTop: "1px solid #f0f0f0",
+                      display: "grid", gridTemplateColumns: "1fr 1fr 1.3fr", gap: "8px",
+                    }}>
+                      <div style={{ background: "#f0fff4", borderRadius: "7px", padding: "8px 10px", textAlign: "center" }}>
+                        <div style={{ fontSize: "0.66em", color: "#888", marginBottom: "2px" }}>⚖️ Track A (sądowy)</div>
+                        <div style={{ fontSize: "0.93em", fontWeight: "800", color: "#27ae60" }}>{Math.round(ta).toLocaleString()} PLN</div>
+                      </div>
+                      <div style={{ background: "#fff8f0", borderRadius: "7px", padding: "8px 10px", textAlign: "center" }}>
+                        <div style={{ fontSize: "0.66em", color: "#888", marginBottom: "2px" }}>🤝 Track B (negocjacje)</div>
+                        <div style={{ fontSize: "0.93em", fontWeight: "800", color: "#f39c12" }}>{Math.round(tb).toLocaleString()} PLN</div>
+                      </div>
+                      <div style={{
+                        background: collision
+                          ? "linear-gradient(135deg, #c0392b, #e74c3c)"
+                          : "linear-gradient(135deg, #1e8449, #27ae60)",
+                        borderRadius: "7px", padding: "8px 10px", textAlign: "center",
+                      }}>
+                        <div style={{ fontSize: "0.66em", color: "rgba(255,255,255,0.75)", marginBottom: "2px" }}>💰 RAZEM</div>
+                        <div style={{ fontSize: "1.05em", fontWeight: "900", color: "white" }}>{Math.round(razem).toLocaleString()} PLN</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </>
         )}
