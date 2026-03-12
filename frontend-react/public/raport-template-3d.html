@@ -4,337 +4,636 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Raport KSWS — Kalkulator Roszczeń Przesyłowych</title>
-  <!-- Leaflet CSS + JS dla interaktywnej mapy -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+    :root {
+      --bg:        #0d0f1a;
+      --surface:   #131627;
+      --surface-2: #1a1e35;
+      --surface-3: #1f2440;
+      --border:    #252b45;
+      --border-2:  #2f3654;
+      --text:      #e2e5f1;
+      --text-muted:#8991b0;
+      --text-dim:  #555e7a;
+      --purple:    #8b5cf6;
+      --purple-2:  #7c3aed;
+      --purple-grd:linear-gradient(135deg, #4c1d95 0%, #6d28d9 50%, #8b5cf6 100%);
+      --green:     #22c55e;
+      --red:       #ef4444;
+      --orange:    #f97316;
+      --blue:      #3b82f6;
+      --teal:      #14b8a6;
+      --gold:      #eab308;
+      --pink:      #ec4899;
+      --radius:    14px;
+      --radius-sm: 8px;
+    }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    html { color-scheme: dark; }
+
     body {
       font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
-      background: #f4f6f9;
-      color: #1a2035;
-      font-size: 14px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
       line-height: 1.5;
+      min-height: 100vh;
     }
 
-    /* ══════════ PRINT ══════════ */
+    /* ══════════════════════════════════════════
+       PRINT
+    ══════════════════════════════════════════ */
     @media print {
-      body { background: white; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      body { background: #0d0f1a !important; color: #e2e5f1 !important; }
       .no-print { display: none !important; }
       .page-break { page-break-before: always; }
-      .card { box-shadow: none !important; border: 1px solid #ddd !important; break-inside: avoid; }
-      .report-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .kpi-card { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .track-a { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .track-b { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .card, .kpi-card, .track-card { break-inside: avoid; }
     }
 
-    /* ══════════ LAYOUT ══════════ */
+    /* ══════════════════════════════════════════
+       LAYOUT
+    ══════════════════════════════════════════ */
     .report-wrap {
-      max-width: 1200px;
+      max-width: 1100px;
       margin: 0 auto;
-      padding: 32px 20px 60px;
+      padding: 28px 24px 64px;
     }
 
-    /* ══════════ PRINT BUTTON ══════════ */
+    /* ══════════════════════════════════════════
+       PRINT BAR
+    ══════════════════════════════════════════ */
     .print-bar {
-      text-align: right;
-      margin-bottom: 24px;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 22px;
     }
     .btn-print {
-      background: linear-gradient(135deg, #a91079, #d81b60);
-      color: white;
+      background: linear-gradient(135deg, #6d28d9, #8b5cf6);
+      color: #fff;
       border: none;
-      padding: 12px 32px;
+      padding: 10px 26px;
       border-radius: 50px;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
-      box-shadow: 0 4px 14px rgba(169,16,121,0.35);
+      box-shadow: 0 4px 16px rgba(139,92,246,0.4);
       letter-spacing: 0.3px;
+      transition: opacity .15s;
     }
-    .btn-print:hover { opacity: 0.92; }
+    .btn-print:hover { opacity: 0.88; }
+    .btn-print-outline {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border-2);
+      padding: 10px 22px;
+      border-radius: 50px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    .btn-print-outline:hover { border-color: var(--purple); color: var(--text); }
 
-    /* ══════════ HEADER ══════════ */
+    /* ══════════════════════════════════════════
+       HEADER
+    ══════════════════════════════════════════ */
     .report-header {
-      background: linear-gradient(135deg, #3f0d59 0%, #a91079 100%);
-      color: white;
-      padding: 40px 48px;
-      border-radius: 16px;
-      margin-bottom: 32px;
-      box-shadow: 0 8px 30px rgba(169,16,121,0.25);
+      background: linear-gradient(135deg, #1a0533 0%, #2d1065 40%, #4c1d95 75%, #6d28d9 100%);
+      border: 1px solid rgba(139,92,246,0.3);
+      color: #fff;
+      padding: 36px 44px;
+      border-radius: var(--radius);
+      margin-bottom: 28px;
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
       gap: 32px;
+      position: relative;
+      overflow: hidden;
     }
-    .report-header-left {}
-    .report-header h1 {
+    .report-header::before {
+      content: '';
+      position: absolute;
+      right: -80px; top: -80px;
+      width: 260px; height: 260px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(139,92,246,0.25) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .report-header::after {
+      content: '';
+      position: absolute;
+      right: 40px; bottom: -60px;
+      width: 180px; height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(236,72,153,0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .header-icon {
+      width: 52px; height: 52px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
       font-size: 26px;
+      margin-bottom: 14px;
+    }
+    .report-header h1 {
+      font-size: 24px;
       font-weight: 800;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
       letter-spacing: -0.5px;
     }
     .report-header .subtitle {
-      font-size: 13px;
-      opacity: 0.85;
-      margin-bottom: 20px;
+      font-size: 12px;
+      opacity: 0.7;
+      margin-bottom: 22px;
+      font-weight: 400;
     }
     .report-meta-grid {
-      display: grid;
-      grid-template-columns: repeat(3, auto);
-      gap: 24px;
+      display: flex;
+      gap: 28px;
     }
     .meta-item { display: flex; flex-direction: column; gap: 2px; }
-    .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7; font-weight: 600; }
-    .meta-value { font-size: 14px; font-weight: 600; }
-    .report-header-badge {
+    .meta-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      opacity: 0.55;
+      font-weight: 600;
+    }
+    .meta-value { font-size: 13px; font-weight: 600; opacity: 0.95; }
+    .header-right {
       display: flex;
       flex-direction: column;
       align-items: flex-end;
       gap: 8px;
       flex-shrink: 0;
     }
-    .badge-real {
-      background: rgba(255,255,255,0.2);
-      color: white;
-      padding: 6px 16px;
+    .badge-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 14px;
       border-radius: 50px;
       font-size: 11px;
       font-weight: 700;
-      letter-spacing: 1px;
-      border: 1px solid rgba(255,255,255,0.3);
+      letter-spacing: 0.5px;
     }
-    .badge-spec {
-      background: rgba(255,255,255,0.1);
-      color: rgba(255,255,255,0.9);
-      padding: 4px 12px;
-      border-radius: 50px;
+    .badge-pill.real {
+      background: rgba(34,197,94,0.2);
+      color: #86efac;
+      border: 1px solid rgba(34,197,94,0.3);
+    }
+    .badge-pill.spec {
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.75);
+      border: 1px solid rgba(255,255,255,0.12);
       font-size: 10px;
     }
+    .badge-pill.voltage {
+      background: rgba(139,92,246,0.25);
+      color: #c4b5fd;
+      border: 1px solid rgba(139,92,246,0.35);
+    }
 
-    /* ══════════ KPI ROW ══════════ */
+    /* ══════════════════════════════════════════
+       KPI ROW
+    ══════════════════════════════════════════ */
     .kpi-row {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-      margin-bottom: 28px;
+      gap: 14px;
+      margin-bottom: 24px;
     }
     .kpi-card {
-      background: white;
-      border-radius: 12px;
-      padding: 24px 20px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
-      border-top: 4px solid #ccc;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 18px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color .2s;
     }
-    .kpi-card.blue   { border-top-color: #3498db; }
-    .kpi-card.green  { border-top-color: #27ae60; }
-    .kpi-card.red    { border-top-color: #e74c3c; }
-    .kpi-card.gold   { border-top-color: #f39c12; }
-    .kpi-card.magenta { border-top-color: #a91079; }
-    .kpi-icon { font-size: 22px; margin-bottom: 4px; }
-    .kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #7f8c8d; font-weight: 600; }
-    .kpi-value { font-size: 24px; font-weight: 800; color: #1a2035; line-height: 1.1; }
-    .kpi-sub { font-size: 11px; color: #95a5a6; }
+    .kpi-card:hover { border-color: var(--border-2); }
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+    .kpi-card.blue::before   { background: var(--blue); }
+    .kpi-card.green::before  { background: var(--green); }
+    .kpi-card.red::before    { background: var(--red); }
+    .kpi-card.gold::before   { background: var(--gold); }
+    .kpi-card.purple::before { background: var(--purple); }
+    .kpi-card.teal::before   { background: var(--teal); }
 
-    /* ══════════ SECTION TITLE ══════════ */
+    .kpi-icon-wrap {
+      width: 38px; height: 38px;
+      border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+    .kpi-card.blue   .kpi-icon-wrap { background: rgba(59,130,246,0.18); }
+    .kpi-card.green  .kpi-icon-wrap { background: rgba(34,197,94,0.18); }
+    .kpi-card.red    .kpi-icon-wrap { background: rgba(239,68,68,0.18); }
+    .kpi-card.gold   .kpi-icon-wrap { background: rgba(234,179,8,0.18); }
+    .kpi-card.purple .kpi-icon-wrap { background: rgba(139,92,246,0.18); }
+    .kpi-card.teal   .kpi-icon-wrap { background: rgba(20,184,166,0.18); }
+
+    .kpi-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .kpi-value {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1.15;
+      margin-top: 2px;
+    }
+    .kpi-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+    /* ══════════════════════════════════════════
+       SECTION TITLE
+    ══════════════════════════════════════════ */
     .section-title {
-      font-size: 15px;
+      font-size: 13px;
       font-weight: 700;
-      color: #1a2035;
-      margin: 32px 0 14px;
+      color: var(--text);
+      margin: 28px 0 12px;
       padding-bottom: 10px;
-      border-bottom: 2px solid #a91079;
+      border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       gap: 8px;
     }
+    .section-title .st-icon {
+      width: 26px; height: 26px;
+      background: rgba(139,92,246,0.18);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px;
+    }
 
-    /* ══════════ CARDS ══════════ */
+    /* ══════════════════════════════════════════
+       CARD
+    ══════════════════════════════════════════ */
     .card {
-      background: white;
-      border-radius: 12px;
-      padding: 24px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
-      margin-bottom: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      margin-bottom: 14px;
     }
     .card-title {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.8px;
-      color: #7f8c8d;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ══════════════════════════════════════════
+       TWO / THREE COL GRID
+    ══════════════════════════════════════════ */
+    .two-col   { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+
+    /* ══════════════════════════════════════════
+       DATA TABLE
+    ══════════════════════════════════════════ */
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table tr { border-bottom: 1px solid var(--border); }
+    .data-table tr:last-child { border-bottom: none; }
+    .data-table td { padding: 9px 0; vertical-align: top; }
+    .data-table .dl {
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 500;
+      width: 50%;
+    }
+    .data-table .dv {
+      color: var(--text);
+      font-weight: 600;
+      font-size: 12px;
+      text-align: right;
+    }
+    .data-table .dv.big {
+      font-size: 14px;
+      font-weight: 700;
+      color: #c4b5fd;
+    }
+    .data-table .dv.green { color: var(--green); font-weight: 700; }
+    .data-table .dv.red   { color: var(--red);   font-weight: 700; }
+
+    /* ══════════════════════════════════════════
+       ALERT STRIP
+    ══════════════════════════════════════════ */
+    .alert-strip {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 18px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 18px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .alert-strip.warning {
+      background: rgba(249,115,22,0.1);
+      border: 1px solid rgba(249,115,22,0.25);
+      color: #fdba74;
+    }
+    .alert-strip.warning strong { color: #fb923c; }
+    .alert-strip.success {
+      background: rgba(34,197,94,0.1);
+      border: 1px solid rgba(34,197,94,0.25);
+      color: #86efac;
+    }
+    .alert-strip.success strong { color: #4ade80; }
+    .alert-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+    /* ══════════════════════════════════════════
+       TRACK CARDS
+    ══════════════════════════════════════════ */
+    .track-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
       margin-bottom: 16px;
     }
-
-    /* ══════════ TWO-COL GRID ══════════ */
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
-
-    /* ══════════ DATA TABLE ══════════ */
-    .data-table { width: 100%; border-collapse: collapse; }
-    .data-table tr { border-bottom: 1px solid #f0f2f5; }
-    .data-table tr:last-child { border-bottom: none; }
-    .data-table td { padding: 10px 0; vertical-align: top; }
-    .data-table .dl { color: #7f8c8d; font-size: 12px; font-weight: 600; width: 48%; }
-    .data-table .dv { color: #1a2035; font-weight: 500; font-size: 13px; text-align: right; }
-    .data-table .dv.big { font-size: 16px; font-weight: 700; color: #a91079; }
-    .data-table .dv.green { color: #27ae60; font-weight: 700; }
-    .data-table .dv.red { color: #e74c3c; font-weight: 700; }
-
-    /* ══════════ ALERT ══════════ */
-    .alert-warning {
-      background: #fff8e1;
-      border-left: 5px solid #f39c12;
-      padding: 16px 20px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      font-size: 13px;
+    .track-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 26px 24px;
+      position: relative;
+      overflow: hidden;
     }
-    .alert-warning strong { color: #e67e22; }
-    .alert-success {
-      background: #e8f8f5;
-      border-left: 5px solid #27ae60;
-      padding: 16px 20px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      font-size: 13px;
+    .track-card::after {
+      content: '';
+      position: absolute;
+      bottom: -40px; right: -40px;
+      width: 120px; height: 120px;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .track-card.track-a {
+      border-left: 4px solid #6d28d9;
+    }
+    .track-card.track-a::after {
+      background: radial-gradient(circle, rgba(109,40,217,0.12) 0%, transparent 70%);
+    }
+    .track-card.track-b {
+      border-left: 4px solid var(--orange);
+    }
+    .track-card.track-b::after {
+      background: radial-gradient(circle, rgba(249,115,22,0.1) 0%, transparent 70%);
     }
 
-    /* ══════════ TRACK CARDS ══════════ */
-    .track-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-
-    .track-a {
-      background: #f8f9fa;
-      border: 1px solid #dee2e6;
-      border-left: 6px solid #2c3e50;
-      border-radius: 12px;
-      padding: 28px;
-    }
-    .track-b {
-      background: #fffdf0;
-      border: 1px solid #f39c12;
-      border-left: 6px solid #f39c12;
-      border-radius: 12px;
-      padding: 28px;
-    }
     .track-tag {
-      display: inline-block;
-      padding: 3px 12px;
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px;
       border-radius: 50px;
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 700;
       letter-spacing: 1px;
       text-transform: uppercase;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
-    .track-tag.sad { background: #1a2035; color: white; }
-    .track-tag.neg { background: #f39c12; color: white; }
-    .track-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
-    .track-desc { font-size: 11px; color: #7f8c8d; margin-bottom: 20px; }
+    .track-card.track-a .track-tag {
+      background: rgba(109,40,217,0.2);
+      color: #c4b5fd;
+      border: 1px solid rgba(109,40,217,0.3);
+    }
+    .track-card.track-b .track-tag {
+      background: rgba(249,115,22,0.18);
+      color: #fdba74;
+      border: 1px solid rgba(249,115,22,0.3);
+    }
+
+    .track-name { font-size: 17px; font-weight: 800; margin-bottom: 3px; color: var(--text); }
+    .track-desc { font-size: 10px; color: var(--text-dim); margin-bottom: 18px; }
     .track-amount {
-      font-size: 32px;
-      font-weight: 800;
-      color: #1a2035;
-      margin-bottom: 4px;
+      font-size: 30px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      line-height: 1.1;
+      margin-bottom: 3px;
     }
-    .track-amount.na { font-size: 20px; color: #bdc3c7; }
-    .track-sub { font-size: 11px; color: #95a5a6; }
+    .track-card.track-a .track-amount { color: #c4b5fd; }
+    .track-card.track-b .track-amount { color: #fdba74; }
+    .track-amount.na { font-size: 18px; color: var(--text-dim) !important; font-weight: 500; }
+    .track-sub { font-size: 10px; color: var(--text-dim); }
     .track-breakdown {
-      margin-top: 20px;
-      padding-top: 16px;
-      border-top: 1px solid rgba(0,0,0,0.08);
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
     }
-    .track-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 12px; }
-    .track-row .tl { color: #7f8c8d; }
-    .track-row .tv { font-weight: 600; }
+    .track-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      font-size: 11px;
+    }
+    .track-row .tl { color: var(--text-muted); }
+    .track-row .tv { font-weight: 600; color: var(--text); }
 
-    /* ══════════ MAPA LEAFLET ══════════ */
+    /* ══════════════════════════════════════════
+       MAP
+    ══════════════════════════════════════════ */
     .map-box {
-      border-radius: 12px;
+      border-radius: 10px;
       height: 340px;
-      margin-bottom: 16px;
       overflow: hidden;
-      border: 1px solid #dee2e6;
-      background: #e8e8e8;
+      border: 1px solid var(--border-2);
+      background: #0a0c14;
     }
+    .map-legend {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: var(--surface-2);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-muted); }
+    .legend-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .legend-line { width: 22px; height: 3px; border-radius: 2px; flex-shrink: 0; }
 
-    /* ══════════ LEGENDA MAP ══════════ */
-    .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 12px; }
-    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #555; }
-    .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-    .legend-line { width: 24px; height: 3px; flex-shrink: 0; }
-
-    /* ══════════ WNIOSKI ══════════ */
-    .conclusions { background: #f8f9fa; border-radius: 12px; padding: 24px; }
+    /* ══════════════════════════════════════════
+       WNIOSKI
+    ══════════════════════════════════════════ */
+    .conclusions {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
     .conclusion-item {
       display: flex;
       align-items: flex-start;
-      gap: 10px;
-      padding: 8px 0;
-      border-bottom: 1px solid #e9ecef;
-      font-size: 13px;
+      gap: 12px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      transition: background .15s;
     }
     .conclusion-item:last-child { border-bottom: none; }
-    .ci-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
-    .ci-text { color: #2c3e50; }
-    .ci-text strong { color: #1a2035; }
+    .conclusion-item:hover { background: var(--surface-2); }
+    .ci-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+    .ci-text { color: var(--text-muted); line-height: 1.5; }
+    .ci-text strong { color: var(--text); }
 
-    /* ══════════ FOOTER ══════════ */
-    .report-footer {
-      text-align: center;
-      padding: 32px 0 16px;
-      border-top: 1px solid #dee2e6;
-      margin-top: 48px;
-      color: #95a5a6;
-      font-size: 11px;
-    }
-    .report-footer strong { color: #7f8c8d; }
-
-    /* ══════════ INFRA BADGE ══════════ */
+    /* ══════════════════════════════════════════
+       INFRA BADGES
+    ══════════════════════════════════════════ */
     .infra-badge {
       display: inline-flex; align-items: center; gap: 5px;
-      background: #e74c3c; color: white;
-      padding: 4px 12px; border-radius: 50px;
+      padding: 3px 10px; border-radius: 50px;
       font-size: 11px; font-weight: 700;
     }
-    .infra-badge.brak { background: #27ae60; }
-    .voltage-chip {
-      background: #1a2035; color: white;
-      padding: 3px 10px; border-radius: 50px;
-      font-size: 11px; font-weight: 600;
+    .infra-badge.detected { background: rgba(239,68,68,0.18); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+    .infra-badge.clear    { background: rgba(34,197,94,0.15); color: #86efac; border: 1px solid rgba(34,197,94,0.3); }
+
+    .source-pill {
+      background: var(--surface-2);
+      color: var(--text-dim);
+      padding: 3px 9px;
+      border-radius: 50px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+      border: 1px solid var(--border);
+    }
+    .sources { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+
+    /* ══════════════════════════════════════════
+       FOOTER
+    ══════════════════════════════════════════ */
+    .report-footer {
+      text-align: center;
+      padding: 28px 0 12px;
+      border-top: 1px solid var(--border);
+      margin-top: 48px;
+      color: var(--text-dim);
+      font-size: 10px;
+      line-height: 1.7;
+    }
+    .report-footer strong { color: var(--text-muted); }
+
+    /* ══════════════════════════════════════════
+       DIVIDER
+    ══════════════════════════════════════════ */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 6px 0 14px;
     }
 
-    /* ══════════ SOURCES ══════════ */
-    .sources { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-    .source-pill {
-      background: #f0f2f5; color: #7f8c8d;
-      padding: 3px 10px; border-radius: 50px;
-      font-size: 10px; font-weight: 600;
-      letter-spacing: 0.5px;
+    /* ══════════════════════════════════════════
+       COMPENSATION SUMMARY BOX
+    ══════════════════════════════════════════ */
+    .comp-summary {
+      background: linear-gradient(135deg, #1a0b3d 0%, #1e1040 60%, #1a1635 100%);
+      border: 1px solid rgba(139,92,246,0.3);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
     }
+    .comp-summary-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: rgba(196,181,253,0.7);
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .comp-summary-range {
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      color: #e9d5ff;
+    }
+    .comp-summary-sub {
+      font-size: 11px;
+      color: rgba(196,181,253,0.5);
+      margin-top: 4px;
+    }
+    .comp-summary-tracks {
+      display: flex;
+      gap: 24px;
+    }
+    .comp-track-box {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 3px;
+    }
+    .comp-track-tag {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 50px;
+    }
+    .comp-track-tag.a { background: rgba(109,40,217,0.25); color: #c4b5fd; }
+    .comp-track-tag.b { background: rgba(249,115,22,0.2); color: #fdba74; }
+    .comp-track-val {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .comp-track-val.a { color: #c4b5fd; }
+    .comp-track-val.b { color: #fdba74; }
+
   </style>
 </head>
 <body>
 <div class="report-wrap">
 
-  <!-- PRINT BUTTON -->
+  <!-- ── PRINT BAR ─────────────────────────────── -->
   <div class="print-bar no-print">
+    <button class="btn-print-outline" onclick="window.close()">✕ Zamknij</button>
     <button class="btn-print" onclick="window.print()">⬇ Drukuj / Zapisz jako PDF</button>
   </div>
 
-  <!-- HEADER -->
+  <!-- ── HEADER ────────────────────────────────── -->
   <div class="report-header">
-    <div class="report-header-left">
-      <h1>⚡ Raport Analizy KSWS</h1>
-      <p class="subtitle">Kalkulator Roszczeń Odszkodowawczych Przesyłowych — Spec v3.0</p>
+    <div>
+      <div class="header-icon">⚡</div>
+      <h1>Raport Analizy KSWS</h1>
+      <p class="subtitle">Kalkulator Roszczeń Odszkodowawczych Przesyłowych · Spec v3.0</p>
       <div class="report-meta-grid">
         <div class="meta-item">
           <span class="meta-label">Działka</span>
@@ -350,60 +649,66 @@
         </div>
       </div>
     </div>
-    <div class="report-header-badge">
-      <span class="badge-real">✓ REAL DATA</span>
-      <span class="badge-spec">KSWS Track A/B · TK P 10/16</span>
+    <div class="header-right">
+      <span class="badge-pill real">✓ REAL DATA</span>
+      <span class="badge-pill spec">KSWS Track A/B · TK P 10/16</span>
       <span id="infra-voltage-badge"></span>
     </div>
   </div>
 
-  <!-- KPI ROW -->
+  <!-- ── KPI ROW ───────────────────────────────── -->
   <div class="kpi-row">
     <div class="kpi-card blue">
-      <div class="kpi-icon">📐</div>
+      <div class="kpi-icon-wrap">📐</div>
       <div class="kpi-label">Powierzchnia</div>
       <div class="kpi-value" id="kpi-area">—</div>
       <div class="kpi-sub">EGiB / ULDK</div>
     </div>
     <div class="kpi-card green">
-      <div class="kpi-icon">🌱</div>
+      <div class="kpi-icon-wrap">🌱</div>
       <div class="kpi-label">Klasa gruntu</div>
       <div class="kpi-value" id="kpi-class">—</div>
       <div class="kpi-sub" id="kpi-class-sub">—</div>
     </div>
     <div class="kpi-card red" id="kpi-infra-card">
-      <div class="kpi-icon">⚡</div>
+      <div class="kpi-icon-wrap">⚡</div>
       <div class="kpi-label">Sieci przesyłowe</div>
       <div class="kpi-value" id="kpi-infra">—</div>
       <div class="kpi-sub" id="kpi-infra-sub">—</div>
     </div>
     <div class="kpi-card gold">
-      <div class="kpi-icon">💰</div>
+      <div class="kpi-icon-wrap">💰</div>
       <div class="kpi-label">Cena rynkowa</div>
       <div class="kpi-value" id="kpi-price">—</div>
       <div class="kpi-sub" id="kpi-price-sub">GUS BDL</div>
     </div>
   </div>
 
-  <!-- MAPA -->
-  <div class="section-title">🗺️ Lokalizacja działki</div>
-  <div class="card">
+  <!-- ── MAPA ──────────────────────────────────── -->
+  <div class="section-title">
+    <div class="st-icon">🗺</div>
+    Lokalizacja działki
+  </div>
+  <div class="card" style="padding: 16px;">
     <div class="map-box" id="map-placeholder"></div>
-    <div class="legend">
-      <div class="legend-item"><div class="legend-line" style="background:#a91079"></div> Granica działki</div>
-      <div class="legend-item"><div class="legend-line" style="background:#e74c3c"></div> Linia 380/220kV</div>
-      <div class="legend-item"><div class="legend-line" style="background:#f39c12"></div> Linia 110kV</div>
-      <div class="legend-item"><div class="legend-line" style="background:#27ae60"></div> Linia 15-30kV</div>
-      <div class="legend-item"><div class="legend-line" style="background:#3498db"></div> Linia nN</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#8B4513"></div> Słup</div>
+    <div class="map-legend">
+      <div class="legend-item"><div class="legend-line" style="background:#a855f7"></div> Granica działki</div>
+      <div class="legend-item"><div class="legend-line" style="background:#ef4444"></div> Linia 380/220 kV</div>
+      <div class="legend-item"><div class="legend-line" style="background:#f97316"></div> Linia 110 kV</div>
+      <div class="legend-item"><div class="legend-line" style="background:#22c55e"></div> Linia 15–30 kV (SN)</div>
+      <div class="legend-item"><div class="legend-line" style="background:#3b82f6"></div> Linia nN</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#a16207"></div> Słup energetyczny</div>
     </div>
   </div>
 
-  <!-- DANE DZIAŁKI -->
-  <div class="section-title">📋 Dane działki i gruntu</div>
+  <!-- ── DANE DZIAŁKI ──────────────────────────── -->
+  <div class="section-title">
+    <div class="st-icon">📋</div>
+    Dane działki i gruntu
+  </div>
   <div class="two-col">
     <div class="card">
-      <div class="card-title">Ewidencja gruntów (EGiB)</div>
+      <div class="card-title">🏛 Ewidencja gruntów (EGiB)</div>
       <table class="data-table">
         <tr><td class="dl">Identyfikator</td><td class="dv" id="d-parcel-id">—</td></tr>
         <tr><td class="dl">Gmina / Obręb</td><td class="dv" id="d-commune">—</td></tr>
@@ -415,37 +720,43 @@
         <tr><td class="dl">Klasa / Użytek</td><td class="dv" id="d-class">—</td></tr>
         <tr><td class="dl">Budynki</td><td class="dv" id="d-buildings">—</td></tr>
       </table>
+      <div class="sources">
+        <span class="source-pill">ULDK GUGiK</span>
+        <span class="source-pill">EGiB</span>
+        <span class="source-pill">GUS BDL</span>
+      </div>
     </div>
     <div class="card">
-      <div class="card-title">Wartość rynkowa</div>
+      <div class="card-title">💹 Wartość rynkowa</div>
       <table class="data-table">
         <tr><td class="dl">Cena jednostkowa</td><td class="dv big" id="d-price-m2">—</td></tr>
         <tr><td class="dl">Wartość całkowita</td><td class="dv big" id="d-price-total">—</td></tr>
         <tr><td class="dl">Źródło</td><td class="dv" id="d-price-source">—</td></tr>
         <tr><td class="dl">Typ gruntu</td><td class="dv" id="d-land-type">—</td></tr>
       </table>
-      <div style="margin-top: 20px;">
-        <div class="card-title">Infrastruktura</div>
-        <table class="data-table">
-          <tr><td class="dl">Linia elektr.</td><td class="dv" id="d-infra-elec">—</td></tr>
-          <tr><td class="dl">Napięcie</td><td class="dv" id="d-voltage">—</td></tr>
-          <tr><td class="dl">Szerokość pasa</td><td class="dv" id="d-band">—</td></tr>
-          <tr><td class="dl">Pow. pasa ochr.</td><td class="dv" id="d-band-area">—</td></tr>
-          <tr><td class="dl">Gaz</td><td class="dv" id="d-gas">—</td></tr>
-          <tr><td class="dl">Woda / Kan.</td><td class="dv" id="d-water">—</td></tr>
-        </table>
-      </div>
-      <div class="sources" style="margin-top: 16px;">
-        <span class="source-pill">ULDK GUGiK</span>
+      <div class="divider"></div>
+      <div class="card-title">⚡ Infrastruktura</div>
+      <table class="data-table">
+        <tr><td class="dl">Linia elektr.</td><td class="dv" id="d-infra-elec">—</td></tr>
+        <tr><td class="dl">Napięcie</td><td class="dv" id="d-voltage">—</td></tr>
+        <tr><td class="dl">Szerokość pasa</td><td class="dv" id="d-band">—</td></tr>
+        <tr><td class="dl">Pow. pasa ochr.</td><td class="dv" id="d-band-area">—</td></tr>
+        <tr><td class="dl">Gaz</td><td class="dv" id="d-gas">—</td></tr>
+        <tr><td class="dl">Woda / Kan.</td><td class="dv" id="d-water">—</td></tr>
+      </table>
+      <div class="sources">
         <span class="source-pill">GESUT</span>
-        <span class="source-pill">GUS BDL</span>
         <span class="source-pill">RCN GUGiK</span>
+        <span class="source-pill">Overpass OSM</span>
       </div>
     </div>
   </div>
 
-  <!-- PLANOWANIE -->
-  <div class="section-title">🏗️ Planowanie przestrzenne</div>
+  <!-- ── PLANOWANIE ────────────────────────────── -->
+  <div class="section-title">
+    <div class="st-icon">🏗</div>
+    Planowanie przestrzenne
+  </div>
   <div class="card">
     <div class="two-col">
       <table class="data-table">
@@ -460,20 +771,44 @@
     </div>
   </div>
 
-  <!-- ALERT BRAK INFRASTRUKTURY -->
-  <div id="alert-no-infra" class="alert-warning" style="display:none">
-    ⚠️ <strong>Brak zdetektowanej infrastruktury.</strong> Automatyczna detekcja nie znalazła linii przesyłowych dla tej działki. Wyniki Track A/B nie zostały wyliczone. Możliwe przyczyny: brak dostępu do WFS GUGiK, lub rzeczywisty brak infrastruktury.
+  <!-- ── ALERT INFRA ───────────────────────────── -->
+  <div id="alert-no-infra" class="alert-strip warning" style="display:none">
+    <span class="alert-icon">⚠️</span>
+    <span><strong>Brak zdetektowanej infrastruktury.</strong> Automatyczna detekcja nie znalazła linii przesyłowych dla tej działki. Wyniki Track A/B nie zostały wyliczone. Możliwe przyczyny: brak dostępu do WFS GUGiK, lub rzeczywisty brak infrastruktury.</span>
   </div>
-  <div id="alert-has-infra" class="alert-success" style="display:none">
-    ✅ <strong>Infrastruktura zdetektowana.</strong> Linia przesyłowa wykryta w strefie działki. Wyliczenia KSWS Track A/B wykonane poniżej.
+  <div id="alert-has-infra" class="alert-strip success" style="display:none">
+    <span class="alert-icon">✅</span>
+    <span><strong>Infrastruktura zdetektowana.</strong> Linia przesyłowa wykryta w strefie działki. Wyliczenia KSWS Track A/B wykonane poniżej.</span>
   </div>
 
-  <!-- TRACK A / B -->
-  <div class="section-title">💵 Kalkulacja odszkodowania KSWS</div>
+  <!-- ── COMPENSATION SUMMARY ─────────────────── -->
+  <div id="comp-summary-box" class="comp-summary" style="display:none">
+    <div>
+      <div class="comp-summary-label">Szacowane odszkodowanie</div>
+      <div class="comp-summary-range" id="comp-summary-range">—</div>
+      <div class="comp-summary-sub">Track A (sądowa) · Track B (negocjacyjna)</div>
+    </div>
+    <div class="comp-summary-tracks">
+      <div class="comp-track-box">
+        <span class="comp-track-tag a">Track A</span>
+        <span class="comp-track-val a" id="comp-track-a-val">—</span>
+      </div>
+      <div class="comp-track-box">
+        <span class="comp-track-tag b">Track B</span>
+        <span class="comp-track-val b" id="comp-track-b-val">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── KALKULACJA ────────────────────────────── -->
+  <div class="section-title">
+    <div class="st-icon">💵</div>
+    Kalkulacja odszkodowania KSWS
+  </div>
   <div class="track-grid">
     <!-- Track A -->
-    <div class="track-a">
-      <span class="track-tag sad">ŚCIEŻKA SĄDOWA</span>
+    <div class="track-card track-a">
+      <span class="track-tag">⚖ Ścieżka sądowa</span>
       <div class="track-name">Track A</div>
       <div class="track-desc">TK P 10/16 · WSP + WBK + OBN · Wyrok NSA 2016</div>
       <div class="track-amount" id="track-a-total">—</div>
@@ -495,8 +830,8 @@
     </div>
 
     <!-- Track B -->
-    <div class="track-b">
-      <span class="track-tag neg">ŚCIEŻKA NEGOCJACYJNA</span>
+    <div class="track-card track-b">
+      <span class="track-tag">🤝 Ścieżka negocjacyjna</span>
       <div class="track-name">Track B</div>
       <div class="track-desc">Track A × Mnożnik rynkowy (benchmark)</div>
       <div class="track-amount" id="track-b-total">—</div>
@@ -514,9 +849,9 @@
     </div>
   </div>
 
-  <!-- KSWS PARAMETRY -->
+  <!-- ── PARAMETRY KSWS ────────────────────────── -->
   <div class="card" id="ksws-params-card" style="display:none">
-    <div class="card-title">Parametry kalkulacji KSWS</div>
+    <div class="card-title">⚙ Parametry kalkulacji KSWS</div>
     <div class="three-col">
       <table class="data-table">
         <tr><td class="dl">Typ infrastruktury</td><td class="dv" id="k-type">—</td></tr>
@@ -536,8 +871,11 @@
     </div>
   </div>
 
-  <!-- WNIOSKI -->
-  <div class="section-title">✅ Wnioski i zalecenia</div>
+  <!-- ── WNIOSKI ───────────────────────────────── -->
+  <div class="section-title">
+    <div class="st-icon">✅</div>
+    Wnioski i zalecenia
+  </div>
   <div class="conclusions" id="conclusions">
     <div class="conclusion-item">
       <span class="ci-icon">✅</span>
@@ -561,7 +899,7 @@
     </div>
   </div>
 
-  <!-- FOOTER -->
+  <!-- ── FOOTER ────────────────────────────────── -->
   <div class="report-footer">
     <strong>KALKULATOR KSWS v3.0</strong> — Kalkulator Roszczeń Odszkodowawczych Przesyłowych<br>
     Metodologia: KSWS · Podstawa prawna: TK P 10/16 · Dane: ULDK, GESUT, RCN, GUS BDL, planowanie.gov.pl<br>
@@ -571,9 +909,6 @@
 </div>
 
 <script>
-  // ── Dane wstrzykiwane przez frontend ────────────────────────────────────────
-  // Frontend wywołuje window.fillReport(masterRecord) po pobraniu z API
-
   function fmtPLN(v) {
     if (v == null || isNaN(v)) return '—';
     return Number(v).toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' PLN';
@@ -586,104 +921,103 @@
     if (v == null || isNaN(v)) return '—';
     return Number(v).toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' zł/m²';
   }
-
   function set(id, val) {
-    const el = document.getElementById(id);
+    var el = document.getElementById(id);
     if (el) el.textContent = val || '—';
   }
-  function show(id) { const el = document.getElementById(id); if (el) el.style.display = ''; }
-  function hide(id) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }
+  function show(id) { var el = document.getElementById(id); if (el) el.style.display = ''; }
+  function hide(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; }
 
   window.fillReport = function(mr) {
-    const geom   = mr.geometry           || {};
-    const meta   = mr.parcel_metadata    || {};
-    const egib   = mr.egib               || {};
-    const plan   = mr.planning           || {};
-    const infra  = mr.infrastructure     || {};
-    const power  = infra.power           || {};
-    const powerL = infra.power_lines     || {};
-    const utils  = infra.utilities       || {};
-    const market = mr.market_data        || {};
-    const ksws   = mr.ksws               || {};
-    const comp   = mr.compensation       || {};
-    const trackA = comp.track_a          || null;
-    const trackB = comp.track_b          || null;
-    const invest = mr.investments        || {};
-    const landUse = Array.isArray(egib.land_use) ? egib.land_use : [];
-    const primaryClass = egib.primary_class || (landUse[0] && landUse[0].class) || 'R';
-    const hasLine = !!(powerL.detected || power.exists);
-    const locationStr = [meta.commune, meta.county].filter(Boolean).join(', ');
-    const now = new Date().toLocaleString('pl-PL');
+    var geom   = mr.geometry           || {};
+    var meta   = mr.parcel_metadata    || {};
+    var egib   = mr.egib               || {};
+    var plan   = mr.planning           || {};
+    var infra  = mr.infrastructure     || {};
+    var power  = infra.power           || {};
+    var powerL = infra.power_lines     || {};
+    var utils  = infra.utilities       || {};
+    var market = mr.market_data        || {};
+    var ksws   = mr.ksws               || {};
+    var comp   = mr.compensation       || {};
+    var trackA = comp.track_a          || null;
+    var trackB = comp.track_b          || null;
+    var invest = mr.investments        || {};
+    var landUse = Array.isArray(egib.land_use) ? egib.land_use : [];
+    var primaryClass = egib.primary_class || (landUse[0] && landUse[0].class) || 'R';
+    var hasLine = !!(powerL.detected || power.exists);
+    var locationStr = [meta.commune, meta.county].filter(Boolean).join(', ');
+    var now = new Date().toLocaleString('pl-PL');
 
-    // Header meta
-    set('meta-parcel', mr.metadata && mr.metadata.teryt_id || '—');
+    // Header
+    set('meta-parcel',   (mr.metadata && mr.metadata.teryt_id) || '—');
     set('meta-location', locationStr || '—');
-    set('meta-date', now);
-    set('footer-date', 'Wygenerowano: ' + now);
+    set('meta-date',     now);
+    set('footer-date',   'Wygenerowano: ' + now);
 
     // Voltage badge
-    const vb = document.getElementById('infra-voltage-badge');
+    var vb = document.getElementById('infra-voltage-badge');
     if (vb && powerL.voltage && powerL.voltage !== 'nieznane') {
-      vb.innerHTML = '<span class="voltage-chip">' + powerL.voltage + '</span>';
+      vb.innerHTML = '<span class="badge-pill voltage">⚡ ' + powerL.voltage + '</span>';
     }
 
     // KPI
-    set('kpi-area', fmtM2(geom.area_m2));
-    set('kpi-class', primaryClass);
+    set('kpi-area',      fmtM2(geom.area_m2));
+    set('kpi-class',     primaryClass);
     set('kpi-class-sub', egib.land_type === 'agricultural' ? 'Rolny' : 'Budowlany');
-    set('kpi-infra', hasLine ? (powerL.voltage || 'Wykryta') : 'Brak');
+    set('kpi-infra',     hasLine ? (powerL.voltage || 'Wykryta') : 'Brak');
     set('kpi-infra-sub', hasLine ? 'Infrastruktura obecna' : 'Brak kolizji');
-    const kpiInfraCard = document.getElementById('kpi-infra-card');
+    var kpiInfraCard = document.getElementById('kpi-infra-card');
     if (kpiInfraCard) {
       kpiInfraCard.classList.remove('red', 'green');
       kpiInfraCard.classList.add(hasLine ? 'red' : 'green');
     }
-    set('kpi-price', fmtPrice(market.average_price_m2));
+    set('kpi-price',     fmtPrice(market.average_price_m2));
     set('kpi-price-sub', market.price_source || 'GUS BDL');
 
     // Dane działki
-    set('d-parcel-id', mr.metadata && mr.metadata.teryt_id);
-    set('d-commune', [meta.commune, meta.county].filter(Boolean).join(', '));
-    set('d-county', meta.county);
-    set('d-region', meta.region);
-    set('d-area', fmtM2(geom.area_m2));
+    set('d-parcel-id', (mr.metadata && mr.metadata.teryt_id) || '—');
+    set('d-commune',   [meta.commune, meta.county].filter(Boolean).join(', '));
+    set('d-county',    meta.county);
+    set('d-region',    meta.region);
+    set('d-area',      fmtM2(geom.area_m2));
     set('d-perimeter', geom.perimeter_m ? Math.round(geom.perimeter_m) + ' m' : '—');
-    set('d-shape', geom.shape_class || '—');
-    set('d-class', [primaryClass, egib.land_type === 'agricultural' ? 'rolny' : 'budowlany'].join(' · '));
+    set('d-shape',     geom.shape_class || '—');
+    set('d-class',     [primaryClass, egib.land_type === 'agricultural' ? 'rolny' : 'budowlany'].join(' · '));
     set('d-buildings', (mr.buildings && mr.buildings.count) ? mr.buildings.count + ' szt.' : 'Brak');
 
     // Cena
-    set('d-price-m2', fmtPrice(market.average_price_m2));
+    set('d-price-m2',    fmtPrice(market.average_price_m2));
     set('d-price-total', fmtPLN(market.average_price_m2 && geom.area_m2 ? market.average_price_m2 * geom.area_m2 : null));
     set('d-price-source', market.price_source || '—');
-    set('d-land-type', egib.land_type === 'agricultural' ? 'Rolny' : 'Budowlany');
+    set('d-land-type',   egib.land_type === 'agricultural' ? 'Rolny' : 'Budowlany');
 
     // Infrastruktura
     set('d-infra-elec', hasLine ? '✓ Wykryto' : '— Brak');
-    set('d-voltage', powerL.voltage || '—');
-    set('d-band', ksws.band_width_m ? ksws.band_width_m + ' m' : '—');
-    set('d-band-area', ksws.band_area_m2 ? fmtM2(ksws.band_area_m2) : '—');
-    set('d-gas', utils.gaz ? '✓ Tak' : '— Brak');
-    set('d-water', (utils.woda || utils.kanal) ? '✓ Tak' : '— Brak');
+    set('d-voltage',    powerL.voltage || '—');
+    set('d-band',       ksws.band_width_m ? ksws.band_width_m + ' m' : '—');
+    set('d-band-area',  ksws.band_area_m2 ? fmtM2(ksws.band_area_m2) : '—');
+    set('d-gas',        utils.gaz ? '✓ Tak' : '— Brak');
+    set('d-water',      (utils.woda || utils.kanal) ? '✓ Tak' : '— Brak');
 
     // Planowanie
-    set('d-mpzp', plan.mpzp_active ? '✓ Aktywny MPZP' : '— Brak MPZP');
+    set('d-mpzp',       plan.mpzp_active ? '✓ Aktywny MPZP' : '— Brak MPZP');
     set('d-mpzp-usage', plan.usage || '—');
-    set('d-studium', plan.studium_usage || '—');
-    set('d-permits', invest.active_permits ? invest.active_permits + ' szt.' : 'Brak');
+    set('d-studium',    plan.studium_usage || '—');
+    set('d-permits',    invest.active_permits ? invest.active_permits + ' szt.' : 'Brak');
     set('d-plan-status', plan.status || '—');
 
-    // Alert infrastruktura
+    // Alert infra
     if (hasLine) { show('alert-has-infra'); hide('alert-no-infra'); }
     else         { show('alert-no-infra');  hide('alert-has-infra'); }
 
     // Track A
     if (trackA && trackA.total != null) {
       set('track-a-total', fmtPLN(trackA.total));
-      set('track-a-sub', 'Kwota odszkodowania (ścieżka sądowa)');
-      set('track-a-wsp', fmtPLN(trackA.wsp));
-      set('track-a-wbk', fmtPLN(trackA.wbk));
-      set('track-a-obn', fmtPLN(trackA.obn));
+      set('track-a-sub',   'Kwota odszkodowania (ścieżka sądowa)');
+      set('track-a-wsp',   fmtPLN(trackA.wsp));
+      set('track-a-wbk',   fmtPLN(trackA.wbk));
+      set('track-a-obn',   fmtPLN(trackA.obn));
       show('track-a-breakdown');
     } else {
       set('track-a-total', '—');
@@ -693,93 +1027,103 @@
     // Track B
     if (trackB && trackB.total != null) {
       set('track-b-total', fmtPLN(trackB.total));
-      set('track-b-sub', 'Kwota negocjacyjna (benchmark rynkowy)');
-      set('track-b-base', fmtPLN(trackA && trackA.total));
-      set('track-b-mult', '× ' + (trackB.multiplier || '—'));
+      set('track-b-sub',   'Kwota negocjacyjna (benchmark rynkowy)');
+      set('track-b-base',  fmtPLN(trackA && trackA.total));
+      set('track-b-mult',  '× ' + (trackB.multiplier || '—'));
       show('track-b-breakdown');
     } else {
       set('track-b-total', '—');
       document.getElementById('track-b-total').classList.add('na');
     }
 
+    // Compensation summary box
+    if (trackA && trackA.total && trackB && trackB.total) {
+      show('comp-summary-box');
+      set('comp-summary-range', fmtPLN(trackA.total) + ' – ' + fmtPLN(trackB.total));
+      set('comp-track-a-val',   fmtPLN(trackA.total));
+      set('comp-track-b-val',   fmtPLN(trackB.total));
+    }
+
     // KSWS parametry
     if (ksws.infra_type) {
       show('ksws-params-card');
-      set('k-type', ksws.label || ksws.infra_type);
-      set('k-band', ksws.band_width_m + ' m');
+      set('k-type',      ksws.label || ksws.infra_type);
+      set('k-band',      ksws.band_width_m + ' m');
       set('k-band-area', fmtM2(ksws.band_area_m2));
-      set('k-value', fmtPLN(ksws.property_value_total));
-      set('k-price', fmtPrice(ksws.price_per_m2));
-      const coeffs = ksws.coeffs || {};
-      set('k-S', coeffs.S);
-      set('k-k', coeffs.k);
-      set('k-R', coeffs.R);
+      set('k-value',     fmtPLN(ksws.property_value_total));
+      set('k-price',     fmtPrice(ksws.price_per_m2));
+      var coeffs = ksws.coeffs || {};
+      set('k-S',    coeffs.S);
+      set('k-k',    coeffs.k);
+      set('k-R',    coeffs.R);
       set('k-mult', coeffs.track_b_mult ? '×' + coeffs.track_b_mult : '—');
     }
 
-    // ── MAPA LEAFLET ──────────────────────────────────────────────────────────
+    // ── MAPA LEAFLET ──────────────────────────────────
     (function initMap() {
-      const geojsonData = geom.geojson_ll || geom.geojson;
-      const centroid    = geom.centroid_ll;
+      var geojsonData = geom.geojson_ll || geom.geojson;
+      var centroid    = geom.centroid_ll;
       if (!geojsonData || !centroid) return;
 
-      const lat = Number(centroid[1]);
-      const lon = Number(centroid[0]);
+      var lat = Number(centroid[1]);
+      var lon = Number(centroid[0]);
       if (!lat || !lon) return;
 
-      // Zniszcz poprzednią mapę jeśli istnieje (np. przy ponownym fillReport)
-      const container = document.getElementById('map-placeholder');
-      if (container._leaflet_id) {
-        // Leaflet oznacza zainicjalizowane kontenery tym polem
-        return; // Już zainicjowano
-      }
+      var container = document.getElementById('map-placeholder');
+      if (container._leaflet_id) return;
 
-      const map = L.map('map-placeholder').setView([lat, lon], 16);
+      var map = L.map('map-placeholder').setView([lat, lon], 16);
 
-      // ESRI World Imagery — satelita, darmowe, bez klucza
+      // Satelita ESRI
       L.tileLayer(
         'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         { attribution: '© ESRI World Imagery', maxZoom: 19 }
       ).addTo(map);
 
-      // Granica działki
-      const parcelLayer = L.geoJSON(geojsonData, {
-        style: { color: '#a91079', weight: 3, fillColor: '#a91079', fillOpacity: 0.18 }
+      // OpenInfraMap — kolorowe linie energetyczne
+      L.tileLayer(
+        'https://tiles.openinframap.org/power/{z}/{x}/{y}.png',
+        { attribution: '⚡ OpenInfraMap', opacity: 0.9, maxZoom: 19, zIndex: 6 }
+      ).addTo(map);
+
+      // KIUT GUGiK WMS
+      L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu', {
+        layers: 'przewod_elektroenergetyczny',
+        format: 'image/png',
+        transparent: true,
+        opacity: 0.85,
+        zIndex: 7,
+        attribution: 'KIUT GUGiK'
       }).addTo(map);
 
-      // Dopasuj widok do działki
+      // Granica działki
+      var parcelLayer = L.geoJSON(geojsonData, {
+        style: { color: '#a855f7', weight: 3, fillColor: '#a855f7', fillOpacity: 0.15 }
+      }).addTo(map);
+
       try {
-        const bounds = parcelLayer.getBounds();
+        var bounds = parcelLayer.getBounds();
         if (bounds.isValid()) map.fitBounds(bounds, { padding: [20, 20] });
       } catch (_) {}
 
-      // Overpass OSM — linie energetyczne (async, nie blokuje ładowania)
-      const pad = 0.025;
-      const query = `[out:json][timeout:25];
-(
-  way["power"="line"](${lat - pad},${lon - pad},${lat + pad},${lon + pad});
-  way["power"="cable"](${lat - pad},${lon - pad},${lat + pad},${lon + pad});
-  node["power"="tower"](${lat - pad},${lon - pad},${lat + pad},${lon + pad});
-  node["power"="pole"](${lat - pad},${lon - pad},${lat + pad},${lon + pad});
-);
-out body;>;out skel qt;`;
+      // Overpass OSM
+      var pad = 0.025;
+      var query = '[out:json][timeout:25];\n(\n  way["power"="line"](' + (lat-pad) + ',' + (lon-pad) + ',' + (lat+pad) + ',' + (lon+pad) + ');\n  way["power"="cable"](' + (lat-pad) + ',' + (lon-pad) + ',' + (lat+pad) + ',' + (lon+pad) + ');\n  node["power"="tower"](' + (lat-pad) + ',' + (lon-pad) + ',' + (lat+pad) + ',' + (lon+pad) + ');\n  node["power"="pole"](' + (lat-pad) + ',' + (lon-pad) + ',' + (lat+pad) + ',' + (lon+pad) + ');\n);\nout body;>;out skel qt;';
 
-      const voltColor = function(v) {
-        const n = parseInt(v) || 0;
-        if (n >= 300) return '#e60000';
-        if (n >= 180) return '#ff6600';
-        if (n >= 100) return '#ffcc00';
-        if (n >= 10)  return '#00bb00';
-        return '#0066ff';
+      var voltColor = function(v) {
+        var n = parseInt(v) || 0;
+        if (n >= 300) return '#ef4444';
+        if (n >= 180) return '#f97316';
+        if (n >= 100) return '#eab308';
+        if (n >= 10)  return '#22c55e';
+        return '#3b82f6';
       };
 
       fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query })
         .then(function(r) { return r.json(); })
         .then(function(data) {
           var nodeMap = {};
-          data.elements.forEach(function(e) {
-            if (e.type === 'node') nodeMap[e.id] = [e.lon, e.lat];
-          });
+          data.elements.forEach(function(e) { if (e.type === 'node') nodeMap[e.id] = [e.lon, e.lat]; });
           var features = [];
           data.elements.forEach(function(el) {
             if (el.type === 'way' && el.nodes) {
@@ -794,7 +1138,7 @@ out body;>;out skel qt;`;
           L.geoJSON({ type: 'FeatureCollection', features: features }, {
             style: function(f) { return { color: voltColor(f.properties.voltage), weight: 2.5, opacity: 0.9 }; },
             pointToLayer: function(f, ll) {
-              return L.circleMarker(ll, { radius: 3, fillColor: '#8B4513', color: '#fff', weight: 1, fillOpacity: 0.9 });
+              return L.circleMarker(ll, { radius: 3, fillColor: '#a16207', color: '#fff', weight: 1, fillOpacity: 0.9 });
             }
           }).addTo(map);
         })
@@ -802,7 +1146,7 @@ out body;>;out skel qt;`;
     })();
 
     // Wnioski
-    const conclInfra = document.getElementById('concl-infra');
+    var conclInfra = document.getElementById('concl-infra');
     if (conclInfra) {
       if (hasLine) {
         conclInfra.querySelector('.ci-icon').textContent = '✅';
@@ -814,22 +1158,21 @@ out body;>;out skel qt;`;
     }
     if (trackA && trackA.total) {
       show('concl-compensation');
-      const txt = document.getElementById('concl-compensation-text');
+      var txt = document.getElementById('concl-compensation-text');
       if (txt) txt.innerHTML = 'Szacowane odszkodowanie: Track A = <strong>' + fmtPLN(trackA.total) + '</strong> · Track B = <strong>' + fmtPLN(trackB && trackB.total) + '</strong>';
     }
   };
 
-  // Auto-fill z sessionStorage jeśli otwarto przez Batch CSV (parametr ?key=...)
+  // ── Auto-fill z sessionStorage ──────────────────
   (function autoFillFromStorage() {
     try {
-      const params = new URLSearchParams(window.location.search);
-      const key = params.get('key');
+      var params = new URLSearchParams(window.location.search);
+      var key = params.get('key');
       if (key) {
-        const raw = sessionStorage.getItem(key);
+        var raw = sessionStorage.getItem(key);
         if (raw) {
-          const mr = JSON.parse(raw);
+          var mr = JSON.parse(raw);
           sessionStorage.removeItem(key);
-          // Poczekaj aż DOM gotowy, potem wypełnij
           if (document.readyState === 'complete') {
             window.fillReport(mr);
           } else {

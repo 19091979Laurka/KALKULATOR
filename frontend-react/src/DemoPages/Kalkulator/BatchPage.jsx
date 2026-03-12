@@ -17,6 +17,7 @@ export default function BatchPage() {
   const [municipality, setMunicipality] = useState("");
   const [useCache, setUseCache] = useState(true);
   const [infraType, setInfraType] = useState("elektro_SN");
+  const [isFarmer, setIsFarmer] = useState(false);
   const [loading, setLoading] = useState(false);
   const [jobId, setJobId] = useState(null);
   const [status, setStatus] = useState(null);
@@ -83,6 +84,7 @@ export default function BatchPage() {
           county: county || undefined,
           municipality: municipality || undefined,
           infra_type_pref: infraType,
+          is_farmer: isFarmer,
           use_cache: useCache,
         }),
       });
@@ -140,6 +142,11 @@ export default function BatchPage() {
                 <FormGroup check>
                   <Label check><Input type="checkbox" checked={useCache} onChange={(e) => setUseCache(e.target.checked)} /> Cache</Label>
                 </FormGroup>
+                <FormGroup check>
+                  <Label check style={{ color: isFarmer ? "#1a7a2e" : undefined, fontWeight: isFarmer ? 600 : 400 }}>
+                    <Input type="checkbox" checked={isFarmer} onChange={(e) => setIsFarmer(e.target.checked)} /> 🌾 Rolnicy (R5)
+                  </Label>
+                </FormGroup>
                 <Button type="submit" color="primary" disabled={loading}>{(loading) ? <Spinner size="sm" /> : null} Uruchom batch</Button>
               </Col>
             </Row>
@@ -169,17 +176,59 @@ export default function BatchPage() {
           <CardBody>
             <CardTitle>Wyniki ({results.length})</CardTitle>
             <div className="table-responsive">
-              <table className="table table-sm">
-                <thead><tr><th>Działka</th><th>Status</th><th>Powierzchnia</th></tr></thead>
+              <table className="table table-sm table-hover">
+                <thead className="table-dark">
+                  <tr>
+                    <th>Działka</th>
+                    <th>Status</th>
+                    <th>Pow. [m²]</th>
+                    <th>Cena [zł/m²]</th>
+                    <th>Track A [PLN]</th>
+                    <th>Track B [PLN]</th>
+                    <th>R5 rolna</th>
+                    <th>Łącznie</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {results.map((r) => (
-                    <tr key={r.parcel_id}>
-                      <td>{r.parcel_id}</td>
-                      <td><Badge color={r.data_status === "ERROR" ? "danger" : "success"}>{r.data_status}</Badge></td>
-                      <td>{r.master_record?.geometry?.area_m2 != null ? `${r.master_record.geometry.area_m2} m²` : "—"}</td>
-                    </tr>
-                  ))}
+                  {results.map((r) => {
+                    const mr  = r.master_record || {};
+                    const ta  = mr.compensation?.track_a || {};
+                    const tb  = mr.compensation?.track_b || {};
+                    const cq  = mr.claims_qualification || {};
+                    const r5  = cq.R5 || {};
+                    const fmt = (v) => v != null ? Number(v).toLocaleString("pl-PL", { maximumFractionDigits: 0 }) : "—";
+                    return (
+                      <tr key={r.parcel_id}>
+                        <td style={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{r.parcel_id}</td>
+                        <td><Badge color={r.data_status === "ERROR" ? "danger" : "success"}>{r.data_status}</Badge></td>
+                        <td>{fmt(mr.geometry?.area_m2)}</td>
+                        <td>{mr.ksws?.price_per_m2 != null ? `${mr.ksws.price_per_m2.toFixed(2)} zł` : "—"}</td>
+                        <td style={{ fontWeight: 600, color: "#2c3e7a" }}>{fmt(ta.total)}</td>
+                        <td style={{ fontWeight: 600, color: "#b7770d" }}>{fmt(tb.total)}</td>
+                        <td style={{ color: "#1a7a2e" }}>{r5.active ? fmt(r5.value) : "—"}</td>
+                        <td style={{ fontWeight: 700 }}>{fmt(cq.total_active_claims)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
+                {results.length > 1 && (() => {
+                  const sumA = results.reduce((s, r) => s + (r.master_record?.compensation?.track_a?.total || 0), 0);
+                  const sumB = results.reduce((s, r) => s + (r.master_record?.compensation?.track_b?.total || 0), 0);
+                  const sumR5 = results.reduce((s, r) => s + (r.master_record?.claims_qualification?.R5?.value || 0), 0);
+                  const sumAll = results.reduce((s, r) => s + (r.master_record?.claims_qualification?.total_active_claims || 0), 0);
+                  const fmt = (v) => v > 0 ? v.toLocaleString("pl-PL", { maximumFractionDigits: 0 }) : "—";
+                  return (
+                    <tfoot className="table-secondary fw-bold">
+                      <tr>
+                        <td colSpan={4}>SUMA ({results.length} działek)</td>
+                        <td style={{ color: "#2c3e7a" }}>{fmt(sumA)}</td>
+                        <td style={{ color: "#b7770d" }}>{fmt(sumB)}</td>
+                        <td style={{ color: "#1a7a2e" }}>{fmt(sumR5)}</td>
+                        <td>{fmt(sumAll)}</td>
+                      </tr>
+                    </tfoot>
+                  );
+                })()}
               </table>
             </div>
           </CardBody>

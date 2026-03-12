@@ -1733,7 +1733,36 @@ export default function KalkulatorPage() {
   const [obreb, setObreb] = useState("");
   const [county, setCounty] = useState("");
   const [municipality, setMunicipality] = useState("");
+  const [voivodeship, setVoivodeship] = useState("");
+  const [kwNumber, setKwNumber] = useState("");
+  const [checks, setChecks] = useState({
+    pismoStarosty: false,
+    wnioskowanieWZ: false,
+    odmowaWZ: false,
+    pismoOperatora: false,
+  });
   const infraType = "elektro_SN";
+
+  // ── Karta klienta ────────────────────────────────────────────────────────────
+  const [clientName, setClientName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [caseNumber, setCaseNumber] = useState("");
+  const [emailSentDate, setEmailSentDate] = useState("");
+
+  // ── Results state ────────────────────────────────────────────────────────────
+  // WAŻNE: musi być PRZED useEffect który używa result w dep array (TDZ)
+  const [result, setResult] = useState(null);
+  const [allResults, setAllResults] = useState(null);
+
+  // Auto-fill location fields from analysis result
+  useEffect(() => {
+    if (!result) return;
+    const mr = result.master_record || {};
+    const geom = mr.geometry || {};
+    if (geom.voivodeship && !voivodeship) setVoivodeship(geom.voivodeship);
+    if (geom.county && !county) setCounty(geom.county);
+    if (geom.commune && !municipality) setMunicipality(geom.commune);
+  }, [result]); // eslint-disable-line
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(false);
@@ -1742,15 +1771,50 @@ export default function KalkulatorPage() {
   const [activeNav, setActiveNav] = useState("analiza");
   const [showManual, setShowManual] = useState(false);
 
+  // ── Typ klienta ──────────────────────────────────────────────────────────────
+  const [isFarmer, setIsFarmer] = useState(false);
+
   // ── Manual correction ───────────────────────────────────────────────────────
   const [manualPrice, setManualPrice] = useState("");
   const [manualLandType, setManualLandType] = useState("");
   const [manualInfraDetect, setManualInfraDetect] = useState("");
   const [manualVoltage, setManualVoltage] = useState("");
+  const [manualLineLength, setManualLineLength] = useState("");
 
-  // ── Results state ────────────────────────────────────────────────────────────
-  const [result, setResult] = useState(null);
-  const [allResults, setAllResults] = useState(null);
+  // ── Assign to client ─────────────────────────────────────────────────────────
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignClientId, setAssignClientId] = useState("");
+  const [assignedMsg, setAssignedMsg] = useState("");
+
+  function getClientsFromStorage() {
+    try { return JSON.parse(localStorage.getItem("ksws_clients_v1") || "[]"); } catch { return []; }
+  }
+
+  function assignToClient() {
+    if (!assignClientId || !result) return;
+    const clients = getClientsFromStorage();
+    const mr = result.master_record || {};
+    const comp = mr.compensation || {};
+    const ksws = mr.ksws || {};
+    const entry = {
+      parcelId: result.parcel_id,
+      date: new Date().toISOString(),
+      trackA: ksws.track_a_total ?? comp.track_a ?? null,
+      trackB: ksws.track_b_total ?? comp.track_b ?? null,
+      total:  (ksws.track_a_total ?? 0) + (ksws.track_b_total ?? 0) || null,
+    };
+    const updated = clients.map((c) =>
+      c.id === assignClientId
+        ? { ...c, analyses: [entry, ...(c.analyses || [])] }
+        : c
+    );
+    localStorage.setItem("ksws_clients_v1", JSON.stringify(updated));
+    const cl = clients.find((c) => c.id === assignClientId);
+    setAssignedMsg(`✅ Przypisano do: ${cl?.firstName} ${cl?.lastName}`);
+    setShowAssignModal(false);
+    setAssignClientId("");
+    setTimeout(() => setAssignedMsg(""), 4000);
+  }
   const [mapCenter, setMapCenter] = useState(DEFAULT_CENTER);
   const [mapZoom, setMapZoom] = useState(DEFAULT_ZOOM);
   const [powerGeoJSON, setPowerGeoJSON] = useState(null);
@@ -1782,11 +1846,13 @@ export default function KalkulatorPage() {
           county: county || undefined,
           municipality: municipality || undefined,
           infra_type_pref: infraType,
+          is_farmer: isFarmer,
           manual_price_m2: manualPrice ? parseFloat(manualPrice) : undefined,
           manual_land_type: manualLandType || undefined,
           manual_infra_detected:
             manualInfraDetect !== "" ? manualInfraDetect === "true" : undefined,
           manual_voltage: manualVoltage || undefined,
+          manual_line_length_m: manualLineLength ? parseFloat(manualLineLength) : undefined,
         }),
       });
       const data = await res.json();
@@ -1872,22 +1938,60 @@ export default function KalkulatorPage() {
   const openHtmlReport = () => {
     if (!result) return;
     const mr = result.master_record;
-    const win = window.open("/raport-template-3d.html", "_blank");
-    // Poczekaj na załadowanie strony i wywołaj fillReport()
-    win.addEventListener("load", () => {
-      try { win.fillReport(mr); } catch (e) { console.error("fillReport error:", e); }
-    });
-    // Fallback — timeout jeśli load nie wystrzelił
-    setTimeout(() => {
-      try { if (win.fillReport) win.fillReport(mr); } catch (_) {}
-    }, 1500);
+    // sessionStorage + ?key= — niezawodne, nie blokowane przez przeglądarkę
+    const key = `ksws_rpt_${Date.now()}`;
+    try { sessionStorage.setItem(key, JSON.stringify(mr)); } catch (_) {}
+    const win = window.open(`/raport-template-3d.html?key=${key}`, "_blank");
+    if (!win) {
+      alert("Przeglądarka zablokowała okno popup — zezwól na wyskakujące okna dla tego serwisu.");
+      return;
+    }
+    // Polling fallback: jeśli sessionStorage nie zadziałał, wstrzyknij przez fillReport
+    let n = 0;
+    const iv = setInterval(() => {
+      n++;
+      try {
+        if (typeof win.fillReport === "function") {
+          clearInterval(iv);
+          win.fillReport(mr);
+        } else if (win.closed || n > 30) {
+          clearInterval(iv);
+        }
+      } catch (_) { clearInterval(iv); }
+    }, 200);
   };
 
-  // ── downloadPdf — backend PDF (fallback) ─────────────────────────────────────
+  // ── downloadPdf — backend PDF z pełnym raportem R1-R5 ───────────────────────
   const downloadPdf = async () => {
-    if (!allResults) return;
-    // Najpierw spróbuj HTML report (lepsza jakość wizualna)
-    openHtmlReport();
+    if (!result) return;
+    setPdfLoading(true);
+    try {
+      const res = await fetch("/api/report/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parcels: [{ parcel_id: result.parcel_id, master_record: result.master_record }],
+          owner_name: "Właściciel",
+          kw_number: "",
+          address: "",
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Błąd generowania PDF");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `raport_KSWS_${result.parcel_id.replace(/\//g, "_")}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("Błąd PDF: " + e.message);
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   // ── Destructure result ───────────────────────────────────────────────────────
@@ -1922,7 +2026,7 @@ export default function KalkulatorPage() {
     (market.rcn_price_m2 ? "RCN" : market.gus_price_m2 ? "GUS BDL" : null);
 
   const hasManualActive =
-    manualPrice || manualLandType || manualInfraDetect || manualVoltage;
+    manualPrice || manualLandType || manualInfraDetect || manualVoltage || manualLineLength;
 
   // ── RENDER ───────────────────────────────────────────────────────────────────
   return (
@@ -2157,76 +2261,257 @@ export default function KalkulatorPage() {
               <div>
                 <div className="ksws-card-header-title">Identyfikacja działki</div>
                 <div className="ksws-card-header-sub">
-                  Wprowadź identyfikator ULDK lub numer ewidencyjny
+                  Dane pobierane automatycznie z ULDK GUGiK · GUS BDL · GESUT
                 </div>
               </div>
             </div>
             <div className="ksws-card-body">
               <form onSubmit={runAnalysis}>
-                <div className="ksws-form-grid">
-                  {/* ID działki */}
-                  <div className="ksws-form-group">
-                    <label className="ksws-form-label">Identyfikator działki *</label>
-                    <input
-                      className="ksws-form-input"
-                      value={parcelIds}
-                      onChange={(e) => setParcelIds(e.target.value)}
-                      placeholder="TERYT: 141906_5.0029.60  lub podaj obręb + numer w polach poniżej"
-                    />
-                  </div>
 
-                  {/* Obręb */}
-                  <div className="ksws-form-group">
-                    <label className="ksws-form-label">Obręb</label>
-                    <input
-                      className="ksws-form-input"
-                      value={obreb}
-                      onChange={(e) => setObreb(e.target.value)}
-                      placeholder="np. Szapsk"
-                    />
+                {/* ── KARTA KLIENTA ── */}
+                <div className="ksws-client-card">
+                  <div className="ksws-client-card-header">
+                    <span style={{ fontSize: "1em" }}>👤</span>
+                    <span>Karta klienta</span>
+                    <span className="ksws-client-card-note">— dane trafiają do raportu</span>
                   </div>
-
-                  {/* Powiat */}
-                  <div className="ksws-form-group">
-                    <label className="ksws-form-label">Powiat</label>
-                    <input
-                      className="ksws-form-input"
-                      value={county}
-                      onChange={(e) => setCounty(e.target.value)}
-                      placeholder="np. płoński"
-                    />
-                  </div>
-
-                  {/* Gmina */}
-                  <div className="ksws-form-group">
-                    <label className="ksws-form-label">Gmina</label>
-                    <input
-                      className="ksws-form-input"
-                      value={municipality}
-                      onChange={(e) => setMunicipality(e.target.value)}
-                      placeholder="np. Baboszewo"
-                    />
-                  </div>
-
-                  {/* Przycisk */}
-                  <div className="ksws-form-group ksws-form-btn-col">
-                    <label className="ksws-form-label" style={{ opacity: 0 }}>.</label>
-                    <button
-                      type="submit"
-                      className="ksws-btn ksws-btn-primary"
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <>
-                          <span className="ksws-spinner-inline" />
-                          Analizuję…
-                        </>
-                      ) : (
-                        <>⚡ Generuj raport</>
-                      )}
-                    </button>
+                  <div className="ksws-client-card-grid">
+                    <div className="ksws-form-group">
+                      <label className="ksws-form-label">Imię i nazwisko / Firma</label>
+                      <input
+                        className="ksws-form-input"
+                        value={clientName}
+                        onChange={(e) => setClientName(e.target.value)}
+                        placeholder="Jan Kowalski"
+                      />
+                    </div>
+                    <div className="ksws-form-group">
+                      <label className="ksws-form-label">E-mail klienta</label>
+                      <input
+                        className="ksws-form-input"
+                        type="email"
+                        value={clientEmail}
+                        onChange={(e) => setClientEmail(e.target.value)}
+                        placeholder="jan@email.pl"
+                      />
+                    </div>
+                    <div className="ksws-form-group">
+                      <label className="ksws-form-label">Nr sprawy</label>
+                      <input
+                        className="ksws-form-input"
+                        value={caseNumber}
+                        onChange={(e) => setCaseNumber(e.target.value)}
+                        placeholder="SZU/2026/001"
+                      />
+                    </div>
+                    <div className="ksws-form-group">
+                      <label className="ksws-form-label">Data wysłania maila</label>
+                      <input
+                        className="ksws-form-input"
+                        type="date"
+                        value={emailSentDate}
+                        onChange={(e) => setEmailSentDate(e.target.value)}
+                      />
+                    </div>
                   </div>
                 </div>
+
+                {/* ── BOX 1: Identyfikator działki ── */}
+                <div className="ksws-form-box">
+                  <div className="ksws-form-box-label">
+                    <span className="ksws-form-box-num">1</span>
+                    Identyfikator działki
+                  </div>
+                  <div className="ksws-form-group" style={{ marginBottom: 0 }}>
+                    <label className="ksws-form-label">
+                      Identyfikator działki *
+                      <span className="ksws-form-hint">
+                        Pełny TERYT np. <code>141906_5.0029.60</code> — lub wpisz sam numer i uzupełnij Obręb poniżej
+                      </span>
+                    </label>
+                    <input
+                      className="ksws-form-input ksws-form-input-lg"
+                      value={parcelIds}
+                      onChange={(e) => setParcelIds(e.target.value)}
+                      placeholder="141906_5.0029.60  lub wiele po przecinku: 141906_5.0029.60, 141906_5.0029.129"
+                      autoComplete="off"
+                    />
+                    <div className="ksws-form-tip">
+                      Format TERYT: <strong>WWPPGG_R.OOOO.NR</strong> — WW=województwo PP=powiat GG=gmina R=rodzaj O=obręb NR=numer
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── BOX 2: Dane ewidencyjne ── */}
+                <div className="ksws-form-box">
+                  <div className="ksws-form-box-label">
+                    <span className="ksws-form-box-num">2</span>
+                    Dane ewidencyjne
+                    <span style={{ marginLeft: 8, fontSize: "0.72em", color: "#8ac926", fontWeight: 700 }}>
+                      ✓ Uzupełniają się automatycznie po analizie
+                    </span>
+                  </div>
+                  <div className="ksws-form-grid" style={{ marginBottom: 0 }}>
+                    <div className="ksws-form-group">
+                      <label className="ksws-form-label">Numer działki</label>
+                      <input
+                        className="ksws-form-input"
+                        value={parcelIds.includes(",") ? "" : parcelIds.split(".").pop() || parcelIds}
+                        onChange={(e) => {
+                          const nr = e.target.value.trim();
+                          if (obreb) setParcelIds(nr);
+                          else setParcelIds(nr);
+                        }}
+                        placeholder="np. 60 lub 114/2"
+                      />
+                    </div>
+                    <div className="ksws-form-group">
+                      <label className="ksws-form-label">Obręb ewidencyjny</label>
+                      <input
+                        className="ksws-form-input"
+                        value={obreb}
+                        onChange={(e) => setObreb(e.target.value)}
+                        placeholder="np. Szapsk, Cieszkowo Kolonia"
+                      />
+                    </div>
+                    <div className="ksws-form-group">
+                      <label className="ksws-form-label">Gmina</label>
+                      <input
+                        className="ksws-form-input"
+                        value={municipality}
+                        onChange={(e) => setMunicipality(e.target.value)}
+                        placeholder="np. Baboszewo"
+                      />
+                    </div>
+                    <div className="ksws-form-group">
+                      <label className="ksws-form-label">Powiat</label>
+                      <input
+                        className="ksws-form-input"
+                        value={county}
+                        onChange={(e) => setCounty(e.target.value)}
+                        placeholder="np. płoński"
+                      />
+                    </div>
+                    <div className="ksws-form-group">
+                      <label className="ksws-form-label">Województwo</label>
+                      <input
+                        className="ksws-form-input"
+                        value={voivodeship}
+                        onChange={(e) => setVoivodeship(e.target.value)}
+                        placeholder="np. mazowieckie"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── BOX 3: KW + Status prawny ── */}
+                <div className="ksws-form-box">
+                  <div className="ksws-form-box-label">
+                    <span className="ksws-form-box-num">3</span>
+                    Księga Wieczysta i status prawny
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-start" }}>
+                    {/* KW */}
+                    <div className="ksws-form-group" style={{ minWidth: 220, flex: "0 0 260px" }}>
+                      <label className="ksws-form-label">
+                        Nr Księgi Wieczystej
+                        <span className="ksws-form-hint">Format: AAAA/NNNNNNNN/N (np. WA1M/00012345/6)</span>
+                      </label>
+                      <input
+                        className="ksws-form-input"
+                        value={kwNumber}
+                        onChange={(e) => {
+                          // Auto-format: AAAA/NNNNNNNN/N
+                          let v = e.target.value.toUpperCase().replace(/[^A-Z0-9/]/g, "");
+                          // Strip existing slashes to reformat
+                          const raw = v.replace(/\//g, "");
+                          if (raw.length <= 4) v = raw;
+                          else if (raw.length <= 12) v = raw.slice(0, 4) + "/" + raw.slice(4);
+                          else v = raw.slice(0, 4) + "/" + raw.slice(4, 12) + "/" + raw.slice(12, 13);
+                          setKwNumber(v);
+                        }}
+                        placeholder="WA1M/00012345/6"
+                        maxLength={15}
+                        style={{ fontFamily: "monospace", letterSpacing: "1px" }}
+                      />
+                    </div>
+
+                    {/* Checkboxy */}
+                    <div style={{ flex: 1 }}>
+                      <div className="ksws-form-label" style={{ marginBottom: 10 }}>
+                        Status sprawy
+                      </div>
+                      <div className="ksws-checks-grid">
+                        {[
+                          { key: "pismoStarosty",  label: "Pismo od starosty" },
+                          { key: "wnioskowanieWZ", label: "Wnioskowane o WZ" },
+                          { key: "odmowaWZ",       label: "Odmowa WZ" },
+                          { key: "pismoOperatora", label: "Pismo od operatora" },
+                        ].map(({ key, label }) => (
+                          <label key={key} className="ksws-check-item">
+                            <input
+                              type="checkbox"
+                              className="ksws-check-input"
+                              checked={checks[key]}
+                              onChange={(e) => setChecks((prev) => ({ ...prev, [key]: e.target.checked }))}
+                            />
+                            <span className="ksws-check-label">{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── PRZYCISK ── */}
+                <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+                  <button
+                    type="submit"
+                    className="ksws-btn ksws-btn-primary"
+                    disabled={loading}
+                    style={{ minWidth: 200 }}
+                  >
+                    {loading ? (
+                      <>
+                        <span className="ksws-spinner-inline" />
+                        Analizuję…
+                      </>
+                    ) : (
+                      <>⚡ Generuj raport KSWS</>
+                    )}
+                  </button>
+                  {(checks.pismoStarosty || checks.wnioskowanieWZ || checks.odmowaWZ || checks.pismoOperatora) && (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {checks.pismoStarosty  && <span className="ksws-badge ksws-badge-blue">📄 Pismo starosty</span>}
+                      {checks.wnioskowanieWZ && <span className="ksws-badge ksws-badge-blue">📋 WZ złożone</span>}
+                      {checks.odmowaWZ       && <span className="ksws-badge" style={{ background: "#ff595e", color: "#fff" }}>❌ Odmowa WZ</span>}
+                      {checks.pismoOperatora && <span className="ksws-badge ksws-badge-blue">📧 Pismo operatora</span>}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Typ klienta: Rolnik ── */}
+                <label
+                  style={{
+                    display: "flex", alignItems: "center", gap: "8px",
+                    marginTop: "10px", marginBottom: "2px",
+                    cursor: "pointer", fontWeight: isFarmer ? "600" : "400",
+                    color: isFarmer ? "#1a7a2e" : "#444",
+                    background: isFarmer ? "#eafaf1" : "transparent",
+                    border: isFarmer ? "1px solid #27ae60" : "1px solid transparent",
+                    borderRadius: "6px", padding: "6px 10px",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isFarmer}
+                    onChange={(e) => setIsFarmer(e.target.checked)}
+                    style={{ width: "16px", height: "16px", accentColor: "#27ae60" }}
+                  />
+                  <span>🌾 Rolnik — aktywuje R5 (szkoda rolna: fundamenty + wyspy sprzętowe)</span>
+                </label>
+
+                <div style={{ marginTop: "6px" }}></div>
 
                 {/* ── Korekta ręczna accordion ── */}
                 <button
@@ -2301,6 +2586,70 @@ export default function KalkulatorPage() {
                           <option value="nN">nN (&lt;1 kV)</option>
                         </select>
                       </div>
+                      <div className="ksws-form-group">
+                        <label className="ksws-form-label">
+                          Długość linii [m]
+                          <span style={{ fontSize: "0.7rem", color: "#888", fontWeight: 400, marginLeft: 4 }}>
+                            (z Geoportalu / geodety)
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          step="1"
+                          min="0"
+                          className="ksws-form-input"
+                          placeholder="np. 180"
+                          value={manualLineLength}
+                          onChange={(e) => setManualLineLength(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    {/* ── INSTRUKCJA GEOPORTAL ── */}
+                    <div style={{
+                      marginTop: 14,
+                      padding: "12px 14px",
+                      background: "#f0f4ff",
+                      border: "1px solid #c5d0f0",
+                      borderRadius: 8,
+                      fontSize: "0.78rem",
+                      color: "#344",
+                      lineHeight: 1.6,
+                    }}>
+                      <div style={{ fontWeight: 700, marginBottom: 6, color: "#2c3e7a", fontSize: "0.8rem" }}>
+                        📐 Jak zmierzyć linię i ustalić napięcie w Geoportalu?
+                      </div>
+                      <ol style={{ margin: 0, paddingLeft: 18 }}>
+                        <li>
+                          <a
+                            href={result?.parcel_id
+                              ? `https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${result.parcel_id}`
+                              : "https://mapy.geoportal.gov.pl/"}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "#1a56db", fontWeight: 600 }}
+                          >
+                            Otwórz działkę w Geoportalu →
+                          </a>
+                        </li>
+                        <li>
+                          W panelu warstw włącz <strong>Uzbrojenie terenu (KIUT)</strong> — linie pojawią się na mapie
+                        </li>
+                        <li>
+                          <strong>Kliknij na linię</strong> — pojawi się okno z atrybutami, np.:
+                          <div style={{ margin: "5px 0 3px 0", padding: "6px 10px", background: "#fff", border: "1px solid #d0d8f0", borderRadius: 5, fontFamily: "monospace", fontSize: "0.75rem", color: "#333" }}>
+                            Rodzaj: <strong>linia elektroenergetyczna średniego napięcia</strong><br/>
+                            <span style={{ color: "#888" }}>→ "wysokiego" = WN &nbsp;|&nbsp; "średniego" = SN &nbsp;|&nbsp; "niskiego" = nN</span>
+                          </div>
+                        </li>
+                        <li>
+                          Kliknij ikonę <strong>📏 Pomiar odległości</strong> (pasek narzędzi u góry) i kliknij wzdłuż linii <em>w granicach działki</em>
+                        </li>
+                        <li>Wpisz napięcie i długość powyżej, kliknij <em>Generuj</em></li>
+                      </ol>
+                      <div style={{ marginTop: 8, color: "#666", fontSize: "0.72rem" }}>
+                        💡 Brak warstwy KIUT? Spróbuj <a href="https://inspire.miasternet.pl/kiut/" target="_blank" rel="noopener noreferrer" style={{ color: "#1a56db" }}>KIUT na miasternet.pl</a> lub poproś o mapę zasadniczą u starosty.
+                      </div>
                     </div>
 
                     {hasManualActive && (
@@ -2337,6 +2686,9 @@ export default function KalkulatorPage() {
                         {manualVoltage && (
                           <span className="ksws-badge ksws-badge-blue">{manualVoltage}</span>
                         )}
+                        {manualLineLength && (
+                          <span className="ksws-badge ksws-badge-blue">{manualLineLength} m</span>
+                        )}
                         <button
                           type="button"
                           className="ksws-btn-link"
@@ -2345,6 +2697,7 @@ export default function KalkulatorPage() {
                             setManualLandType("");
                             setManualInfraDetect("");
                             setManualVoltage("");
+                            setManualLineLength("");
                           }}
                         >
                           Wyczyść
@@ -2439,21 +2792,90 @@ export default function KalkulatorPage() {
                   )}
                   <button
                     className="ksws-btn ksws-btn-pdf"
-                    onClick={downloadPdf}
-                    disabled={pdfLoading}
-                    title="Pobierz raport PDF"
+                    onClick={openHtmlReport}
+                    title="Otwórz raport z mapą — drukuj lub zapisz jako PDF (Ctrl+P)"
                   >
-                    {pdfLoading ? (
-                      <>
-                        <span className="ksws-spinner-inline" />
-                        PDF…
-                      </>
-                    ) : (
-                      <>⬇ PDF</>
-                    )}
+                    📄 Raport PDF
+                  </button>
+                  <button
+                    className="ksws-btn"
+                    style={{ background: "#f0eaff", color: "#6a4c93", border: "1.5px solid #c9b8e8", fontSize: "0.82em" }}
+                    onClick={() => setShowAssignModal((v) => !v)}
+                    title="Przypisz analizę do karty klienta"
+                  >
+                    👤 Klient
                   </button>
                 </div>
               </div>
+
+              {/* ── ASSIGN TO CLIENT MINI MODAL ── */}
+              {showAssignModal && (() => {
+                const clients = getClientsFromStorage();
+                return (
+                  <div style={{
+                    background: "#fff",
+                    border: "1.5px solid #c9b8e8",
+                    borderRadius: 10,
+                    padding: "16px 20px",
+                    marginBottom: 12,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    flexWrap: "wrap",
+                    boxShadow: "0 4px 16px rgba(106,76,147,0.12)",
+                  }}>
+                    <span style={{ fontWeight: 700, fontSize: "0.85em", color: "#6a4c93" }}>👤 Przypisz do klienta:</span>
+                    {clients.length === 0 ? (
+                      <span style={{ color: "#9b9faa", fontSize: "0.82em" }}>
+                        Brak klientów — <a href="#/kalkulator/klienci" style={{ color: "#6a4c93" }}>dodaj klienta</a>
+                      </span>
+                    ) : (
+                      <>
+                        <select
+                          value={assignClientId}
+                          onChange={(e) => setAssignClientId(e.target.value)}
+                          style={{ padding: "7px 12px", border: "1px solid #dce1e7", borderRadius: 7, fontSize: "0.875rem", outline: "none", minWidth: 200 }}
+                        >
+                          <option value="">— wybierz klienta —</option>
+                          {clients.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.firstName} {c.lastName}{c.caseNumber ? ` (${c.caseNumber})` : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          className="ksws-btn ksws-btn-primary"
+                          style={{ fontSize: "0.82em", padding: "7px 14px" }}
+                          disabled={!assignClientId}
+                          onClick={assignToClient}
+                        >
+                          Przypisz
+                        </button>
+                      </>
+                    )}
+                    <button
+                      style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "#9b9faa", fontSize: "1em" }}
+                      onClick={() => setShowAssignModal(false)}
+                    >✕</button>
+                  </div>
+                );
+              })()}
+
+              {/* ── ASSIGNED SUCCESS MSG ── */}
+              {assignedMsg && (
+                <div style={{
+                  background: "#f0fadf",
+                  border: "1px solid #b5d96c",
+                  borderRadius: 8,
+                  padding: "10px 16px",
+                  fontSize: "0.85em",
+                  fontWeight: 700,
+                  color: "#5a8a17",
+                  marginBottom: 12,
+                }}>
+                  {assignedMsg}
+                </div>
+              )}
 
               {/* ── ALERT — brak infrastruktury ── */}
               {!power.exists && manualInfraDetect !== "true" && (
@@ -2473,10 +2895,14 @@ export default function KalkulatorPage() {
                         className="ksws-btn ksws-btn-success"
                         onClick={() => {
                           setManualInfraDetect("true");
-                          runAnalysis({ preventDefault: () => {} });
+                          setShowManual(true); // otwórz korektę ręczną → ustaw napięcie
+                          // Scroll do korekty ręcznej
+                          setTimeout(() => {
+                            document.querySelector(".ksws-accordion-body")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                          }, 150);
                         }}
                       >
-                        ✓ TAK — ma linię
+                        ✓ TAK — ma linię (ustaw napięcie ↓)
                       </button>
                       <button
                         className="ksws-btn ksws-btn-neutral"
@@ -2484,11 +2910,36 @@ export default function KalkulatorPage() {
                       >
                         ✗ NIE — na pewno brak
                       </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── ALERT — linia potwierdzona ale brak długości ── */}
+              {ksws.measurement_source === "BRAK — wpisz ręcznie" && (
+                <div className="ksws-alert ksws-alert-warning">
+                  <div className="ksws-alert-icon">📏</div>
+                  <div>
+                    <div className="ksws-alert-title">
+                      Brak długości linii — kalkulacja niemożliwa
+                    </div>
+                    <div className="ksws-alert-text">
+                      Linia przesyłowa jest <strong>potwierdzona</strong>, ale nie podano jej długości —
+                      Track A i B wynoszą 0. Zmierz długość linii na mapie w Geoportalu lub podaj
+                      dane od geodety i wpisz w <strong>Korektę ręczną → Długość linii [m]</strong>,
+                      a następnie uruchom ponownie.
+                    </div>
+                    <div className="ksws-alert-actions">
                       <button
-                        className="ksws-btn-link"
-                        onClick={() => setShowManual(true)}
+                        className="ksws-btn ksws-btn-primary"
+                        onClick={() => {
+                          setShowManual(true);
+                          setTimeout(() => {
+                            document.querySelector(".ksws-accordion-body")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                          }, 150);
+                        }}
                       >
-                        Szczegóły…
+                        📏 Wpisz długość linii ↓
                       </button>
                     </div>
                   </div>
@@ -2870,11 +3321,13 @@ export default function KalkulatorPage() {
                       <span
                         style={{
                           fontSize: "0.9rem",
-                          color: "#95a5a6",
-                          fontWeight: 400,
+                          color: ksws.measurement_source === "BRAK — wpisz ręcznie" ? "#e67e22" : "#95a5a6",
+                          fontWeight: ksws.measurement_source === "BRAK — wpisz ręcznie" ? 600 : 400,
                         }}
                       >
-                        Brak wykrytej linii
+                        {ksws.measurement_source === "BRAK — wpisz ręcznie"
+                          ? "⚠ Podaj długość linii"
+                          : "Brak wykrytej linii"}
                       </span>
                     )}
                   </div>
@@ -2895,7 +3348,7 @@ export default function KalkulatorPage() {
                           <td>{fmtPLN(trackA.obn)}</td>
                         </tr>
                         <tr className="track-total-row">
-                          <td>Razem ({trackA.years || 10} lat)</td>
+                          <td>Razem ({trackA.years || 6} lat)</td>
                           <td>{fmtPLN(trackA.total)}</td>
                         </tr>
                       </tbody>
@@ -2931,11 +3384,13 @@ export default function KalkulatorPage() {
                       <span
                         style={{
                           fontSize: "0.9rem",
-                          color: "#95a5a6",
-                          fontWeight: 400,
+                          color: ksws.measurement_source === "BRAK — wpisz ręcznie" ? "#e67e22" : "#95a5a6",
+                          fontWeight: ksws.measurement_source === "BRAK — wpisz ręcznie" ? 600 : 400,
                         }}
                       >
-                        Brak wykrytej linii
+                        {ksws.measurement_source === "BRAK — wpisz ręcznie"
+                          ? "⚠ Podaj długość linii"
+                          : "Brak wykrytej linii"}
                       </span>
                     )}
                   </div>
@@ -3061,6 +3516,115 @@ export default function KalkulatorPage() {
                   </div>
                 </div>
               )}
+
+              {/* ── KWALIFIKACJA ROSZCZEŃ R1–R5 ── */}
+              {mr.claims_qualification && (() => {
+                const cq = mr.claims_qualification;
+                const R1 = cq.R1 || {};
+                const R2 = cq.R2 || {};
+                const R3 = cq.R3 || {};
+                const R4 = cq.R4 || {};
+                const R5 = cq.R5 || {};
+                const total = cq.total_active_claims || 0;
+                const fmtV = (v) => v != null && v > 0 ? fmtPLN(v) : "—";
+
+                return (
+                  <div className="ksws-card" style={{ marginTop: "16px" }}>
+                    <div className="ksws-card-header">
+                      <span className="ksws-card-header-icon">⚖️</span>
+                      <div className="ksws-card-header-title">Kwalifikacja roszczeń R1–R5</div>
+                      {total > 0 && (
+                        <span className="ksws-badge ksws-badge-blue" style={{ marginLeft: "auto", fontSize: "0.95rem", padding: "4px 12px" }}>
+                          Łącznie: {fmtPLN(total)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="ksws-card-body">
+                      <table className="ksws-track-table" style={{ width: "100%" }}>
+                        <thead>
+                          <tr style={{ background: "#f4f6f8" }}>
+                            <th style={{ textAlign: "left", padding: "6px 10px", fontSize: "0.8rem", color: "#2c3e7a" }}>Roszczenie</th>
+                            <th style={{ textAlign: "left", padding: "6px 10px", fontSize: "0.8rem", color: "#2c3e7a" }}>Podstawa</th>
+                            <th style={{ textAlign: "right", padding: "6px 10px", fontSize: "0.8rem", color: "#2c3e7a" }}>Kwota</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            { key: "R1", r: R1, label: "R1 — Służebność przesyłu (WSP)", basis: "art. 305¹–305⁴ KC" },
+                            { key: "R2", r: R2, label: `R2 — Bezumowne korzystanie (WBK ${R2.years || 6} lat)`, basis: "art. 224–225 KC" },
+                            { key: "R3", r: R3, label: "R3 — Obniżenie wartości (OBN)", basis: "art. 305² KC" },
+                            { key: "R4", r: R4, label: "R4 — Blokada zabudowy", basis: "art. 140 KC + WZ/MPZP" },
+                          ].map(({ key, r, label, basis }) => (
+                            <tr key={key} style={{ opacity: r.active ? 1 : 0.4 }}>
+                              <td style={{ padding: "6px 10px" }}>
+                                <span style={{ fontWeight: r.active ? 600 : 400 }}>{label}</span>
+                                {r.note && <div style={{ fontSize: "0.75rem", color: "#7f8c8d", marginTop: "2px" }}>{r.note}</div>}
+                              </td>
+                              <td style={{ padding: "6px 10px", fontSize: "0.8rem", color: "#555" }}>{basis}</td>
+                              <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 600, color: r.active && r.value > 0 ? "#2c3e7a" : "#bbb" }}>
+                                {r.active ? fmtV(r.value) : "n.d."}
+                              </td>
+                            </tr>
+                          ))}
+
+                          {/* R5 — tylko dla rolników */}
+                          {R5.active && (
+                            <>
+                              <tr style={{ background: "#eafaf1" }}>
+                                <td style={{ padding: "6px 10px" }}>
+                                  <span style={{ fontWeight: 600, color: "#1a7a2e" }}>🌾 R5 — Szkoda rolna</span>
+                                  <div style={{ fontSize: "0.75rem", color: "#555", marginTop: "2px" }}>
+                                    {R5.detail?.pole_count} słupów · fundamenty + wyspy niedostępne sprzętowi
+                                  </div>
+                                </td>
+                                <td style={{ padding: "6px 10px", fontSize: "0.8rem", color: "#555" }}>art. 361 §1–2 KC</td>
+                                <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700, color: "#1a7a2e" }}>
+                                  {fmtV(R5.value)}
+                                </td>
+                              </tr>
+                              {R5.detail?.r51 && (
+                                <tr style={{ background: "#f0faf4" }}>
+                                  <td style={{ padding: "4px 10px 4px 24px", fontSize: "0.8rem", color: "#444" }}>
+                                    ↳ R5.1 Fundamenty ({R5.detail.pole_count} sł. × {R5.detail.r51.formula?.split("×")[1]?.trim() || "—"})
+                                  </td>
+                                  <td style={{ fontSize: "0.75rem", color: "#7f8c8d", padding: "4px 10px" }}>damnum emergens</td>
+                                  <td style={{ padding: "4px 10px", textAlign: "right", fontSize: "0.85rem", color: "#27ae60" }}>
+                                    {fmtV(R5.detail.r51.value)}
+                                  </td>
+                                </tr>
+                              )}
+                              {R5.detail?.r52 && (
+                                <tr style={{ background: "#f0faf4" }}>
+                                  <td style={{ padding: "4px 10px 4px 24px", fontSize: "0.8rem", color: "#444" }}>
+                                    ↳ R5.2 Wyspy/kliny ({R5.detail.r52.formula || "—"})
+                                    <div style={{ fontSize: "0.72rem", color: "#7f8c8d" }}>{R5.detail.r52.note}</div>
+                                  </td>
+                                  <td style={{ fontSize: "0.75rem", color: "#7f8c8d", padding: "4px 10px" }}>lucrum cessans · GUS {R5.detail?.prod_per_ha_year_gus?.toLocaleString("pl-PL")} zł/ha/rok</td>
+                                  <td style={{ padding: "4px 10px", textAlign: "right", fontSize: "0.85rem", color: "#27ae60" }}>
+                                    {fmtV(R5.detail.r52.value)}
+                                  </td>
+                                </tr>
+                              )}
+                            </>
+                          )}
+                        </tbody>
+                        {total > 0 && (
+                          <tfoot>
+                            <tr style={{ background: "#eaf2ff", borderTop: "2px solid #2c3e7a" }}>
+                              <td colSpan={2} style={{ padding: "8px 10px", fontWeight: 700, color: "#2c3e7a" }}>
+                                ŁĄCZNIE AKTYWNE ROSZCZENIA
+                              </td>
+                              <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, fontSize: "1.05rem", color: "#2c3e7a" }}>
+                                {fmtPLN(total)}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
             </>
           )}
 

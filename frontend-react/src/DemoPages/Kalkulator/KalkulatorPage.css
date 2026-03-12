@@ -4,45 +4,47 @@
    ═════════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* ── Wzorzec: biały + jasno-piaskowy sidebar + beżowe kafelki KPI ── */
-  --szuwara-gold:      #b8963e;
-  --szuwara-gold-light:#d4af62;
-  --szuwara-gold-dark: #8c6e27;
+  /* ── Paleta NexaVerse: fioletowy sidebar + kolorowe KPI ── */
+  /* #6a4c93 · #8ac926 · #edf2f4 · #ff595e · #ffca3a · #f87575 · #1982c4 · #61e786 */
 
-  /* Paleta piaskowa (#EDEDE9 · #D6CCC2 · #F5EBE0 · #E3D5CA · #D5BDAF) */
-  --beige-1: #EDEDE9;   /* sidebar bg — bardzo jasny piasek */
-  --beige-2: #D6CCC2;   /* obramowania, linie sep. */
-  --beige-3: #F5EBE0;   /* kafelki KPI — ciepły krem */
-  --beige-4: #E3D5CA;   /* kafelki KPI wariant 2 */
-  --beige-5: #D5BDAF;   /* kafelki KPI wariant 3 — ciemniejszy piasek */
+  --purple:       #6a4c93;   /* sidebar bg */
+  --purple-dark:  #4e3571;   /* sidebar hover/active */
+  --purple-light: #8b6db4;   /* sidebar subtext */
 
-  /* Layout — jak na screenshocie */
-  --ksws-sidebar-bg:  var(--beige-1);  /* jasny piasek */
+  --green:        #8ac926;   /* primary accent / button */
+  --green-light:  #61e786;   /* success light */
+  --red:          #ff595e;   /* alert / collision */
+  --yellow:       #ffca3a;   /* warning KPI */
+  --salmon:       #f87575;   /* secondary alert */
+  --blue:         #1982c4;   /* info */
+
+  /* Layout */
+  --ksws-sidebar-bg:    var(--purple);
   --ksws-sidebar-width: 260px;
-  --ksws-bg:          #ffffff;          /* treść — czysta biel */
-  --ksws-white:       #ffffff;
-  --ksws-card-bg:     #ffffff;          /* karty — białe */
-  --ksws-kpi-bg:      var(--beige-3);   /* kafelki KPI — krem */
-  --ksws-border:      #ede8e3;          /* obramowania — delikatne */
+  --ksws-bg:            #edf2f4;   /* treść — bardzo jasny szary */
+  --ksws-white:         #ffffff;
+  --ksws-card-bg:       #ffffff;
+  --ksws-kpi-bg:        #ffffff;
+  --ksws-border:        #e2e8ed;
 
-  /* Tekst — czarny jak na screenshocie */
-  --ksws-text-dark:   #111111;
-  --ksws-text-muted:  #888888;
+  /* Tekst */
+  --ksws-text-dark:   #1a1a2e;
+  --ksws-text-muted:  #6b7a8d;
 
-  /* Akcenty */
-  --ksws-magenta:          var(--szuwara-gold);
-  --ksws-magenta-dark:     var(--szuwara-gold-dark);
-  --ksws-magenta-gradient: linear-gradient(135deg, #b8963e 0%, #d4af62 100%);
-  --ksws-green:  #27ae60;
-  --ksws-blue:   #555555;
-  --ksws-orange: #e67e22;
-  --ksws-red:    #e74c3c;
-  --ksws-gold:   var(--szuwara-gold);
+  /* Aliasy akcenty (używane w kartach i przyciskach) */
+  --ksws-magenta:          var(--green);
+  --ksws-magenta-dark:     #6da01d;
+  --ksws-magenta-gradient: linear-gradient(135deg, #6a4c93 0%, #8ac926 100%);
+  --ksws-green:    var(--green);
+  --ksws-blue:     var(--blue);
+  --ksws-orange:   var(--yellow);
+  --ksws-red:      var(--red);
+  --ksws-gold:     var(--yellow);
 
-  /* Cienie — subtelne */
-  --ksws-shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
-  --ksws-shadow-md: 0 4px 12px rgba(0,0,0,0.08);
-  --ksws-shadow-lg: 0 8px 24px rgba(0,0,0,0.10);
+  /* Cienie */
+  --ksws-shadow-sm: 0 1px 4px rgba(106,76,147,0.08);
+  --ksws-shadow-md: 0 4px 14px rgba(106,76,147,0.12);
+  --ksws-shadow-lg: 0 8px 28px rgba(106,76,147,0.16);
 }
 
 /* ── RESET / BASE ─────────────────────────────────────────────────────────── */
@@ -60,7 +62,7 @@
   width: var(--ksws-sidebar-width);
   min-height: 100vh;
   background: var(--ksws-sidebar-bg);
-  color: #111111;
+  color: #ffffff;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -81,30 +83,31 @@
 /* ── SIDEBAR INNER ────────────────────────────────────────────────────────── */
 .ksws-sidebar-logo {
   padding: 22px 20px 18px;
-  border-bottom: 1px solid rgba(184,150,62,0.25);
-  background: linear-gradient(180deg, rgba(184,150,62,0.07) 0%, transparent 100%);
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  background: linear-gradient(180deg, rgba(0,0,0,0.12) 0%, transparent 100%);
 }
 
-/* § symbol circle */
+/* § symbol circle — oryginalny złoty kolor logo */
 .ksws-sidebar-logo-symbol {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  border: 2px solid var(--szuwara-gold);
+  border: 2px solid #b8963e;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.4rem;
-  color: var(--szuwara-gold);
+  color: #d4af62;
   font-weight: 700;
   margin-bottom: 10px;
   flex-shrink: 0;
+  background: rgba(184,150,62,0.15);
 }
 
 .ksws-sidebar-logo-title {
   font-size: 1.22rem;
   font-weight: 800;
-  color: #111111;
+  color: #ffffff;
   letter-spacing: 2px;
   text-transform: uppercase;
   margin: 0 0 3px 0;
@@ -113,11 +116,11 @@
 
 .ksws-sidebar-logo-sub {
   font-size: 0.62rem;
-  color: var(--szuwara-gold-light);
+  color: rgba(255,255,255,0.55);
   letter-spacing: 1.5px;
   text-transform: uppercase;
   margin: 0;
-  opacity: 0.85;
+  opacity: 1;
 }
 
 .ksws-sidebar-nav {
@@ -130,7 +133,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 24px;
-  color: rgba(0,0,0,0.55);
+  color: rgba(255,255,255,0.70);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -141,15 +144,15 @@
 }
 
 .ksws-sidebar-nav-item:hover {
-  color: #111111;
-  background: rgba(0,0,0,0.05);
-  border-left-color: rgba(0,0,0,0.15);
+  color: #ffffff;
+  background: rgba(255,255,255,0.10);
+  border-left-color: rgba(255,255,255,0.30);
 }
 
 .ksws-sidebar-nav-item.active {
-  color: #111111;
-  background: rgba(184,150,62,0.15);
-  border-left-color: var(--szuwara-gold);
+  color: #ffffff;
+  background: rgba(138,201,38,0.20);
+  border-left-color: var(--green);
   font-weight: 700;
 }
 
@@ -161,14 +164,14 @@
 
 .ksws-sidebar-footer {
   padding: 14px 20px;
-  border-top: 1px solid rgba(0,0,0,0.08);
+  border-top: 1px solid rgba(255,255,255,0.12);
   font-size: 0.68rem;
-  color: rgba(0,0,0,0.40);
+  color: rgba(255,255,255,0.40);
   line-height: 1.6;
 }
 
 .ksws-sidebar-footer a {
-  color: var(--szuwara-gold-light);
+  color: var(--green-light);
   text-decoration: none;
   font-weight: 600;
   opacity: 0.85;
@@ -281,6 +284,154 @@
 }
 
 /* ── FORM ─────────────────────────────────────────────────────────────────── */
+
+/* Numbered box containers */
+.ksws-form-box {
+  background: #fafbfc;
+  border: 1px solid #e2e8ed;
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 14px;
+}
+
+.ksws-form-box-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--purple);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ksws-form-box-num {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--purple);
+  color: #fff;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+/* Hint below label */
+.ksws-form-hint {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: #6b7a8d;
+  margin-top: 2px;
+  letter-spacing: 0;
+}
+
+/* Tip below input */
+.ksws-form-tip {
+  font-size: 0.72rem;
+  color: #9b9faa;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* Large input for TERYT */
+.ksws-form-input-lg {
+  font-size: 1rem !important;
+  padding: 11px 14px !important;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+/* Checkboxes grid */
+.ksws-checks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.ksws-check-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #dce1e7;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #fff;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.ksws-check-item:hover {
+  border-color: var(--purple);
+  background: #f3eeff;
+}
+
+.ksws-check-input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--purple);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ksws-check-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #2d3436;
+}
+
+/* ── KARTA KLIENTA ────────────────────────────────────────────────────────── */
+.ksws-client-card {
+  background: linear-gradient(135deg, #f9f6ff, #f3eeff);
+  border: 1.5px solid #c9b8e8;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 14px;
+}
+
+.ksws-client-card-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--purple);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.ksws-client-card-note {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: #8257b0;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.ksws-client-card-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .ksws-client-card-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 540px) {
+  .ksws-client-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .ksws-form-grid {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr 1fr auto;

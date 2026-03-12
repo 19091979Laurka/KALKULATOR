@@ -23,7 +23,7 @@ const AppMain = () => {
                         <Kalkulator />
                     </Suspense>
                 } />
-                <Route path="*" element={<Navigate to="/kalkulator/analiza" replace />} />
+                <Route path="*" element={<Navigate to="/kalkulator/home" replace />} />
             </Routes>
             <ToastContainer/>
         </Fragment>
