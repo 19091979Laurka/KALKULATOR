@@ -12,25 +12,25 @@
 
 .batch-header h1 {
   font-size: 2em;
-  color: #1a2035;
+  color: #3d2319;
   margin: 0 0 8px 0;
   font-weight: 700;
 }
 
 .batch-header p {
-  color: #888;
+  color: #9e8b83;
   font-size: 1em;
   margin: 0;
 }
 
 /* UPLOAD */
 .batch-upload-section {
-  background: white;
+  background: #F5EBE0;
   border-radius: 10px;
   padding: 30px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 12px rgba(92,61,46,0.08);
   margin-bottom: 30px;
-  border: 1px solid #eef0f5;
+  border: 1px solid #D6CCC2;
 }
 
 .upload-box {
@@ -39,27 +39,27 @@
 
 .file-label {
   display: block;
-  border: 2px dashed #2575fc;
+  border: 2px dashed #b8963e;
   border-radius: 10px;
   padding: 30px;
   text-align: center;
   cursor: pointer;
-  color: #2575fc;
+  color: #5c3d2e;
   font-weight: 600;
   font-size: 1em;
   transition: all 0.2s;
-  background: #f7f9ff;
+  background: #EDEDE9;
 }
 
 .file-label:hover {
-  background: #eef2ff;
-  border-color: #2575fc;
+  background: #E3D5CA;
+  border-color: #8c6e27;
 }
 
 .submit-btn {
   width: 100%;
   padding: 14px;
-  background: linear-gradient(135deg, #1a2035, #2575fc);
+  background: linear-gradient(135deg, #5c3d2e, #b8963e);
   color: white;
   border: none;
   border-radius: 8px;
@@ -81,7 +81,7 @@
 
 .file-info {
   font-size: 0.85em;
-  color: #999;
+  color: #9e8b83;
   margin: 0;
 }
 
@@ -120,13 +120,13 @@
 }
 
 .stat-card {
-  background: white;
+  background: #F5EBE0;
   border-radius: 10px;
   padding: 20px;
   text-align: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  border: 1px solid #eef0f5;
-  border-left: 4px solid #2575fc;
+  box-shadow: 0 2px 8px rgba(92,61,46,0.07);
+  border: 1px solid #D6CCC2;
+  border-left: 4px solid #b8963e;
 }
 
 .stat-card.success {
@@ -134,27 +134,27 @@
 }
 
 .stat-card.orange {
-  border-left-color: #f39c12;
+  border-left-color: #e67e22;
 }
 
 .stat-card.money {
-  border-left-color: #2575fc;
+  border-left-color: #b8963e;
 }
 
 .stat-card.money2 {
-  border-left-color: #6a11cb;
+  border-left-color: #8c6e27;
 }
 
 .stat-value {
   font-size: 2em;
   font-weight: 800;
-  color: #1a2035;
+  color: #3d2319;
   line-height: 1.2;
 }
 
 .stat-label {
   font-size: 0.8em;
-  color: #888;
+  color: #9e8b83;
   margin-top: 8px;
   font-weight: 600;
 }
@@ -197,23 +197,23 @@
   border-radius: 8px;
   font-size: 0.9em;
   font-weight: 600;
-  border: 1px solid #dde1ee;
-  background: white;
-  color: #555;
+  border: 1px solid #D6CCC2;
+  background: #F5EBE0;
+  color: #5c3d2e;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .tab:hover {
-  background: #f0f4ff;
-  color: #2575fc;
-  border-color: #c5d3f8;
+  background: #E3D5CA;
+  color: #3d2319;
+  border-color: #D5BDAF;
 }
 
 .tab.active {
-  background: #1a2035;
+  background: #5c3d2e;
   color: white;
-  border-color: #1a2035;
+  border-color: #5c3d2e;
 }
 
 .tab-download {
@@ -222,48 +222,48 @@
   border-radius: 8px;
   font-size: 0.9em;
   font-weight: 600;
-  border: 1px solid #c5d3f8;
-  background: #f0f4ff;
-  color: #2575fc;
+  border: 1px solid #D6CCC2;
+  background: #EDEDE9;
+  color: #5c3d2e;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .tab-download:hover {
-  background: #e0ebff;
+  background: #E3D5CA;
 }
 
 /* CONTENT */
 .content-box {
-  background: white;
+  background: #F5EBE0;
   border-radius: 10px;
   padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  border: 1px solid #eef0f5;
+  box-shadow: 0 2px 8px rgba(92,61,46,0.07);
+  border: 1px solid #D6CCC2;
 }
 
 .content-box h3 {
-  color: #1a2035;
+  color: #3d2319;
   margin: 0 0 15px 0;
   font-size: 1.1em;
   font-weight: 700;
 }
 
 .map-box {
-  background: white;
+  background: #F5EBE0;
   border-radius: 10px;
   padding: 0;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  border: 1px solid #eef0f5;
+  box-shadow: 0 2px 12px rgba(92,61,46,0.08);
+  border: 1px solid #D6CCC2;
   overflow: hidden;
 }
 
 .table-box {
-  background: white;
+  background: #F5EBE0;
   border-radius: 10px;
   padding: 0;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  border: 1px solid #eef0f5;
+  box-shadow: 0 2px 12px rgba(92,61,46,0.08);
+  border: 1px solid #D6CCC2;
   overflow: hidden;
 }
 
@@ -275,21 +275,21 @@
 }
 
 .results-table thead th {
-  background: #1a2035;
+  background: #5c3d2e;
   color: white;
   padding: 12px;
   text-align: left;
   font-weight: 600;
-  border-bottom: 2px solid #2575fc;
+  border-bottom: 2px solid #b8963e;
 }
 
 .results-table tbody td {
   padding: 12px;
-  border-bottom: 1px solid #f0f2f7;
+  border-bottom: 1px solid #E3D5CA;
 }
 
 .results-table tbody tr:hover {
-  background: #f9f9f9;
+  background: #EDEDE9;
 }
 
 .results-table tbody tr.collision {
@@ -302,7 +302,7 @@
 
 /* LEAFLET MAP */
 .leaflet-container {
-  background: #e5e3df;
+  background: #EDEDE9;
 }
 
 .leaflet-popup-content {

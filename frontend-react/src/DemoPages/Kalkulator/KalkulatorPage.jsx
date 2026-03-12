@@ -807,7 +807,7 @@ function BatchCSVSection() {
           <div class="parcel-header-left">
             <div class="parcel-num-badge" style="background:${collision ? '#fde8e8' : '#e8f5e9'};border:2px solid ${collision ? '#e53935' : '#43a047'};color:${collision ? '#c62828' : '#2e7d32'};font-size:12px;">#${i + 1}</div>
             <div>
-              <div class="parcel-id" style="color:#1a2035;">${p.parcel_id || "—"}</div>
+              <div class="parcel-id" style="color:#3d2319;">${p.parcel_id || "—"}</div>
               <a href="https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${encodeURIComponent(p.parcel_id || "")}"
                  target="_blank" class="geo-link" style="color:#3498db;">🔗 geoportal</a>
             </div>
@@ -885,7 +885,7 @@ function BatchCSVSection() {
                 </div>
               </div>
               <!-- RAZEM -->
-              <div style="background:#1a2035;border-radius:10px;padding:14px;">
+              <div style="background:#3d2319;border-radius:10px;padding:14px;">
                 <div class="track-label" style="color:rgba(255,193,7,0.85);">💰 RAZEM A+B</div>
                 <div style="font-size:22px;font-weight:900;color:white;margin-top:4px;">${fmtN((ta.total || 0) + (tb.total || 0))}</div>
                 <div style="font-size:10px;color:rgba(255,255,255,0.5);margin-top:2px;font-weight:700;">PLN · Track A + B łącznie</div>
@@ -933,7 +933,7 @@ function BatchCSVSection() {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1a2035;font-size:14px;line-height:1.5}
+body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3d2319;font-size:14px;line-height:1.5}
 @media print{
   body{background:white}
   .no-print{display:none!important}
@@ -971,7 +971,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
 .kpi-value.sm{font-size:16px;font-weight:900;color:white}
 .kpi-sub{font-size:10px;color:rgba(255,255,255,0.65);font-weight:500}
 /* SECTION TITLE */
-.section-title{font-size:15px;font-weight:700;color:#1a2035;margin:28px 0 14px;padding-bottom:10px;border-bottom:2px solid #a91079;display:flex;align-items:center;gap:8px}
+.section-title{font-size:15px;font-weight:700;color:#3d2319;margin:28px 0 14px;padding-bottom:10px;border-bottom:2px solid #a91079;display:flex;align-items:center;gap:8px}
 /* RAZEM BANNER */
 .razem-banner{background:linear-gradient(135deg,#1a1a2e,#2c3e50);color:white;padding:22px 32px;border-radius:12px;text-align:center;margin-bottom:24px;box-shadow:0 4px 15px rgba(0,0,0,.15)}
 .razem-banner-label{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;opacity:.65;margin-bottom:6px}
@@ -981,15 +981,15 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
 .parcel-header{padding:14px 22px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .parcel-header-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .parcel-num-badge{width:36px;height:36px;border-radius:50%;color:white;font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.parcel-id{font-size:15px;font-weight:800;color:#1a2035}
+.parcel-id{font-size:15px;font-weight:800;color:#3d2319}
 .parcel-sub{font-size:11px;color:#95a5a6;margin-top:2px}
 .geo-link{font-size:11px;color:#3498db;text-decoration:none;font-weight:600}
 .collision-badge{padding:4px 14px;border-radius:50px;font-size:12px;font-weight:700;letter-spacing:.5px;color:white}
 .parcel-body-grid{display:grid;grid-template-columns:1fr 290px}
 /* DATA BOXES */
-.data-box-v2{background:#f8f9fc;border-radius:10px;padding:10px 12px;border:1px solid #eef0f5}
+.data-box-v2{background:#f8f9fc;border-radius:10px;padding:10px 12px;border:1px solid #D6CCC2}
 .db-label{font-size:10px;color:#95a5a6;margin-bottom:4px;text-transform:uppercase;letter-spacing:.7px;font-weight:700}
-.db-value{font-size:13px;font-weight:800;color:#1a2035}
+.db-value{font-size:13px;font-weight:800;color:#3d2319}
 .db-hint{display:block;font-size:10px;color:#e67e22;font-weight:500;margin-top:2px}
 /* TRACK BOXES */
 .track-box-a{background:#eef4ff;border-radius:10px;padding:14px;border:1px solid #dce8ff}
@@ -1005,9 +1005,9 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
 .leaflet-container{height:100%;min-height:280px}
 /* SUMMARY TABLE */
 .summary-table{width:100%;border-collapse:collapse;background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.07)}
-.summary-table thead tr{background:#1a2035;color:white}
+.summary-table thead tr{background:#3d2319;color:white}
 .summary-table thead th{padding:11px 12px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px}
-.summary-table tfoot tr{background:#f4f6f9;border-top:2px solid #1a2035}
+.summary-table tfoot tr{background:#EDEDE9;border-top:2px solid #3d2319}
 .summary-table tfoot td{padding:12px;font-weight:800;font-size:14px}
 /* FOOTER */
 .report-footer{text-align:center;margin-top:40px;font-size:11px;color:#95a5a6;padding:20px;border-top:1px solid #e8ecf0}
@@ -1083,7 +1083,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
         <td colspan="2">SUMA (${results.length} działek)</td>
         <td style="text-align:right;color:#27ae60;">${fmtN(totalA)} PLN</td>
         <td style="text-align:right;color:#e67e22;">${fmtN(totalB)} PLN</td>
-        <td style="text-align:right;color:#1a2035;">${fmtN(totalA + totalB)} PLN</td>
+        <td style="text-align:right;color:#3d2319;">${fmtN(totalA + totalB)} PLN</td>
       </tr>
     </tfoot>
   </table>
@@ -1091,7 +1091,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
   <div class="report-footer">
     <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px;">
       <span style="width:28px;height:28px;border-radius:50%;border:1.5px solid #b8963e;display:inline-flex;align-items:center;justify-content:center;font-size:1rem;color:#b8963e;font-weight:800;">§</span>
-      <strong style="font-size:13px;letter-spacing:1.5px;color:#1a2035;">SZUWARA</strong>
+      <strong style="font-size:13px;letter-spacing:1.5px;color:#3d2319;">SZUWARA</strong>
       <span style="color:#b8963e;font-size:11px;">Kancelaria Prawno-Podatkowa</span>
     </div>
     <a href="https://www.kancelaria-szuwara.pl" style="color:#b8963e;font-weight:700;">www.kancelaria-szuwara.pl</a>
@@ -1214,7 +1214,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
             <button type="button" onClick={downloadBatchPDF} disabled={!batchResults?.results} className="ksws-btn" style={{ whiteSpace: "nowrap", background: "#a91079", color: "white", border: "none", fontWeight: "700" }}>
               📊 Raport Zbiorczy
             </button>
-            <button type="button" onClick={downloadMapHTML} disabled={!batchResults?.results} className="ksws-btn" style={{ whiteSpace: "nowrap", background: "#2575fc", color: "white", border: "none" }}>
+            <button type="button" onClick={downloadMapHTML} disabled={!batchResults?.results} className="ksws-btn" style={{ whiteSpace: "nowrap", background: "#b8963e", color: "white", border: "none" }}>
               🗺️ Mapa
             </button>
           </div>
@@ -1255,7 +1255,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
             <div style={{ background: "white", borderRadius: "14px", border: "1px solid #e8eaf0", overflow: "hidden", marginBottom: "24px", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}>
               <div style={{ height: "5px", background: "linear-gradient(90deg,#e74c3c,#f39c12,#27ae60,#3498db)" }} />
               <div style={{ padding: "16px 20px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #f0f2f5" }}>
-                <div style={{ fontWeight: "800", fontSize: "0.95em", color: "#1a2035", display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ fontWeight: "800", fontSize: "0.95em", color: "#3d2319", display: "flex", alignItems: "center", gap: "10px" }}>
                   🗺️ Mapa zbiorcza
                   <span style={{ fontWeight: "400", fontSize: "0.85em", color: "#95a5a6" }}>— wszystkie {stats.total} działek</span>
                 </div>
@@ -1318,7 +1318,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
 
                 {/* ── Compensation per parcel — horizontal bars (jak w dashboardzie) ── */}
                 <div style={{ background: "white", borderRadius: "12px", padding: "20px", boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
-                  <div style={{ fontSize: "0.75em", fontWeight: "700", color: "#1a2035", marginBottom: "14px", letterSpacing: "0.3px" }}>
+                  <div style={{ fontSize: "0.75em", fontWeight: "700", color: "#3d2319", marginBottom: "14px", letterSpacing: "0.3px" }}>
                     📊 Odszkodowanie wg działki
                   </div>
                   {(() => {
@@ -1346,7 +1346,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
                                 <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pctA}%`, background: "#3498db", borderRadius: "4px 0 0 4px", transition: "width 0.3s" }} />
                                 <div style={{ position: "absolute", left: `${pctA}%`, top: 0, bottom: 0, width: `${pctB}%`, background: "#f39c12", transition: "width 0.3s" }} />
                               </div>
-                              <div style={{ fontSize: "0.73em", fontWeight: "700", color: "#1a2035", textAlign: "right" }}>
+                              <div style={{ fontSize: "0.73em", fontWeight: "700", color: "#3d2319", textAlign: "right" }}>
                                 {Math.round(razem / 1000).toLocaleString()}k PLN
                               </div>
                             </div>
@@ -1378,10 +1378,10 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
 
                 {/* ── Summary — Payment received style ── */}
                 <div style={{ background: "white", borderRadius: "12px", padding: "20px", boxShadow: "0 1px 6px rgba(0,0,0,0.06)", minWidth: "220px", display: "flex", flexDirection: "column", gap: "0" }}>
-                  <div style={{ fontSize: "0.75em", fontWeight: "700", color: "#1a2035", marginBottom: "16px" }}>💰 Łączne roszczenie</div>
+                  <div style={{ fontSize: "0.75em", fontWeight: "700", color: "#3d2319", marginBottom: "16px" }}>💰 Łączne roszczenie</div>
                   <div style={{ marginBottom: "20px" }}>
                     <div style={{ fontSize: "0.62em", textTransform: "uppercase", letterSpacing: "1px", color: "#95a5a6", fontWeight: "700", marginBottom: "2px" }}>Razem (A+B)</div>
-                    <div style={{ fontSize: "1.65em", fontWeight: "900", color: "#1a2035", lineHeight: 1.1 }}>{fmtPLN(stats.trackA + stats.trackB)}</div>
+                    <div style={{ fontSize: "1.65em", fontWeight: "900", color: "#3d2319", lineHeight: 1.1 }}>{fmtPLN(stats.trackA + stats.trackB)}</div>
                   </div>
                   <div style={{ borderTop: "1px solid #f0f2f5", paddingTop: "14px", display: "flex", flexDirection: "column", gap: "12px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1405,7 +1405,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
                   </div>
                   <button
                     onClick={downloadBatchPDF}
-                    style={{ background: "#1a2035", color: "white", border: "none", borderRadius: "8px", padding: "10px 16px", cursor: "pointer", fontWeight: "700", fontSize: "0.82em", marginTop: "18px" }}
+                    style={{ background: "#3d2319", color: "white", border: "none", borderRadius: "8px", padding: "10px 16px", cursor: "pointer", fontWeight: "700", fontSize: "0.82em", marginTop: "18px" }}
                   >📊 Raport zbiorczy</button>
                 </div>
               </div>
@@ -1467,7 +1467,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
                         flexShrink:0,
                       }}>#{i+1}</div>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontWeight:"800", fontSize:"0.95em", color:"#1a2035", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.parcel_id}</div>
+                        <div style={{ fontWeight:"800", fontSize:"0.95em", color:"#3d2319", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.parcel_id}</div>
                         <a href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${p.parcel_id||""}`}
                           target="_blank" rel="noopener noreferrer"
                           style={{ color:"#3498db", fontSize:"0.65em", textDecoration:"none", fontWeight:"600" }}>🔗 geoportal.gov.pl</a>
@@ -1483,7 +1483,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
                         {collision ? "⚡ KOLIZJA" : "✓ BEZ KOLIZJI"}
                       </span>
                       <button onClick={()=>generateParcelPDF(p)} style={{
-                        padding:"6px 14px", background:"#1a2035", color:"white",
+                        padding:"6px 14px", background:"#3d2319", color:"white",
                         border:"none", borderRadius:"8px", cursor:"pointer",
                         fontSize:"0.7em", fontWeight:"700", flexShrink:0, whiteSpace:"nowrap",
                       }}>
@@ -1534,7 +1534,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
                             <div style={{ color:"#e65100", fontSize:"1.45em", fontWeight:"900", lineHeight:1.1 }}>{Math.round(tb).toLocaleString()}</div>
                             <div style={{ color:"#c19060", fontSize:"0.6em", marginTop:"2px" }}>PLN</div>
                           </div>
-                          <div style={{ background:"#1a2035", borderRadius:"12px", padding:"14px 16px" }}>
+                          <div style={{ background:"#3d2319", borderRadius:"12px", padding:"14px 16px" }}>
                             <div style={{ color:"rgba(255,193,7,0.85)", fontSize:"0.6em", fontWeight:"700", textTransform:"uppercase", letterSpacing:"1px", marginBottom:"5px" }}>💰 Razem A+B</div>
                             <div style={{ color:"white", fontSize:"1.45em", fontWeight:"900", lineHeight:1.1 }}>{Math.round(razem).toLocaleString()}</div>
                             <div style={{ color:"rgba(255,255,255,0.45)", fontSize:"0.6em", marginTop:"2px" }}>PLN</div>
@@ -2089,7 +2089,7 @@ export default function KalkulatorPage() {
                             <div className="ksws-history-full-num">{idx + 1}</div>
                             <div>
                               <div className="ksws-history-full-id" style={{ fontWeight: 700, fontSize: "0.95rem" }}>
-                                <a href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${item.parcel_id}`} target="_blank" rel="noreferrer" style={{ color: "#2575fc", textDecoration: "none" }} onClick={(e) => e.stopPropagation()}>
+                                <a href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${item.parcel_id}`} target="_blank" rel="noreferrer" style={{ color: "#b8963e", textDecoration: "none" }} onClick={(e) => e.stopPropagation()}>
                                   {item.parcel_id} 🔗
                                 </a>
                               </div>
@@ -2107,7 +2107,7 @@ export default function KalkulatorPage() {
                           <div><span style={{ color: "#999" }}>Napięcie:</span> <strong>{item.voltage || "—"}</strong></div>
                           <div><span style={{ color: "#999" }}>Dł linii:</span> <strong>{Math.round(item.line_length_m || 0)} m</strong></div>
                           <div><span style={{ color: "#999" }}>Pas:</span> <strong>{Math.round(item.band_width_m || 0)}m × {Math.round(item.band_area_m2 || 0)} m²</strong></div>
-                          <div><span style={{ color: "#999" }}>Razem:</span> <strong style={{ color: "#1a2035" }}>{Math.round(item.razem || item.track_a || 0).toLocaleString()} PLN</strong></div>
+                          <div><span style={{ color: "#999" }}>Razem:</span> <strong style={{ color: "#3d2319" }}>{Math.round(item.razem || item.track_a || 0).toLocaleString()} PLN</strong></div>
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", fontSize: "0.82rem", marginTop: "4px" }}>
                           <div style={{ background: "#eafaf1", padding: "8px 12px", borderRadius: "6px", textAlign: "center" }}>
@@ -2120,7 +2120,7 @@ export default function KalkulatorPage() {
                           </div>
                           <div style={{ background: "#eaf2fd", padding: "8px 12px", borderRadius: "6px", textAlign: "center" }}>
                             <div style={{ fontSize: "0.68rem", color: "#999" }}>RAZEM</div>
-                            <div style={{ fontWeight: 700, color: "#1a2035" }}>{Math.round(item.razem || item.track_a || 0).toLocaleString()} PLN</div>
+                            <div style={{ fontWeight: 700, color: "#3d2319" }}>{Math.round(item.razem || item.track_a || 0).toLocaleString()} PLN</div>
                           </div>
                         </div>
                       </div>
@@ -2375,7 +2375,7 @@ export default function KalkulatorPage() {
                 {apiError.isUldkDown ? "⏳" : "❌"}
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, color: "#1a2035", marginBottom: 6 }}>
+                <div style={{ fontWeight: 700, color: "#3d2319", marginBottom: 6 }}>
                   {apiError.isUldkDown ? "ULDK GUGiK chwilowo niedostępny" : "Błąd wyszukiwania działki"}
                 </div>
                 <div style={{ fontSize: "0.85rem", color: "#555", marginBottom: 12 }}>
@@ -2417,7 +2417,7 @@ export default function KalkulatorPage() {
                         target="_blank"
                         rel="noopener noreferrer"
                         title="Otwórz działkę w Geoportalu"
-                        style={{ marginLeft: "12px", fontSize: "0.7em", color: "#2575fc", textDecoration: "none", border: "1px solid #2575fc", padding: "4px 8px", borderRadius: "3px", display: "inline-block" }}
+                        style={{ marginLeft: "12px", fontSize: "0.7em", color: "#b8963e", textDecoration: "none", border: "1px solid #b8963e", padding: "4px 8px", borderRadius: "3px", display: "inline-block" }}
                       >
                         🗺️ Geoportal
                       </a>

@@ -4,35 +4,42 @@
    ═════════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* Szuwara brand palette */
-  --szuwara-navy:      #1a2035;   /* primary dark — sidebar, headers */
-  --szuwara-navy-deep: #141829;   /* deeper navy */
-  --szuwara-gold:      #b8963e;   /* Szuwara signature gold */
-  --szuwara-gold-light:#d4af62;   /* lighter gold for hover/glow */
-  --szuwara-gold-dark: #8c6e27;   /* darker gold */
+  /* Szuwara brand palette — beige warm earth */
+  --szuwara-navy:      #5c3d2e;   /* ciepły ciemny brąz — sidebar, headers */
+  --szuwara-navy-deep: #3d2319;   /* głębszy brąz */
+  --szuwara-gold:      #b8963e;   /* złoto Szuwara — bez zmian */
+  --szuwara-gold-light:#d4af62;   /* jaśniejsze złoto */
+  --szuwara-gold-dark: #8c6e27;   /* ciemniejsze złoto */
+
+  /* Beige palette: #EDEDE9 · #D6CCC2 · #F5EBE0 · #E3D5CA · #D5BDAF */
+  --beige-1: #EDEDE9;   /* tło główne */
+  --beige-2: #D6CCC2;   /* obramowania */
+  --beige-3: #F5EBE0;   /* tło kart */
+  --beige-4: #E3D5CA;   /* hover, secondary */
+  --beige-5: #D5BDAF;   /* akcenty muted */
 
   /* Layout */
   --ksws-sidebar-bg: var(--szuwara-navy);
   --ksws-sidebar-width: 260px;
 
-  /* Legacy accent → replaced by Szuwara gold */
+  /* Akcenty */
   --ksws-magenta: var(--szuwara-gold);
   --ksws-magenta-dark: var(--szuwara-gold-dark);
   --ksws-magenta-gradient: linear-gradient(135deg, #b8963e 0%, #d4af62 100%);
 
   --ksws-green: #27ae60;
-  --ksws-blue: #3498db;
+  --ksws-blue: #7a5c4e;
   --ksws-orange: #e67e22;
   --ksws-red: #e74c3c;
   --ksws-gold: var(--szuwara-gold);
-  --ksws-bg: #f4f6f9;
-  --ksws-white: #ffffff;
-  --ksws-border: #e9ecef;
-  --ksws-text-dark: #1a2035;
-  --ksws-text-muted: #95a5a6;
-  --ksws-shadow-sm: 0 2px 4px rgba(0,0,0,0.06);
-  --ksws-shadow-md: 0 4px 12px rgba(0,0,0,0.10);
-  --ksws-shadow-lg: 0 8px 24px rgba(0,0,0,0.13);
+  --ksws-bg: var(--beige-1);
+  --ksws-white: var(--beige-3);
+  --ksws-border: var(--beige-2);
+  --ksws-text-dark: #3d2319;
+  --ksws-text-muted: #9e8b83;
+  --ksws-shadow-sm: 0 2px 4px rgba(92,61,46,0.07);
+  --ksws-shadow-md: 0 4px 12px rgba(92,61,46,0.11);
+  --ksws-shadow-lg: 0 8px 24px rgba(92,61,46,0.14);
 }
 
 /* ── RESET / BASE ─────────────────────────────────────────────────────────── */

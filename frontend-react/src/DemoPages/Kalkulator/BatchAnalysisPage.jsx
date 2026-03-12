@@ -69,7 +69,7 @@ const BatchAnalysisPage = () => {
 
       {/* STATS CARDS */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "15px", marginBottom: "30px" }}>
-        <div style={{ background: "white", padding: "20px", borderRadius: "8px", border: "1px solid #eee", borderLeft: "4px solid #2575fc", textAlign: "center" }}>
+        <div style={{ background: "white", padding: "20px", borderRadius: "8px", border: "1px solid #eee", borderLeft: "4px solid #b8963e", textAlign: "center" }}>
           <div style={{ fontSize: "2em", fontWeight: "800" }}>{stats.total}</div>
           <div style={{ fontSize: "0.85em", color: "#888" }}>Razem</div>
         </div>
@@ -101,7 +101,7 @@ const BatchAnalysisPage = () => {
       <div style={{ background: "white", borderRadius: "8px", border: "1px solid #eee", overflow: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85em" }}>
           <thead>
-            <tr style={{ background: "#1a2035", color: "white", position: "sticky", top: 0 }}>
+            <tr style={{ background: "#3d2319", color: "white", position: "sticky", top: 0 }}>
               <th style={{ padding: "12px", textAlign: "left" }}>Działka</th>
               <th style={{ padding: "12px" }}>Kolizja</th>
               <th style={{ padding: "12px" }}>Napięcie</th>

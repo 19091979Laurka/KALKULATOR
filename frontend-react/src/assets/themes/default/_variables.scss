@@ -11,7 +11,7 @@ $enable-transitions: true;
 $enable-grid-classes: true;
 $enable-print-styles: false;
 
-$body-bg: #fff;
+$body-bg: #EDEDE9;
 
 // Colors
 
@@ -45,9 +45,9 @@ $grays: map.merge(
 );
 
 //--#{$color}
-$brand: #545cd8;
-$blue: #86c6fb;
-$indigo: #444054;
+$brand: #b8963e;
+$blue: #D5BDAF;
+$indigo: #5c3d2e;
 $purple: #83588a;
 $pink: #f65ca2;
 $red: #d92550;
@@ -103,8 +103,8 @@ $pagination-focus-box-shadow: none;
 
 $body-color: $gray-700;
 
-$card-cap-bg: $white;
-$card-border-color: rgba(shade-color($primary, 25%), .125);
+$card-cap-bg: #F5EBE0;
+$card-border-color: #D6CCC2;
 
 $dropdown-min-width: 15rem;
 $dropdown-link-hover-bg: #e0f3ff;
