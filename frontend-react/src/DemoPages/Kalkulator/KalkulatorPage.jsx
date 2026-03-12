@@ -694,6 +694,36 @@ function BatchCSVSection() {
     }
   };
 
+  const downloadMapHTML = async () => {
+    if (!batchResults?.results) return;
+    try {
+      toast.info("Generuję mapę interaktywną...");
+      const payload = {
+        parcels: batchResults.results.map((p) => ({
+          parcel_id: p.parcel_id,
+          master_record: p.data || {},
+        })),
+        title: `Analiza ${batchResults.results.length} działek — KSWS`,
+      };
+      const res = await fetch("/api/report/map", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Mapa_KSWS_${new Date().toISOString().split("T")[0]}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Mapa pobrana — otwórz w przeglądarce!");
+    } catch (err) {
+      toast.error("Błąd mapy: " + err.message);
+    }
+  };
+
   const stats = batchResults?.results ? {
     total: batchResults.parcel_count || batchResults.results.length,
     collision: batchResults.results.filter(p => p.data?.infrastructure?.power_lines?.detected).length,
@@ -722,6 +752,9 @@ function BatchCSVSection() {
             </button>
             <button type="button" onClick={downloadBatchPDF} disabled={!batchResults?.results} className="ksws-btn" style={{ whiteSpace: "nowrap", background: "#27ae60", color: "white", border: "none" }}>
               📄 PDF Raport
+            </button>
+            <button type="button" onClick={downloadMapHTML} disabled={!batchResults?.results} className="ksws-btn" style={{ whiteSpace: "nowrap", background: "#2575fc", color: "white", border: "none" }}>
+              🗺️ Mapa
             </button>
           </div>
 

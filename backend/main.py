@@ -415,6 +415,212 @@ async def report_pdf(req: PdfReportRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class MapReportRequest(BaseModel):
+    parcels: List[dict]   # [{parcel_id, master_record}]
+    title: Optional[str] = "Mapa działek — analiza KSWS"
+
+@app.post("/api/report/map")
+async def report_interactive_map(req: MapReportRequest):
+    """Generuje standalone HTML z interaktywną mapą Leaflet (99 działek + linie)."""
+    try:
+        html = _generate_map_html(req.parcels, req.title or "Mapa KSWS")
+        return Response(
+            content=html.encode("utf-8"),
+            media_type="text/html",
+            headers={"Content-Disposition": 'attachment; filename="Mapa_KSWS.html"'},
+        )
+    except Exception as e:
+        logger.error(f"Map HTML error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _generate_map_html(parcels: list, title: str) -> str:
+    """Buduje standalone HTML z Leaflet, satelitą, działkami i liniami."""
+    import json as _json
+
+    features_parcels = []
+    features_lines = []
+    total_a = 0
+    total_b = 0
+    collision_count = 0
+
+    for p in parcels:
+        pid = p.get("parcel_id", "?")
+        mr = p.get("master_record", {})
+        geom = mr.get("geometry", {})
+        infra = mr.get("infrastructure", {})
+        pl = infra.get("power_lines", {})
+        comp = mr.get("compensation", {})
+        ksws = mr.get("ksws", {})
+        ta = comp.get("track_a", {}).get("total", 0) or 0
+        tb = comp.get("track_b", {}).get("total", 0) or 0
+        total_a += ta
+        total_b += tb
+        detected = pl.get("detected", False)
+        if detected:
+            collision_count += 1
+
+        gj = geom.get("geojson_ll") or geom.get("geojson")
+        if gj and gj.get("coordinates"):
+            features_parcels.append({
+                "type": "Feature",
+                "geometry": gj,
+                "properties": {
+                    "id": pid, "detected": detected,
+                    "voltage": pl.get("voltage", "—"),
+                    "area_m2": geom.get("area_m2", 0),
+                    "track_a": round(ta, 2), "track_b": round(tb, 2),
+                    "band_area": ksws.get("band_area_m2", 0),
+                    "line_length": infra.get("power", {}).get("line_length_m", 0),
+                },
+            })
+
+        pl_geo = pl.get("geojson", {})
+        if pl_geo and pl_geo.get("features"):
+            for feat in pl_geo["features"]:
+                feat_copy = {
+                    "type": "Feature",
+                    "geometry": feat.get("geometry"),
+                    "properties": {"voltage": feat.get("properties", {}).get("voltage", "SN"), "parcel": pid},
+                }
+                features_lines.append(feat_copy)
+
+    parcels_json = _json.dumps({"type": "FeatureCollection", "features": features_parcels}, ensure_ascii=False)
+    lines_json = _json.dumps({"type": "FeatureCollection", "features": features_lines}, ensure_ascii=False)
+    n = len(features_parcels)
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    return f"""<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>{title}</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  *{{margin:0;padding:0;box-sizing:border-box}}
+  body{{font-family:'Segoe UI',system-ui,sans-serif;background:#111}}
+  #map{{position:absolute;top:0;left:0;right:0;bottom:0;z-index:1}}
+  .panel{{position:absolute;top:12px;left:12px;z-index:999;background:rgba(20,20,35,.92);
+    color:#eee;padding:16px 20px;border-radius:10px;max-width:340px;font-size:13px;
+    box-shadow:0 4px 20px rgba(0,0,0,.5);backdrop-filter:blur(8px)}}
+  .panel h2{{font-size:15px;margin-bottom:8px;color:#f39c12}}
+  .panel .row{{display:flex;justify-content:space-between;padding:3px 0}}
+  .panel .row .val{{font-weight:700}}
+  .panel .total{{margin-top:8px;padding:8px;background:linear-gradient(135deg,#27ae60,#2ecc71);
+    border-radius:6px;text-align:center;font-size:16px;font-weight:800;color:#fff}}
+  .panel .sub{{font-size:11px;color:#999;margin-top:6px}}
+  .legend{{position:absolute;bottom:20px;left:12px;z-index:999;background:rgba(20,20,35,.9);
+    color:#ddd;padding:12px 16px;border-radius:8px;font-size:12px}}
+  .legend div{{display:flex;align-items:center;gap:6px;padding:2px 0}}
+  .legend .sw{{width:14px;height:14px;border-radius:3px;flex-shrink:0}}
+  .filter-bar{{position:absolute;top:12px;right:12px;z-index:999;display:flex;gap:6px}}
+  .filter-bar button{{padding:6px 12px;border:none;border-radius:6px;font-size:12px;
+    font-weight:600;cursor:pointer;opacity:.85;transition:.2s}}
+  .filter-bar button:hover{{opacity:1}}
+  .filter-bar button.active{{box-shadow:0 0 0 2px #fff}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="panel">
+  <h2>⚡ {title}</h2>
+  <div class="row"><span>Działek:</span><span class="val">{n}</span></div>
+  <div class="row"><span>Kolizja z linią:</span><span class="val" style="color:#e74c3c">{collision_count}</span></div>
+  <div class="row"><span>Bez kolizji:</span><span class="val" style="color:#2ecc71">{n - collision_count}</span></div>
+  <div class="row"><span>Track A (sąd):</span><span class="val">{total_a:,.0f} PLN</span></div>
+  <div class="row"><span>Track B (neg.):</span><span class="val" style="color:#f39c12">{total_b:,.0f} PLN</span></div>
+  <div class="total">RAZEM: {total_a + total_b:,.0f} PLN</div>
+  <div class="sub">Raport: {now_str} · KSWS v3.0</div>
+</div>
+<div class="legend">
+  <div><div class="sw" style="background:#e74c3c"></div> Działka z kolizją</div>
+  <div><div class="sw" style="background:#2ecc71"></div> Działka bez kolizji</div>
+  <div><div class="sw" style="background:#00bb00"></div> Linia SN (15-30 kV)</div>
+  <div><div class="sw" style="background:#ffcc00"></div> Linia 110 kV</div>
+  <div><div class="sw" style="background:#e60000"></div> Linia WN (220-400 kV)</div>
+  <div style="color:#888;margin-top:4px;font-size:10px">Warstwy: ESRI · OSM Overpass · KIUT GUGiK</div>
+</div>
+<div class="filter-bar">
+  <button id="btnAll" style="background:#555;color:#fff" class="active" onclick="filterParcels('all')">Wszystkie ({n})</button>
+  <button id="btnCol" style="background:#e74c3c;color:#fff" onclick="filterParcels('collision')">Kolizja ({collision_count})</button>
+  <button id="btnOk" style="background:#2ecc71;color:#fff" onclick="filterParcels('ok')">Bez ({n - collision_count})</button>
+</div>
+<script>
+var parcelsData = {parcels_json};
+var linesData = {lines_json};
+
+var map = L.map('map',{{zoomControl:true}}).setView([52,20],7);
+
+// Satellite
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',
+  {{maxZoom:19,attribution:'ESRI'}}).addTo(map);
+
+// KIUT WMS (uzbrojenie)
+var kiutUrl = 'https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu';
+var elektro = L.tileLayer.wms(kiutUrl,{{layers:'przewod_elektroenergetyczny',format:'image/png',transparent:true,opacity:.6}});
+var gaz = L.tileLayer.wms(kiutUrl,{{layers:'przewod_gazowy',format:'image/png',transparent:true,opacity:.5}});
+var woda = L.tileLayer.wms(kiutUrl,{{layers:'przewod_wodociagowy',format:'image/png',transparent:true,opacity:.5}});
+elektro.addTo(map);
+L.control.layers(null,{{'⚡ Elektroenergetyczny':elektro,'🔥 Gazowy':gaz,'💧 Wodociągowy':woda}},{{collapsed:false,position:'topright'}}).addTo(map);
+
+// Power lines (Overpass)
+var vColors = {{'WN':'#e60000','SN':'#00bb00','nN':'#2196f3'}};
+var linesLayer = L.geoJSON(linesData,{{
+  style:function(f){{ return {{color:vColors[f.properties.voltage]||'#00bb00',weight:3,opacity:.8}} }}
+}}).addTo(map);
+
+// Parcels
+var parcelsLayer;
+function renderParcels(filter) {{
+  if(parcelsLayer) map.removeLayer(parcelsLayer);
+  var filtered = parcelsData.features.filter(function(f){{
+    if(filter==='collision') return f.properties.detected;
+    if(filter==='ok') return !f.properties.detected;
+    return true;
+  }});
+  parcelsLayer = L.geoJSON({{type:'FeatureCollection',features:filtered}},{{
+    style:function(f){{
+      var d=f.properties.detected;
+      return {{color:d?'#e74c3c':'#2ecc71',weight:2,fillColor:d?'#e74c3c':'#2ecc71',fillOpacity:d?.35:.15}}
+    }},
+    onEachFeature:function(f,layer){{
+      var p=f.properties;
+      var razem=Math.round(p.track_a+p.track_b);
+      layer.bindPopup(
+        '<div style="font:13px/1.5 Arial;min-width:220px">'+
+        '<strong style="font-size:14px">'+p.id+'</strong><br>'+
+        'Kolizja: '+(p.detected?'<b style="color:#e74c3c">TAK</b>':'NIE')+'<br>'+
+        'Napięcie: <b>'+p.voltage+'</b><br>'+
+        'Pow. działki: <b>'+Math.round(p.area_m2).toLocaleString()+' m²</b><br>'+
+        (p.detected?'Pas ochronny: <b>'+Math.round(p.band_area)+' m²</b><br>':'')+
+        '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">'+
+        'Track A: <b style="color:#27ae60">'+Math.round(p.track_a).toLocaleString()+' PLN</b><br>'+
+        'Track B: <b style="color:#f39c12">'+Math.round(p.track_b).toLocaleString()+' PLN</b><br>'+
+        '<b style="font-size:14px">Razem: '+razem.toLocaleString()+' PLN</b></div>'
+      );
+    }}
+  }}).addTo(map);
+  return filtered.length;
+}}
+renderParcels('all');
+
+// Fit bounds
+var allGroup = L.featureGroup([parcelsLayer,linesLayer]);
+if(allGroup.getBounds().isValid()) map.fitBounds(allGroup.getBounds(),{{padding:[40,40],maxZoom:16}});
+
+// Filter buttons
+function filterParcels(mode) {{
+  renderParcels(mode);
+  document.querySelectorAll('.filter-bar button').forEach(function(b){{b.classList.remove('active')}});
+  document.getElementById(mode==='collision'?'btnCol':mode==='ok'?'btnOk':'btnAll').classList.add('active');
+}}
+</script>
+</body>
+</html>"""
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8080))
