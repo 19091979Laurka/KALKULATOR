@@ -30,74 +30,98 @@ function MiniMapLayers({ geojson, collision }) {
   return null;
 }
 
+// ── ParcelMiniMap — plain L.map() (no react-leaflet) — zero float issues ─────
 function ParcelMiniMap({ geojson, centroid, collision }) {
   const [ready, setReady] = useState(false);
-  const containerRef = useRef(null);
+  const wrapRef  = useRef(null);   // outer wrapper — observed for visibility
+  const mapDivRef = useRef(null);  // inner div — Leaflet mounts here
+  const leafMap  = useRef(null);   // L.Map instance
 
+  // ── 1. Lazy-init: only when card enters viewport ──
   useEffect(() => {
-    const el = containerRef.current;
+    const el = wrapRef.current;
     if (!el) return;
     const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setReady(true); obs.disconnect(); } },
+      ([e]) => { if (e.isIntersecting) { setReady(true); obs.disconnect(); } },
       { threshold: 0.05 }
     );
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
 
-  // Compute center: prefer centroid_ll [lon,lat], fallback to polygon centroid
-  let center = [52.069, 19.480];
-  if (Array.isArray(centroid) && centroid.length >= 2 && centroid[0] != null) {
-    center = [Number(centroid[1]), Number(centroid[0])];
-  } else if (geojson?.coordinates) {
-    try {
-      const ring = geojson.type === "Polygon"
-        ? geojson.coordinates[0]
-        : geojson.type === "MultiPolygon"
-        ? geojson.coordinates[0][0] : null;
-      if (ring?.length) {
-        center = [
-          ring.reduce((s, c) => s + c[1], 0) / ring.length,
-          ring.reduce((s, c) => s + c[0], 0) / ring.length,
+  // ── 2. Create Leaflet map once `ready` flips true ──
+  useEffect(() => {
+    if (!ready || !mapDivRef.current || leafMap.current) return;
+
+    // compute center
+    let center = [52.069, 19.480];
+    if (Array.isArray(centroid) && centroid.length >= 2 && centroid[0] != null) {
+      center = [Number(centroid[1]), Number(centroid[0])];
+    } else if (geojson?.coordinates) {
+      try {
+        const ring = geojson.type === "Polygon" ? geojson.coordinates[0]
+                   : geojson.type === "MultiPolygon" ? geojson.coordinates[0][0] : null;
+        if (ring?.length) center = [
+          ring.reduce((s,c)=>s+c[1],0)/ring.length,
+          ring.reduce((s,c)=>s+c[0],0)/ring.length,
         ];
-      }
-    } catch (_) {}
-  }
+      } catch(_) {}
+    }
+
+    // init plain L.map — no react-leaflet involved
+    const map = L.map(mapDivRef.current, {
+      center, zoom: 14,
+      zoomControl: false, attributionControl: false,
+      scrollWheelZoom: false, dragging: true, doubleClickZoom: false,
+    });
+
+    // Topo base + OIM power-lines overlay
+    L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 18 }
+    ).addTo(map);
+    L.tileLayer(
+      "https://tiles.openinframap.org/power/{z}/{x}/{y}.png",
+      { opacity: 0.9, maxZoom: 19 }
+    ).addTo(map);
+
+    // draw parcel polygon
+    if (geojson?.coordinates) {
+      const color = collision ? "#e74c3c" : "#27ae60";
+      const layer = L.geoJSON(geojson, {
+        style: { color, weight: 2.5, fillColor: color, fillOpacity: 0.22 }
+      }).addTo(map);
+      try { map.fitBounds(layer.getBounds(), { padding: [6, 6] }); }
+      catch(_) { map.setView(center, 14); }
+    }
+
+    leafMap.current = map;
+    return () => { if (leafMap.current) { leafMap.current.remove(); leafMap.current = null; } };
+  }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const MAP_H = 200;
+  const accentBg = collision ? "rgba(231,76,60,0.88)" : "rgba(39,174,96,0.88)";
 
   return (
-    <div ref={containerRef} style={{ height: "100%", minHeight: "200px", borderRadius: "0 0 12px 0", overflow: "hidden", background: "#e8ecf0", position: "relative" }}>
-      {!ready ? (
-        <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "8px", color: "#95a5a6" }}>
-          <div style={{ fontSize: "2em" }}>🗺️</div>
+    <div ref={wrapRef} style={{ position: "relative", height: `${MAP_H}px`, overflow: "hidden", background: "#dde3ea" }}>
+      {/* placeholder while not in viewport yet */}
+      {!ready && (
+        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "8px", color: "#95a5a6" }}>
+          <div style={{ fontSize: "1.8em" }}>🗺️</div>
           <div style={{ fontSize: "0.72em" }}>Ładowanie mapy…</div>
         </div>
-      ) : (
-        <MapContainer
-          center={center} zoom={14}
-          style={{ height: "100%", width: "100%", minHeight: "200px" }}
-          zoomControl={false} attributionControl={false}
-          scrollWheelZoom={false} dragging={true} doubleClickZoom={false}
-        >
-          <TileLayer
-            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
-            attribution="© Esri" maxZoom={18}
-          />
-          <TileLayer
-            url="https://tiles.openinframap.org/power/{z}/{x}/{y}.png"
-            opacity={0.95} maxZoom={19}
-          />
-          <MiniMapLayers geojson={geojson} collision={collision} />
-        </MapContainer>
       )}
-      {/* badge overlay */}
-      <div style={{
-        position: "absolute", bottom: "8px", left: "8px", zIndex: 999,
-        background: collision ? "rgba(231,76,60,0.9)" : "rgba(39,174,96,0.9)",
-        color: "white", padding: "2px 8px", borderRadius: "10px",
-        fontSize: "0.68em", fontWeight: "700", pointerEvents: "none",
-      }}>
-        {collision ? "⚡ kolizja" : "✓ ok"}
-      </div>
+      {/* Leaflet target — always in DOM so ref is stable */}
+      <div ref={mapDivRef} style={{ height: "100%", width: "100%", display: ready ? "block" : "none" }} />
+      {/* overlay badges */}
+      {ready && <>
+        <div style={{ position:"absolute", bottom:"8px", left:"10px", zIndex:999, background:accentBg, color:"white", padding:"3px 10px", borderRadius:"10px", fontSize:"0.68em", fontWeight:"700", pointerEvents:"none" }}>
+          {collision ? "⚡ kolizja" : "✓ ok"}
+        </div>
+        <div style={{ position:"absolute", bottom:"8px", right:"8px", zIndex:999, background:"rgba(0,0,0,0.45)", color:"rgba(255,255,255,0.8)", padding:"2px 7px", borderRadius:"6px", fontSize:"0.6em", pointerEvents:"none" }}>
+          topo · OIM
+        </div>
+      </>}
     </div>
   );
 }
@@ -800,7 +824,7 @@ function BatchCSVSection() {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Raport Zbiorczy KSWS — Batch — ${dateStr}</title>
+<title>Szuwara KPP · Raport Zbiorczy KSWS — ${dateStr}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -819,7 +843,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
 .wrap{max-width:1100px;margin:0 auto;padding:28px 20px 60px}
 /* PRINT BAR */
 .print-bar{text-align:right;margin-bottom:20px}
-.btn-print{background:linear-gradient(135deg,#a91079,#d81b60);color:white;border:none;padding:10px 28px;border-radius:50px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(169,16,121,.35)}
+.btn-print{background:linear-gradient(135deg,#b8963e,#d4af62);color:white;border:none;padding:10px 28px;border-radius:50px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(184,150,62,.4)}
 /* HEADER */
 .report-header{background:linear-gradient(135deg,#1a1a2e 0%,#2c3e50 60%,#1a2a5c 100%);color:white;padding:36px 44px;border-radius:16px;margin-bottom:28px;box-shadow:0 8px 30px rgba(0,0,0,.25);display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap}
 .report-header h1{font-size:24px;font-weight:800;margin-bottom:6px;letter-spacing:-.5px}
@@ -887,18 +911,30 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
     <button class="btn-print" onclick="window.print()">🖨️ Drukuj / Zapisz PDF</button>
   </div>
 
-  <!-- HEADER -->
+  <!-- HEADER — Szuwara branding -->
   <div class="report-header">
     <div>
-      <h1>📋 Raport Zbiorczy KSWS</h1>
-      <div class="subtitle">Analiza roszczeń z tytułu służebności przesyłu — ${results.length} działek</div>
-      <div class="meta-grid">
-        <div class="meta-item"><span class="meta-label">Data</span><span class="meta-value">${dateStr}</span></div>
+      <!-- Szuwara logo area -->
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+        <div style="width:52px;height:52px;border-radius:50%;border:2.5px solid #b8963e;display:flex;align-items:center;justify-content:center;font-size:1.8rem;color:#b8963e;font-weight:800;flex-shrink:0;">§</div>
+        <div>
+          <div style="font-size:22px;font-weight:900;color:#fff;letter-spacing:2.5px;text-transform:uppercase;line-height:1;">SZUWARA</div>
+          <div style="font-size:10px;color:#b8963e;letter-spacing:2px;text-transform:uppercase;font-weight:600;margin-top:2px;">Kancelaria Prawno-Podatkowa</div>
+        </div>
+      </div>
+      <h1 style="font-size:18px;font-weight:700;margin-bottom:4px;opacity:0.9;">Raport Zbiorczy — Roszczenia Przesyłowe KSWS</h1>
+      <div class="subtitle">Analiza ${results.length} działek · Służebność przesyłu · Track A/B</div>
+      <div class="meta-grid" style="margin-top:14px;">
+        <div class="meta-item"><span class="meta-label">Data raportu</span><span class="meta-value">${dateStr}</span></div>
         <div class="meta-item"><span class="meta-label">Działek</span><span class="meta-value">${results.length}</span></div>
         <div class="meta-item"><span class="meta-label">Z kolizją</span><span class="meta-value">${collisionCount}</span></div>
       </div>
     </div>
     <div class="header-badge-col">
+      <div style="text-align:right;margin-bottom:12px;">
+        <div style="font-size:13px;color:#b8963e;font-weight:700;">www.kancelaria-szuwara.pl</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.7);margin-top:2px;">tel. 790 411 412</div>
+      </div>
       <span class="badge">✓ REAL DATA POLICY</span>
       <span class="badge">KSWS-V.5 · TK P 10/16</span>
     </div>
@@ -945,8 +981,15 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
   </table>
 
   <div class="report-footer">
-    Raport wygenerowany automatycznie przez <strong>KALKULATOR KSWS v3.0</strong> · ${dateStr} ·
-    Dane: ULDK GUGiK, OSM Overpass, GUS BDL · Metodyka: KSWS-V.5 Track A/B · TK P 10/16<br>
+    <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px;">
+      <span style="width:28px;height:28px;border-radius:50%;border:1.5px solid #b8963e;display:inline-flex;align-items:center;justify-content:center;font-size:1rem;color:#b8963e;font-weight:800;">§</span>
+      <strong style="font-size:13px;letter-spacing:1.5px;color:#1a2035;">SZUWARA</strong>
+      <span style="color:#b8963e;font-size:11px;">Kancelaria Prawno-Podatkowa</span>
+    </div>
+    <a href="https://www.kancelaria-szuwara.pl" style="color:#b8963e;font-weight:700;">www.kancelaria-szuwara.pl</a>
+    &nbsp;·&nbsp; tel. 790 411 412<br>
+    Raport wygenerowany: <strong>${dateStr}</strong> · KALKULATOR KSWS v3.0 ·
+    Dane: ULDK GUGiK, OSM Overpass, GUS BDL · Metodyka: KSWS-V.5 · TK P 10/16<br>
     <em>Dokument ma charakter informacyjno-analityczny i nie zastępuje operatu szacunkowego.</em>
   </div>
 </div>
@@ -1275,125 +1318,123 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
                 const VOLT = { WN: "WN >110 kV", SN: "SN 1-110 kV", nN: "nN <1 kV" };
 
                 return (
+                  /* ════ KARTA DZIAŁKI — vertical layout, map as bottom strip ════ */
                   <div key={i} style={{
                     background: "white",
                     borderRadius: "16px",
-                    boxShadow: "0 6px 28px rgba(0,0,0,0.09)",
-                    border: "1px solid #e8eaf0",
+                    boxShadow: "0 4px 22px rgba(0,0,0,0.09)",
+                    border: "1px solid #e4e7ee",
                     overflow: "hidden",
+                    isolation: "isolate",          /* new stacking ctx → stops Leaflet z-index leak */
                   }}>
-                    {/* ── TOP ACCENT BAR — Material Dashboard style ── */}
-                    <div style={{ height: "6px", background: collision
-                      ? "linear-gradient(90deg,#e74c3c 0%,#c0392b 50%,#e74c3c 100%)"
-                      : "linear-gradient(90deg,#27ae60 0%,#1abc9c 50%,#27ae60 100%)"
+                    {/* ── 1. TOP GRADIENT BAR ── */}
+                    <div style={{ height: "5px", background: collision
+                      ? "linear-gradient(90deg,#c0392b,#e74c3c,#c0392b)"
+                      : "linear-gradient(90deg,#1abc9c,#27ae60,#1abc9c)"
                     }} />
 
-                    {/* ── HEADER ── */}
+                    {/* ── 2. HEADER: numer · ID · status · PDF ── */}
                     <div style={{
-                      padding: "14px 22px",
-                      background: collision ? "#fdf3f3" : "#f3fdf7",
-                      display: "flex", justifyContent: "space-between", alignItems: "center",
-                      borderBottom: "1px solid #f0f2f5",
-                      gap: "10px", flexWrap: "wrap",
+                      padding: "12px 20px",
+                      background: collision ? "#fdf4f4" : "#f4fdf6",
+                      display: "flex", alignItems: "center", gap: "12px",
+                      borderBottom: "1px solid #eef0f4", flexWrap: "wrap",
                     }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-                        {/* Number badge */}
-                        <div style={{
-                          width: "34px", height: "34px", borderRadius: "50%",
-                          background: collision ? "#e74c3c" : "#27ae60",
-                          color: "white", fontWeight: "900", fontSize: "0.8em",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          flexShrink: 0,
-                        }}>#{i + 1}</div>
-                        <div>
-                          <div style={{ fontWeight: "800", fontSize: "1.05em", color: "#1a2035", letterSpacing: "-0.3px" }}>{p.parcel_id}</div>
-                          <div style={{ display: "flex", gap: "10px", marginTop: "3px", flexWrap: "wrap" }}>
-                            <a href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${p.parcel_id || ""}`}
-                              target="_blank" rel="noopener noreferrer"
-                              style={{ fontSize: "0.72em", color: "#3498db", textDecoration: "none", fontWeight: "600" }}>
-                              🔗 geoportal
-                            </a>
-                          </div>
+                      {/* circle badge */}
+                      <div style={{
+                        width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
+                        background: collision ? "#e74c3c" : "#27ae60",
+                        color: "white", fontWeight: "900", fontSize: "0.75em",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>#{i + 1}</div>
+
+                      {/* ID + geoportal */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: "800", fontSize: "1em", color: "#1a2035", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {p.parcel_id}
                         </div>
-                        <span style={{
-                          padding: "4px 14px", borderRadius: "50px",
-                          fontSize: "0.75em", fontWeight: "700",
-                          background: collision ? "#e74c3c" : "#27ae60",
-                          color: "white", letterSpacing: "0.6px",
-                          boxShadow: collision ? "0 2px 8px rgba(231,76,60,0.3)" : "0 2px 8px rgba(39,174,96,0.3)",
-                        }}>
-                          {collision ? "⚡ KOLIZJA" : "✓ BEZ KOLIZJI"}
-                        </span>
+                        <a href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${p.parcel_id || ""}`}
+                          target="_blank" rel="noopener noreferrer"
+                          style={{ fontSize: "0.7em", color: "#3498db", textDecoration: "none", fontWeight: "600" }}>
+                          🔗 geoportal.gov.pl
+                        </a>
                       </div>
+
+                      {/* KOLIZJA badge */}
+                      <span style={{
+                        padding: "4px 13px", borderRadius: "50px", fontSize: "0.73em", fontWeight: "800",
+                        background: collision ? "#e74c3c" : "#27ae60", color: "white", letterSpacing: "0.5px",
+                        whiteSpace: "nowrap", flexShrink: 0,
+                      }}>
+                        {collision ? "⚡ KOLIZJA" : "✓ BEZ KOLIZJI"}
+                      </span>
+
+                      {/* PDF button */}
                       <button onClick={() => generateParcelPDF(p)} style={{
-                        padding: "8px 20px", background: "#1a2035", color: "white",
+                        padding: "7px 18px", background: "#1a2035", color: "white",
                         border: "none", borderRadius: "8px", cursor: "pointer",
-                        fontSize: "0.82em", fontWeight: "700", whiteSpace: "nowrap",
-                        letterSpacing: "0.4px", boxShadow: "0 2px 8px rgba(26,32,53,0.3)",
+                        fontSize: "0.78em", fontWeight: "700", whiteSpace: "nowrap", flexShrink: 0,
                       }}>📄 Raport PDF</button>
                     </div>
 
-                    {/* ── BODY: dane (lewo) + mini mapa (prawo) ── */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 300px" }}>
-
-                      {/* Lewa kolumna: dane + Track A/B */}
-                      <div style={{ display: "flex", flexDirection: "column" }}>
-                        {/* Data grid — 7 boxów */}
-                        <div style={{ padding: "16px 20px 12px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: "10px", flex: 1 }}>
-                          {[
-                            { label: "Pow. działki",  value: `${Math.round(area).toLocaleString()} m²`, icon: "📐", color: "#3498db" },
-                            { label: "Cena gruntu",   value: `${price.toFixed(2)} zł/m²`,              icon: "💰", color: "#8e44ad" },
-                            { label: "Wartość nier.", value: `${Math.round(value).toLocaleString()} PLN`, icon: "🏠", color: "#2c3e50" },
-                            { label: "Napięcie",      value: VOLT[voltage] || (voltage !== "—" ? voltage : "—"), icon: "⚡", color: "#e74c3c" },
-                            { label: "Dł. linii",     value: lineLength > 0 ? `${Math.round(lineLength)} m` : "—", icon: "📏", color: "#16a085", hint: msrc },
-                            { label: "Szer. pasa",    value: bandWidth > 0 ? `${bandWidth} m` : "—",   icon: "↔️", color: "#27ae60" },
-                            { label: "Pow. pasa",     value: bandArea > 0 ? `${Math.round(bandArea).toLocaleString()} m²` : "—", icon: "🔲", color: "#f39c12" },
-                          ].map((item, j) => (
-                            <div key={j} title={item.hint || ""} style={{
-                              background: "#f8f9fc",
-                              borderRadius: "10px",
-                              padding: "10px 12px",
-                              border: "1px solid #eef0f5",
-                              borderLeft: `3px solid ${item.color}`,
-                              borderBottom: item.hint ? `3px dashed #f39c12` : `1px solid #eef0f5`,
-                            }}>
-                              <div style={{ fontSize: "0.62em", color: "#95a5a6", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.7px", fontWeight: "700" }}>{item.icon} {item.label}</div>
-                              <div style={{ fontSize: "0.92em", fontWeight: "800", color: "#1a2035" }}>{item.value}</div>
-                              {item.hint && <div style={{ fontSize: "0.58em", color: "#e67e22", marginTop: "2px" }}>⚠ {item.hint}</div>}
-                            </div>
-                          ))}
+                    {/* ── 3. DATA BOXES — single row auto-fill ── */}
+                    <div style={{
+                      padding: "14px 20px 10px",
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+                      gap: "9px",
+                    }}>
+                      {[
+                        { label: "Pow. działki",  value: `${Math.round(area).toLocaleString()} m²`,          icon: "📐", color: "#3498db" },
+                        { label: "Cena gruntu",   value: `${price.toFixed(2)} zł/m²`,                       icon: "💰", color: "#8e44ad" },
+                        { label: "Wartość nier.", value: `${Math.round(value).toLocaleString()} PLN`,         icon: "🏠", color: "#2c3e50" },
+                        { label: "Napięcie",      value: VOLT[voltage] || (voltage !== "—" ? voltage : "—"), icon: "⚡", color: "#e74c3c" },
+                        { label: "Dł. linii",     value: lineLength > 0 ? `${Math.round(lineLength)} m` : "—", icon: "📏", color: "#16a085", hint: msrc },
+                        { label: "Szer. pasa",    value: bandWidth > 0 ? `${bandWidth} m` : "—",             icon: "↔️", color: "#27ae60" },
+                        { label: "Pow. pasa",     value: bandArea > 0 ? `${Math.round(bandArea).toLocaleString()} m²` : "—", icon: "🔲", color: "#f39c12" },
+                      ].map((item, j) => (
+                        <div key={j} title={item.hint || ""} style={{
+                          background: "#f7f8fc",
+                          borderRadius: "9px",
+                          padding: "9px 11px",
+                          border: "1px solid #ebebf2",
+                          borderLeft: `3px solid ${item.color}`,
+                        }}>
+                          <div style={{ fontSize: "0.6em", color: "#aab0bc", marginBottom: "3px", textTransform: "uppercase", letterSpacing: "0.7px", fontWeight: "700" }}>{item.icon} {item.label}</div>
+                          <div style={{ fontSize: "0.88em", fontWeight: "800", color: "#1a2035", lineHeight: 1.2 }}>{item.value}</div>
+                          {item.hint && <div style={{ fontSize: "0.58em", color: "#e67e22", marginTop: "2px" }}>⚠ {item.hint}</div>}
                         </div>
+                      ))}
+                    </div>
 
-                        {/* Track A / B / RAZEM — full-width footer */}
-                        <div style={{ padding: "4px 20px 18px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
-                          {/* Track A */}
-                          <div style={{ background: "#eef4ff", borderRadius: "10px", padding: "12px 14px", border: "1px solid #dce8ff" }}>
-                            <div style={{ fontSize: "0.58em", textTransform: "uppercase", letterSpacing: "1.2px", color: "#3498db", fontWeight: "700", marginBottom: "4px" }}>⚖️ TRACK A</div>
-                            <div style={{ fontSize: "1.05em", fontWeight: "900", color: "#2c3e50" }}>{Math.round(ta).toLocaleString()}</div>
-                            <div style={{ fontSize: "0.6em", color: "#95a5a6", marginTop: "2px" }}>PLN · ścieżka sądowa</div>
-                          </div>
-                          {/* Track B */}
-                          <div style={{ background: "#fff8ee", borderRadius: "10px", padding: "12px 14px", border: "1px solid #fde8c0" }}>
-                            <div style={{ fontSize: "0.58em", textTransform: "uppercase", letterSpacing: "1.2px", color: "#f39c12", fontWeight: "700", marginBottom: "4px" }}>🤝 TRACK B</div>
-                            <div style={{ fontSize: "1.05em", fontWeight: "900", color: "#e67e22" }}>{Math.round(tb).toLocaleString()}</div>
-                            <div style={{ fontSize: "0.6em", color: "#95a5a6", marginTop: "2px" }}>PLN · negocjacje</div>
-                          </div>
-                          {/* RAZEM */}
-                          <div style={{
-                            background: collision ? "linear-gradient(135deg,#e74c3c,#c0392b)" : "linear-gradient(135deg,#27ae60,#1abc9c)",
-                            borderRadius: "10px", padding: "12px 14px",
-                          }}>
-                            <div style={{ fontSize: "0.58em", textTransform: "uppercase", letterSpacing: "1.2px", color: "rgba(255,255,255,0.75)", fontWeight: "700", marginBottom: "4px" }}>💰 RAZEM</div>
-                            <div style={{ fontSize: "1.2em", fontWeight: "900", color: "white" }}>{Math.round(razem).toLocaleString()}</div>
-                            <div style={{ fontSize: "0.6em", color: "rgba(255,255,255,0.7)", marginTop: "2px" }}>PLN łącznie (A+B)</div>
-                          </div>
-                        </div>
+                    {/* ── 4. TRACK A / B / RAZEM — 3-column footer ── */}
+                    <div style={{
+                      padding: "0 20px 14px",
+                      display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "9px",
+                    }}>
+                      {/* Track A */}
+                      <div style={{ background: "#eef4ff", borderRadius: "10px", padding: "11px 14px", border: "1px solid #dce6ff" }}>
+                        <div style={{ fontSize: "0.57em", textTransform: "uppercase", letterSpacing: "1.2px", color: "#3498db", fontWeight: "700", marginBottom: "3px" }}>⚖️ TRACK A · SĄD</div>
+                        <div style={{ fontSize: "1.1em", fontWeight: "900", color: "#2c3e50" }}>{Math.round(ta).toLocaleString()} <span style={{ fontSize: "0.55em", fontWeight: "600", color: "#95a5a6" }}>PLN</span></div>
                       </div>
+                      {/* Track B */}
+                      <div style={{ background: "#fff8ec", borderRadius: "10px", padding: "11px 14px", border: "1px solid #fde8c0" }}>
+                        <div style={{ fontSize: "0.57em", textTransform: "uppercase", letterSpacing: "1.2px", color: "#f39c12", fontWeight: "700", marginBottom: "3px" }}>🤝 TRACK B · NEG.</div>
+                        <div style={{ fontSize: "1.1em", fontWeight: "900", color: "#e67e22" }}>{Math.round(tb).toLocaleString()} <span style={{ fontSize: "0.55em", fontWeight: "600", color: "#95a5a6" }}>PLN</span></div>
+                      </div>
+                      {/* RAZEM */}
+                      <div style={{
+                        background: collision ? "linear-gradient(135deg,#e74c3c,#c0392b)" : "linear-gradient(135deg,#27ae60,#1abc9c)",
+                        borderRadius: "10px", padding: "11px 14px",
+                      }}>
+                        <div style={{ fontSize: "0.57em", textTransform: "uppercase", letterSpacing: "1.2px", color: "rgba(255,255,255,0.75)", fontWeight: "700", marginBottom: "3px" }}>💰 RAZEM A+B</div>
+                        <div style={{ fontSize: "1.15em", fontWeight: "900", color: "white" }}>{Math.round(razem).toLocaleString()} <span style={{ fontSize: "0.55em", fontWeight: "600", opacity: 0.8 }}>PLN</span></div>
+                      </div>
+                    </div>
 
-                      {/* Prawa kolumna: mini mapa */}
-                      <div style={{ borderLeft: "1px solid #eef0f3", minHeight: "270px" }}>
-                        <ParcelMiniMap geojson={geojson} centroid={centroid} collision={collision} />
-                      </div>
+                    {/* ── 5. MINI MAP — horizontal strip, fixed height, isolated ── */}
+                    <div style={{ borderTop: "2px solid #eef0f4" }}>
+                      <ParcelMiniMap geojson={geojson} centroid={centroid} collision={collision} />
                     </div>
                   </div>
                 );
@@ -1770,8 +1811,14 @@ export default function KalkulatorPage() {
       {/* ════════════ SIDEBAR ════════════ */}
       <aside className="ksws-sidebar">
         <div className="ksws-sidebar-logo">
-          <div className="ksws-sidebar-logo-title">⚡ KSWS</div>
-          <div className="ksws-sidebar-logo-sub">Kalkulator Roszczeń</div>
+          {/* Szuwara § symbol */}
+          <div className="ksws-sidebar-logo-symbol">§</div>
+          <div className="ksws-sidebar-logo-title">SZUWARA</div>
+          <div className="ksws-sidebar-logo-sub">Kancelaria Prawno-Podatkowa</div>
+          <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid rgba(184,150,62,0.2)", fontSize: "0.62rem", color: "rgba(255,255,255,0.35)", lineHeight: "1.7" }}>
+            <div style={{ color: "#b8963e", fontWeight: "700", fontSize: "0.72rem", letterSpacing: "0.5px" }}>KALKULATOR KSWS</div>
+            <div>Roszczenia przesyłowe · Track A/B</div>
+          </div>
         </div>
 
         <nav className="ksws-sidebar-nav">
@@ -1799,8 +1846,12 @@ export default function KalkulatorPage() {
         </nav>
 
         <div className="ksws-sidebar-footer">
-          KSWS v2.0 · GUGiK / ULDK<br />
-          Dane rzeczywiste · Track A/B
+          <div style={{ color: "#b8963e", fontWeight: "700", marginBottom: "4px", fontSize: "0.72rem" }}>§ SZUWARA</div>
+          <a href="https://www.kancelaria-szuwara.pl" target="_blank" rel="noopener noreferrer">
+            www.kancelaria-szuwara.pl
+          </a><br />
+          <a href="tel:790411412">790 411 412</a><br />
+          <div style={{ marginTop: "6px", opacity: 0.5 }}>KSWS v3.0 · Track A/B · GUGiK</div>
         </div>
       </aside>
 
@@ -1809,13 +1860,33 @@ export default function KalkulatorPage() {
 
         {/* ── TOP BAR ── */}
         <header className="ksws-topbar">
-          <div>
-            <div className="ksws-topbar-title">Kalkulator Roszczeń Przesyłowych</div>
-            <div className="ksws-topbar-sub">
-              KSWS Track A/B · ULDK · GESUT · RCN · GUS BDL — wyłącznie dane rzeczywiste
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            {/* Szuwara § mini logo */}
+            <div style={{
+              width: "38px", height: "38px", borderRadius: "50%",
+              border: "2px solid #b8963e",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "1.1rem", color: "#b8963e", fontWeight: "800", flexShrink: 0,
+            }}>§</div>
+            <div>
+              <div className="ksws-topbar-title">
+                Kalkulator Roszczeń Przesyłowych
+                <span style={{ marginLeft: "10px", fontSize: "0.65em", fontWeight: "500", color: "#b8963e", letterSpacing: "1px", textTransform: "uppercase" }}>
+                  · Szuwara KPP
+                </span>
+              </div>
+              <div className="ksws-topbar-sub">
+                KSWS Track A/B · ULDK GUGiK · OSM Overpass · GUS BDL — wyłącznie dane rzeczywiste
+              </div>
             </div>
           </div>
           <div className="ksws-topbar-right">
+            <div style={{ fontSize: "0.78rem", color: "#b8963e", fontWeight: "700", letterSpacing: "0.5px" }}>
+              <a href="https://www.kancelaria-szuwara.pl" target="_blank" rel="noopener noreferrer"
+                style={{ color: "#b8963e", textDecoration: "none" }}>
+                kancelaria-szuwara.pl
+              </a>
+            </div>
             <div className="ksws-status-badge">
               <div className="ksws-status-dot" />
               System aktywny
