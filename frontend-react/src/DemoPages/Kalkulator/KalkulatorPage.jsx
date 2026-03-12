@@ -936,17 +936,36 @@ function BatchCSVSection() {
                         <div style={{ fontSize: "0.9em", color: "#f39c12", fontWeight: "bold" }}>💰 Track B: {Math.round(b.summary?.trackB || 0).toLocaleString()} PLN</div>
                         <div style={{ fontSize: "0.85em", color: "#555", marginTop: "5px" }}>🎯 Razem: {Math.round(b.summary?.total || 0).toLocaleString()} PLN</div>
                       </div>
-                      <button
-                        onClick={() => {
-                          const updated = batchHist.filter((_, i) => i !== idx);
-                          localStorage.setItem("batch_history", JSON.stringify(updated));
-                          window.location.reload();
-                        }}
-                        style={{ padding: "8px 16px", background: "#e74c3c", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", whiteSpace: "nowrap" }}
-                        title="Usuń z historii"
-                      >
-                        🗑️ Usuń
-                      </button>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                        <button
+                          onClick={() => {
+                            if (b.full_data && b.full_data.length) {
+                              setBatchResults({
+                                results: b.full_data,
+                                parcel_count: b.parcel_count || b.full_data.length,
+                                successful: b.successful || b.full_data.length,
+                              });
+                              toast.success(`Załadowano batch: ${b.parcel_count || b.full_data.length} działek`);
+                            } else {
+                              toast.error("Brak pełnych danych w tej historii");
+                            }
+                          }}
+                          style={{ padding: "8px 16px", background: "#2575fc", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", whiteSpace: "nowrap" }}
+                        >
+                          📂 Załaduj
+                        </button>
+                        <button
+                          onClick={() => {
+                            const updated = batchHist.filter((_, i) => i !== idx);
+                            localStorage.setItem("batch_history", JSON.stringify(updated));
+                            window.location.reload();
+                          }}
+                          style={{ padding: "6px 12px", background: "#e74c3c", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "0.85em", whiteSpace: "nowrap" }}
+                          title="Usuń z historii"
+                        >
+                          🗑️ Usuń
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
