@@ -565,19 +565,33 @@ var woda = L.tileLayer.wms(kiutUrl,{{layers:'przewod_wodociagowy',format:'image/
 elektro.addTo(map);
 L.control.layers(null,{{'⚡ Elektroenergetyczny':elektro,'🔥 Gazowy':gaz,'💧 Wodociągowy':woda}},{{collapsed:false,position:'topright'}}).addTo(map);
 
-// Power lines (Overpass) — grube, jaskrawe
-var vColors = {{'WN':'#ff0000','SN':'#00ff00','nN':'#00bfff'}};
+// Power lines (Overpass) — grube neonowe linie
+var vColors = {{'WN':'#ff2200','SN':'#00ff44','110kV':'#ffcc00','nN':'#00ccff'}};
+function voltColor(v) {{
+  if(!v) return '#00ff44';
+  if(v==='WN'||parseInt(v)>=200) return '#ff2200';
+  if(parseInt(v)>=100) return '#ffcc00';
+  if(parseInt(v)>=10||v==='SN') return '#00ff44';
+  return '#00ccff';
+}}
 var linesLayer = L.geoJSON(linesData,{{
   style:function(f){{
-    var v=f.properties.voltage||'SN';
-    return {{color:vColors[v]||'#00ff00',weight:5,opacity:1,dashArray:v==='nN'?'8,4':null}}
+    var c=voltColor(f.properties.voltage);
+    return {{color:c,weight:6,opacity:1}}
+  }},
+  onEachFeature:function(f,layer){{
+    layer.bindTooltip('⚡ '+f.properties.voltage,{{sticky:true,className:'tt'}});
   }}
 }}).addTo(map);
 
-// Parcels — mocne kolory, gruby border
+// Labels group
+var labelsLayer = L.layerGroup().addTo(map);
+
+// Parcels — mocne kolory, gruby border, etykiety numerów
 var parcelsLayer;
 function renderParcels(filter) {{
   if(parcelsLayer) map.removeLayer(parcelsLayer);
+  labelsLayer.clearLayers();
   var filtered = parcelsData.features.filter(function(f){{
     if(filter==='collision') return f.properties.detected;
     if(filter==='ok') return !f.properties.detected;
@@ -586,32 +600,59 @@ function renderParcels(filter) {{
   parcelsLayer = L.geoJSON({{type:'FeatureCollection',features:filtered}},{{
     style:function(f){{
       var d=f.properties.detected;
-      return {{color:d?'#ff0000':'#00ff00',weight:3,fillColor:d?'#ff0000':'#00e000',fillOpacity:d?.5:.2}}
+      return {{color:d?'#ff0000':'#00cc44',weight:4,fillColor:d?'#ff3300':'#00dd44',fillOpacity:d?.55:.25}}
     }},
     onEachFeature:function(f,layer){{
       var p=f.properties;
       var razem=Math.round(p.track_a+p.track_b);
+      var nr=p.id.split('.').pop()||p.id;
       layer.bindPopup(
-        '<div style="font:13px/1.5 Arial;min-width:220px">'+
-        '<strong style="font-size:14px">'+p.id+'</strong><br>'+
-        'Kolizja: '+(p.detected?'<b style="color:#e74c3c">TAK</b>':'NIE')+'<br>'+
-        'Napięcie: <b>'+p.voltage+'</b><br>'+
-        'Pow. działki: <b>'+Math.round(p.area_m2).toLocaleString()+' m²</b><br>'+
-        (p.detected?'Pas ochronny: <b>'+Math.round(p.band_area)+' m²</b><br>':'')+
-        '<hr style="margin:4px 0;border:0;border-top:1px solid #ddd">'+
-        'Track A: <b style="color:#27ae60">'+Math.round(p.track_a).toLocaleString()+' PLN</b><br>'+
-        'Track B: <b style="color:#f39c12">'+Math.round(p.track_b).toLocaleString()+' PLN</b><br>'+
-        '<b style="font-size:14px">Razem: '+razem.toLocaleString()+' PLN</b></div>'
-      );
+        '<div style="font:13px/1.6 Arial;min-width:240px;padding:4px">'+
+        '<b style="font-size:15px;color:#1a2035">'+p.id+'</b><br>'+
+        (p.detected?'<span style="background:#ff3300;color:#fff;padding:1px 6px;border-radius:4px;font-size:11px">⚡ KOLIZJA · '+p.voltage+'</span>':
+                    '<span style="background:#27ae60;color:#fff;padding:1px 6px;border-radius:4px;font-size:11px">✓ Bez kolizji</span>')+'<br><br>'+
+        '<b>Pow. działki:</b> '+Math.round(p.area_m2).toLocaleString()+' m²<br>'+
+        (p.detected?'<b>Pas ochronny:</b> '+Math.round(p.band_area).toLocaleString()+' m²<br>':'')+
+        '<hr style="margin:6px 0;border:0;border-top:1px solid #eee">'+
+        '<table style="width:100%;font-size:12px">'+
+        '<tr><td>Track A (sąd):</td><td align="right"><b style="color:#27ae60">'+Math.round(p.track_a).toLocaleString()+' PLN</b></td></tr>'+
+        '<tr><td>Track B (neg.):</td><td align="right"><b style="color:#e67e22">'+Math.round(p.track_b).toLocaleString()+' PLN</b></td></tr>'+
+        '<tr style="border-top:2px solid #2575fc"><td><b>RAZEM:</b></td><td align="right"><b style="font-size:15px;color:#2575fc">'+razem.toLocaleString()+' PLN</b></td></tr>'+
+        '</table></div>'
+      ,{{maxWidth:300}});
+      // Etykieta numeru na środku działki (tylko przy zoom >= 14)
+      layer.on('add', function() {{
+        try {{
+          var center = layer.getBounds().getCenter();
+          var lbl = L.marker(center, {{
+            icon: L.divIcon({{
+              html: '<div style="background:'+(p.detected?'rgba(255,0,0,.85)':'rgba(0,180,50,.85)')
+                   +';color:#fff;font:700 11px Arial;padding:2px 5px;border-radius:3px;white-space:nowrap;'
+                   +'box-shadow:0 1px 4px rgba(0,0,0,.5)">'+nr+'</div>',
+              className:'', iconAnchor:[0,0]
+            }}),
+            interactive: false,
+          }});
+          labelsLayer.addLayer(lbl);
+        }} catch(_) {{}}
+      }});
     }}
   }}).addTo(map);
   return filtered.length;
 }}
 renderParcels('all');
 
-// Fit bounds
-var allGroup = L.featureGroup([parcelsLayer,linesLayer]);
-if(allGroup.getBounds().isValid()) map.fitBounds(allGroup.getBounds(),{{padding:[40,40],maxZoom:16}});
+// Auto-fit — pokaż wszystkie działki i linie na ekranie
+var allBounds = L.featureGroup([parcelsLayer,linesLayer]).getBounds();
+if(allBounds.isValid()) map.fitBounds(allBounds,{{padding:[50,50],maxZoom:17}});
+else map.setView([52,20],7);
+
+// Zoom event — ukryj etykiety przy dużym oddaleniu
+map.on('zoomend',function(){{
+  if(map.getZoom()<13) labelsLayer.clearLayers();
+  else renderParcels(document.querySelector('.filter-bar button.active')?.id==='btnCol'?'collision':
+                     document.querySelector('.filter-bar button.active')?.id==='btnOk'?'ok':'all');
+}});
 
 // Filter buttons
 function filterParcels(mode) {{
