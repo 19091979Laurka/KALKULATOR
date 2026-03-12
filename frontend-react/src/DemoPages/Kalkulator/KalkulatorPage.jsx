@@ -80,30 +80,29 @@ function ParcelMiniMap({ geojson, centroid, collision, height = 260 }) {
       { maxZoom: 19 }
     ).addTo(map);
 
-    // ── GESUT — uzbrojenie terenu (linie energetyczne, rury, kable) ──
+    // ── siatka katastralna GUGIK — wyraźna jak w geoportalu (niebieskie linie) ──
+    L.tileLayer.wms(
+      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow",
+      { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.85 }
+    ).addTo(map);
+
+    // ── GESUT — uzbrojenie terenu (linie, rury, kable) ──
     L.tileLayer.wms(
       "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
       {
         layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny,przewod_cieplowniczy",
-        format: "image/png", transparent: true, opacity: 0.85,
+        format: "image/png", transparent: true, opacity: 0.9,
       }
     ).addTo(map);
 
-    // ── siatka katastralna GUGIK (działki + numery — lżejsza) ──
-    L.tileLayer.wms(
-      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow",
-      { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.5 }
-    ).addTo(map);
-
-    // ── obrys działki: jaskrawy kontur bez wypełnienia — widoczny na ortofoto ──
+    // ── obrys działki: ZIELONY fill + CZARNY gruby obrys — dokładnie jak geoportal ──
     if (geojson?.coordinates) {
-      const borderColor = collision ? "#ff6d00" : "#00e5ff"; // pomarańcz = kolizja, cyjan = ok
       const layer = L.geoJSON(geojson, {
         style: {
-          color: borderColor,
-          weight: 3,
-          fillColor: borderColor,
-          fillOpacity: 0.06,   // prawie przezroczysty — widać podkład
+          color: "#000000",      // czarny gruby obrys — jak zaznaczona działka w geoportalu
+          weight: 4,
+          fillColor: "#33cc33",  // zielony fill jak w geoportalu
+          fillOpacity: 0.35,
           dashArray: null,
           opacity: 1,
         }
@@ -136,9 +135,8 @@ function ParcelMiniMap({ geojson, centroid, collision, height = 260 }) {
       {ready && (
         <div style={{
           position: "absolute", bottom: "7px", left: "8px", zIndex: 999,
-          background: collision ? "rgba(255,109,0,0.9)" : "rgba(0,229,255,0.15)",
-          color: collision ? "white" : "#00e5ff",
-          border: `1px solid ${collision ? "rgba(255,109,0,0.6)" : "rgba(0,229,255,0.6)"}`,
+          background: collision ? "rgba(220,53,69,0.88)" : "rgba(0,0,0,0.55)",
+          color: "white",
           padding: "2px 9px", borderRadius: "8px",
           fontSize: "0.66em", fontWeight: "700", pointerEvents: "none",
           backdropFilter: "blur(4px)",
