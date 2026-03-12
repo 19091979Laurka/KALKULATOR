@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Raport KSWS — Kalkulator Roszczeń Przesyłowych</title>
+  <!-- Leaflet CSS + JS dla interaktywnej mapy -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
@@ -252,19 +256,14 @@
     .track-row .tl { color: #7f8c8d; }
     .track-row .tv { font-weight: 600; }
 
-    /* ══════════ MAPA PLACEHOLDER ══════════ */
+    /* ══════════ MAPA LEAFLET ══════════ */
     .map-box {
-      background: linear-gradient(135deg, #1a2035, #2c3e50);
       border-radius: 12px;
-      height: 300px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 13px;
-      font-weight: 600;
+      height: 340px;
       margin-bottom: 16px;
-      opacity: 0.9;
+      overflow: hidden;
+      border: 1px solid #dee2e6;
+      background: #e8e8e8;
     }
 
     /* ══════════ LEGENDA MAP ══════════ */
@@ -389,9 +388,7 @@
   <!-- MAPA -->
   <div class="section-title">🗺️ Lokalizacja działki</div>
   <div class="card">
-    <div class="map-box" id="map-placeholder">
-      🗺️ Geoportal — Mapa zostanie wydrukowana z przeglądarki
-    </div>
+    <div class="map-box" id="map-placeholder"></div>
     <div class="legend">
       <div class="legend-item"><div class="legend-line" style="background:#a91079"></div> Granica działki</div>
       <div class="legend-item"><div class="legend-line" style="background:#e74c3c"></div> Linia 380/220kV</div>
@@ -720,6 +717,90 @@
       set('k-mult', coeffs.track_b_mult ? '×' + coeffs.track_b_mult : '—');
     }
 
+    // ── MAPA LEAFLET ──────────────────────────────────────────────────────────
+    (function initMap() {
+      const geojsonData = geom.geojson_ll || geom.geojson;
+      const centroid    = geom.centroid_ll;
+      if (!geojsonData || !centroid) return;
+
+      const lat = Number(centroid[1]);
+      const lon = Number(centroid[0]);
+      if (!lat || !lon) return;
+
+      // Zniszcz poprzednią mapę jeśli istnieje (np. przy ponownym fillReport)
+      const container = document.getElementById('map-placeholder');
+      if (container._leaflet_id) {
+        // Leaflet oznacza zainicjalizowane kontenery tym polem
+        return; // Już zainicjowano
+      }
+
+      const map = L.map('map-placeholder').setView([lat, lon], 16);
+
+      // ESRI World Imagery — satelita, darmowe, bez klucza
+      L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        { attribution: '© ESRI World Imagery', maxZoom: 19 }
+      ).addTo(map);
+
+      // Granica działki
+      const parcelLayer = L.geoJSON(geojsonData, {
+        style: { color: '#a91079', weight: 3, fillColor: '#a91079', fillOpacity: 0.18 }
+      }).addTo(map);
+
+      // Dopasuj widok do działki
+      try {
+        const bounds = parcelLayer.getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds, { padding: [20, 20] });
+      } catch (_) {}
+
+      // Overpass OSM — linie energetyczne (async, nie blokuje ładowania)
+      const pad = 0.025;
+      const query = `[out:json][timeout:25];
+(
+  way["power"="line"](${lat - pad},${lon - pad},${lat + pad},${lon + pad});
+  way["power"="cable"](${lat - pad},${lon - pad},${lat + pad},${lon + pad});
+  node["power"="tower"](${lat - pad},${lon - pad},${lat + pad},${lon + pad});
+  node["power"="pole"](${lat - pad},${lon - pad},${lat + pad},${lon + pad});
+);
+out body;>;out skel qt;`;
+
+      const voltColor = function(v) {
+        const n = parseInt(v) || 0;
+        if (n >= 300) return '#e60000';
+        if (n >= 180) return '#ff6600';
+        if (n >= 100) return '#ffcc00';
+        if (n >= 10)  return '#00bb00';
+        return '#0066ff';
+      };
+
+      fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var nodeMap = {};
+          data.elements.forEach(function(e) {
+            if (e.type === 'node') nodeMap[e.id] = [e.lon, e.lat];
+          });
+          var features = [];
+          data.elements.forEach(function(el) {
+            if (el.type === 'way' && el.nodes) {
+              var coords = el.nodes.map(function(id) { return nodeMap[id]; }).filter(Boolean);
+              if (coords.length > 1)
+                features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: el.tags || {} });
+            } else if (el.type === 'node' && el.tags && el.tags.power) {
+              features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [el.lon, el.lat] }, properties: el.tags });
+            }
+          });
+          if (!features.length) return;
+          L.geoJSON({ type: 'FeatureCollection', features: features }, {
+            style: function(f) { return { color: voltColor(f.properties.voltage), weight: 2.5, opacity: 0.9 }; },
+            pointToLayer: function(f, ll) {
+              return L.circleMarker(ll, { radius: 3, fillColor: '#8B4513', color: '#fff', weight: 1, fillOpacity: 0.9 });
+            }
+          }).addTo(map);
+        })
+        .catch(function() {});
+    })();
+
     // Wnioski
     const conclInfra = document.getElementById('concl-infra');
     if (conclInfra) {
@@ -738,7 +819,27 @@
     }
   };
 
-  // Auto-fill z URL parametrów jeśli dostępne
+  // Auto-fill z sessionStorage jeśli otwarto przez Batch CSV (parametr ?key=...)
+  (function autoFillFromStorage() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const key = params.get('key');
+      if (key) {
+        const raw = sessionStorage.getItem(key);
+        if (raw) {
+          const mr = JSON.parse(raw);
+          sessionStorage.removeItem(key);
+          // Poczekaj aż DOM gotowy, potem wypełnij
+          if (document.readyState === 'complete') {
+            window.fillReport(mr);
+          } else {
+            window.addEventListener('load', function() { window.fillReport(mr); });
+          }
+        }
+      }
+    } catch(e) { console.warn('autoFill error:', e); }
+  })();
+
   document.getElementById('footer-date').textContent = 'Wygenerowano: ' + new Date().toLocaleString('pl-PL');
 </script>
 </body>

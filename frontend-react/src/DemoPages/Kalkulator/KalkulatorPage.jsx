@@ -422,27 +422,29 @@ function InfrastructureLayer() {
 // ── PDF Report Generator — otwiera raport-template-3d.html z danymi działki ─
 function generateParcelPDF(parcel) {
   const mr = parcel.data || {};
-  const win = window.open("/raport-template-3d.html", "_blank");
+  // Przekaż dane przez sessionStorage — odczyt w szablonie lub przez polling
+  const key = `ksws_rpt_${Date.now()}`;
+  try { sessionStorage.setItem(key, JSON.stringify(mr)); } catch (_) {}
+  const win = window.open(`/raport-template-3d.html?key=${key}`, "_blank");
   if (!win) {
-    toast.error("Przeglądarka zablokowała popup — zezwól na wyskakujące okna dla tej strony");
+    toast.error("Przeglądarka zablokowała popup — zezwól na wyskakujące okna");
     return;
   }
-  win.addEventListener("load", () => {
+  // Polling co 200ms aż fillReport będzie gotowe (max 5s)
+  let n = 0;
+  const iv = setInterval(() => {
+    n++;
     try {
       if (typeof win.fillReport === "function") {
+        clearInterval(iv);
         win.fillReport(mr);
-        toast.success(`Raport dla ${parcel.parcel_id} otwarty — użyj Ctrl+P by zapisać PDF`);
-      } else {
-        // Fallback: ustaw dane i wywołaj po małym opóźnieniu
-        setTimeout(() => {
-          if (typeof win.fillReport === "function") win.fillReport(mr);
-        }, 500);
+        toast.success(`Raport dla ${parcel.parcel_id} — użyj Ctrl+P by zapisać jako PDF`);
+      } else if (win.closed || n > 25) {
+        clearInterval(iv);
+        if (n > 25) toast.error("Timeout ładowania szablonu");
       }
-    } catch (e) {
-      console.error("fillReport error:", e);
-      toast.error("Błąd raportu: " + e.message);
-    }
-  });
+    } catch (_) { clearInterval(iv); }
+  }, 200);
 }
 
 // ── Batch CSV Component ─────────────────────────────────────────────────────
