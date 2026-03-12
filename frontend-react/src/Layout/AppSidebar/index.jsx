@@ -21,9 +21,11 @@ class AppSidebar extends Component {
   };
 
   componentDidMount() {
-    // Apply dark mode on mount if enabled
-    if (this.state.darkMode) {
-      document.documentElement.classList.add('dark-theme');
+    // Apply light mode on mount if NOT dark (dark is default)
+    if (!this.state.darkMode) {
+      document.documentElement.classList.add('light-theme');
+    } else {
+      document.documentElement.classList.remove('light-theme');
     }
   }
 
@@ -39,11 +41,13 @@ class AppSidebar extends Component {
     // Persist to localStorage
     localStorage.setItem('ksws-dark-mode', newDarkMode);
 
-    // Apply/remove dark-theme class
+    // Apply/remove light-theme class (dark is default)
     if (newDarkMode) {
-      document.documentElement.classList.add('dark-theme');
+      // Dark mode - remove light-theme class
+      document.documentElement.classList.remove('light-theme');
     } else {
-      document.documentElement.classList.remove('dark-theme');
+      // Light mode - add light-theme class
+      document.documentElement.classList.add('light-theme');
     }
   };
 

@@ -2,9 +2,68 @@
    DARK THEME - COMPREHENSIVE DARK MODE STYLING
    ============================================================================ */
 
-/* COLOR PALETTE - Dark Mode (Sales Dashboard Style) */
+/* COLOR PALETTE - Dark Mode as DEFAULT (Sales Dashboard Style) */
 :root {
-  /* Light Mode Defaults */
+  /* DARK MODE AS DEFAULT (since app starts with dark theme ON by default) */
+  --bg-primary: #0f1419;
+  --bg-secondary: #16213e;
+  --bg-tertiary: #1a2f4f;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0a0;
+  --text-muted: #7a8490;
+  --border: #2d3561;
+
+  --accent-primary: #00d9ff;
+  --accent-secondary: #00ff88;
+  --accent-cyan: #00d9ff;
+  --accent-magenta: #ff00ff;
+  --accent-green: #00ff88;
+  --accent-orange: #ff6b35;
+  --accent-yellow: #ffca3a;
+  --accent-red: #ff595e;
+
+  --shadow: rgba(0, 0, 0, 0.3);
+  --shadow-md: rgba(0, 0, 0, 0.4);
+  --shadow-lg: rgba(0, 0, 0, 0.5);
+
+  /* KSWS-SPECIFIC VARIABLES (dark by default) */
+  --purple: #00d9ff;
+  --purple-dark: #0099cc;
+  --purple-light: #33e6ff;
+  --green: #00ff88;
+  --green-light: #33ff99;
+  --red: #ff595e;
+  --yellow: #ffca3a;
+  --salmon: #ff8a8f;
+  --blue: #00d9ff;
+
+  --ksws-sidebar-bg: #16213e;
+  --ksws-bg: #0f1419;
+  --ksws-white: #16213e;
+  --ksws-card-bg: #16213e;
+  --ksws-kpi-bg: #1a2f4f;
+  --ksws-border: #2d3561;
+
+  --ksws-text-dark: #e0e0e0;
+  --ksws-text-muted: #a0a0a0;
+
+  --ksws-magenta: #00ff88;
+  --ksws-magenta-dark: #00dd66;
+  --ksws-magenta-gradient: linear-gradient(135deg, #00d9ff 0%, #00ff88 100%);
+  --ksws-green: #00ff88;
+  --ksws-blue: #00d9ff;
+  --ksws-orange: #ff6b35;
+  --ksws-red: #ff595e;
+  --ksws-gold: #ffca3a;
+
+  --ksws-shadow-sm: 0 1px 4px rgba(0, 217, 255, 0.15);
+  --ksws-shadow-md: 0 4px 14px rgba(0, 217, 255, 0.2);
+  --ksws-shadow-lg: 0 8px 28px rgba(0, 217, 255, 0.25);
+}
+
+/* LIGHT MODE (only when explicitly enabled) */
+body.light-theme {
+  /* Light Mode Overrides */
   --bg-primary: #edf2f4;
   --bg-secondary: #ffffff;
   --bg-tertiary: #f5f7fa;
@@ -12,6 +71,7 @@
   --text-secondary: #6b7a8d;
   --text-muted: #9ca3af;
   --border: #e2e8ed;
+
   --accent-primary: #6a4c93;
   --accent-secondary: #8ac926;
   --accent-cyan: #6a4c93;
@@ -20,9 +80,43 @@
   --accent-orange: #f97316;
   --accent-yellow: #eab308;
   --accent-red: #ef4444;
+
   --shadow: rgba(0, 0, 0, 0.1);
   --shadow-md: rgba(0, 0, 0, 0.15);
   --shadow-lg: rgba(0, 0, 0, 0.2);
+
+  --purple: #6a4c93;
+  --purple-dark: #4e3571;
+  --purple-light: #8b6db4;
+  --green: #8ac926;
+  --green-light: #61e786;
+  --red: #ff595e;
+  --yellow: #ffca3a;
+  --salmon: #f87575;
+  --blue: #1982c4;
+
+  --ksws-sidebar-bg: #6a4c93;
+  --ksws-bg: #edf2f4;
+  --ksws-white: #ffffff;
+  --ksws-card-bg: #ffffff;
+  --ksws-kpi-bg: #ffffff;
+  --ksws-border: #e2e8ed;
+
+  --ksws-text-dark: #1a1a2e;
+  --ksws-text-muted: #6b7a8d;
+
+  --ksws-magenta: #8ac926;
+  --ksws-magenta-dark: #6da01d;
+  --ksws-magenta-gradient: linear-gradient(135deg, #6a4c93 0%, #8ac926 100%);
+  --ksws-green: #8ac926;
+  --ksws-blue: #1982c4;
+  --ksws-orange: #ffca3a;
+  --ksws-red: #ff595e;
+  --ksws-gold: #ffca3a;
+
+  --ksws-shadow-sm: 0 1px 4px rgba(106,76,147,0.08);
+  --ksws-shadow-md: 0 4px 14px rgba(106,76,147,0.12);
+  --ksws-shadow-lg: 0 8px 28px rgba(106,76,147,0.16);
 }
 
 /* Dark Mode Theme */
@@ -93,10 +187,10 @@ html.dark-theme {
 }
 
 /* ============================================================================
-   GLOBAL DARK MODE STYLING
+   GLOBAL DARK MODE STYLING (Dark is default for all, light mode explicitly opt-in)
    ============================================================================ */
 
-body.dark-theme {
+body:not(.light-theme) {
   /* LAYOUT */
   .app-sidebar {
     background-color: var(--bg-secondary);
@@ -942,6 +1036,189 @@ body.dark-theme {
 
     &:hover {
       box-shadow: 0 4px 15px rgba(0, 217, 255, 0.3);
+    }
+  }
+}
+
+  /* ============================================================================
+     AGGRESSIVE HARDCODED COLOR OVERRIDES (for KalkulatorPage.css)
+     ============================================================================ */
+
+  /* Override all hardcoded purple colors */
+  .ksws-layout,
+  .ksws-sidebar,
+  .ksws-content {
+    background: var(--ksws-bg) !important;
+    color: var(--ksws-text-dark) !important;
+  }
+
+  .ksws-sidebar {
+    background: var(--ksws-sidebar-bg) !important;
+  }
+
+  /* Override all hardcoded white/light colors */
+  [style*="background: #ffffff"],
+  [style*="background: #edf2f4"],
+  [style*="background: #f5f7fa"] {
+    background: var(--ksws-card-bg) !important;
+  }
+
+  /* Override all text colors */
+  [style*="color: #1a1a2e"],
+  [style*="color: #6b7a8d"],
+  [style*="color: #6a4c93"] {
+    color: var(--ksws-text-dark) !important;
+  }
+
+  /* Override purple headings */
+  h1, h2, h3, h4, h5, h6 {
+    color: var(--accent-cyan) !important;
+  }
+
+  /* All divs, sections, articles */
+  div, section, article, main, aside {
+    &[style*="background: #ffffff"],
+    &[style*="background: #edf2f4"],
+    &[style*="background: #f5f7fa"],
+    &[style*="background: white"] {
+      background: var(--ksws-card-bg) !important;
+    }
+  }
+
+  /* KPI Cards - Override from light to dark */
+  .kpi-card,
+  .ksws-kpi-box,
+  [class*="kpi"],
+  [class*="card"] {
+    background: var(--ksws-card-bg) !important;
+    border: 1px solid var(--ksws-border) !important;
+    color: var(--ksws-text-dark) !important;
+  }
+
+  /* Form elements */
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  input[type="password"],
+  input[type="search"],
+  input[type="date"],
+  select,
+  textarea {
+    background: var(--ksws-kpi-bg) !important;
+    color: var(--ksws-text-dark) !important;
+    border: 1px solid var(--ksws-border) !important;
+
+    &:focus {
+      border-color: var(--accent-cyan) !important;
+      box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.15) !important;
+    }
+
+    &::placeholder {
+      color: var(--ksws-text-muted) !important;
+    }
+  }
+
+  /* Buttons with gradient */
+  button,
+  [class*="btn"],
+  [class*="button"] {
+    &[style*="linear-gradient"],
+    &[style*="#6a4c93"],
+    &[style*="#8ac926"] {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-green)) !important;
+      color: #000 !important;
+
+      &:hover {
+        box-shadow: 0 4px 15px rgba(0, 217, 255, 0.3) !important;
+      }
+    }
+  }
+
+  /* Override inline background styles on all elements */
+  *[style*="#ffffff"],
+  *[style*="#edf2f4"],
+  *[style*="#f5f7fa"],
+  *[style*="#6a4c93"],
+  *[style*="#8ac926"] {
+    /* Applied via specific overrides above */
+  }
+
+  /* Direct element overrides */
+  .ksws-map-legend,
+  .ksws-info-box,
+  .ksws-detail-box,
+  .ksws-compensation-box,
+  .ksws-track-box {
+    background: var(--ksws-card-bg) !important;
+    border: 1px solid var(--ksws-border) !important;
+    color: var(--ksws-text-dark) !important;
+  }
+
+  /* Table styling */
+  table {
+    background: var(--ksws-card-bg) !important;
+    color: var(--ksws-text-dark) !important;
+
+    thead {
+      background: rgba(0, 217, 255, 0.1) !important;
+
+      th {
+        color: var(--accent-cyan) !important;
+        border-bottom: 2px solid var(--accent-cyan) !important;
+      }
+    }
+
+    tbody {
+      tr {
+        border-bottom: 1px solid var(--ksws-border) !important;
+
+        &:hover {
+          background: rgba(0, 217, 255, 0.05) !important;
+        }
+
+        td {
+          color: var(--ksws-text-dark) !important;
+        }
+      }
+    }
+  }
+
+  /* Status badges and labels */
+  [class*="badge"],
+  [class*="label"],
+  [class*="status"] {
+    &[style*="background"] {
+      color: #000 !important;
+    }
+  }
+
+  /* Map containers */
+  .leaflet-container {
+    background: var(--ksws-kpi-bg) !important;
+  }
+
+  .leaflet-popup-content-wrapper {
+    background: var(--ksws-card-bg) !important;
+    color: var(--ksws-text-dark) !important;
+  }
+
+  /* Ensure text visibility */
+  p, span, label, li {
+    color: var(--ksws-text-dark) !important;
+  }
+
+  .text-muted {
+    color: var(--ksws-text-muted) !important;
+  }
+
+  /* Sidebar specific */
+  .ksws-sidebar {
+    * {
+      color: var(--accent-cyan) !important;
+
+      &:hover {
+        color: var(--accent-green) !important;
+      }
     }
   }
 }
