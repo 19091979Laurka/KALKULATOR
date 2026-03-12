@@ -25,12 +25,12 @@
 
 /* UPLOAD */
 .batch-upload-section {
-  background: #F5EBE0;
+  background: #ffffff;
   border-radius: 10px;
   padding: 30px;
-  box-shadow: 0 2px 12px rgba(92,61,46,0.08);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
   margin-bottom: 30px;
-  border: 1px solid #D6CCC2;
+  border: 1px solid #ede8e3;
 }
 
 .upload-box {
@@ -48,7 +48,7 @@
   font-weight: 600;
   font-size: 1em;
   transition: all 0.2s;
-  background: #EDEDE9;
+  background: #ffffff;
 }
 
 .file-label:hover {
@@ -120,12 +120,12 @@
 }
 
 .stat-card {
-  background: #F5EBE0;
+  background: #ffffff;
   border-radius: 10px;
   padding: 20px;
   text-align: center;
-  box-shadow: 0 2px 8px rgba(92,61,46,0.07);
-  border: 1px solid #D6CCC2;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  border: 1px solid #ede8e3;
   border-left: 4px solid #b8963e;
 }
 
@@ -197,8 +197,8 @@
   border-radius: 8px;
   font-size: 0.9em;
   font-weight: 600;
-  border: 1px solid #D6CCC2;
-  background: #F5EBE0;
+  border: 1px solid #ede8e3;
+  background: #ffffff;
   color: #5c3d2e;
   cursor: pointer;
   transition: all 0.2s;
@@ -222,8 +222,8 @@
   border-radius: 8px;
   font-size: 0.9em;
   font-weight: 600;
-  border: 1px solid #D6CCC2;
-  background: #EDEDE9;
+  border: 1px solid #ede8e3;
+  background: #ffffff;
   color: #5c3d2e;
   cursor: pointer;
   transition: all 0.2s;
@@ -235,11 +235,11 @@
 
 /* CONTENT */
 .content-box {
-  background: #F5EBE0;
+  background: #ffffff;
   border-radius: 10px;
   padding: 20px;
   box-shadow: 0 2px 8px rgba(92,61,46,0.07);
-  border: 1px solid #D6CCC2;
+  border: 1px solid #ede8e3;
 }
 
 .content-box h3 {
@@ -250,20 +250,20 @@
 }
 
 .map-box {
-  background: #F5EBE0;
+  background: #ffffff;
   border-radius: 10px;
   padding: 0;
   box-shadow: 0 2px 12px rgba(92,61,46,0.08);
-  border: 1px solid #D6CCC2;
+  border: 1px solid #ede8e3;
   overflow: hidden;
 }
 
 .table-box {
-  background: #F5EBE0;
+  background: #ffffff;
   border-radius: 10px;
   padding: 0;
   box-shadow: 0 2px 12px rgba(92,61,46,0.08);
-  border: 1px solid #D6CCC2;
+  border: 1px solid #ede8e3;
   overflow: hidden;
 }
 
@@ -289,7 +289,7 @@
 }
 
 .results-table tbody tr:hover {
-  background: #EDEDE9;
+  background: #ffffff;
 }
 
 .results-table tbody tr.collision {
@@ -302,7 +302,7 @@
 
 /* LEAFLET MAP */
 .leaflet-container {
-  background: #EDEDE9;
+  background: #ffffff;
 }
 
 .leaflet-popup-content {

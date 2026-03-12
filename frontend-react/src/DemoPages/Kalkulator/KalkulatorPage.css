@@ -4,42 +4,45 @@
    ═════════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* Szuwara brand palette — jasne piaskowe */
-  --szuwara-navy:      #D5BDAF;   /* jasny piasek — sidebar */
-  --szuwara-navy-deep: #C9AD9F;   /* nieco ciemniejszy piasek */
-  --szuwara-gold:      #b8963e;   /* złoto Szuwara — bez zmian */
-  --szuwara-gold-light:#d4af62;   /* jaśniejsze złoto */
-  --szuwara-gold-dark: #8c6e27;   /* ciemniejsze złoto */
+  /* ── Wzorzec: biały + jasno-piaskowy sidebar + beżowe kafelki KPI ── */
+  --szuwara-gold:      #b8963e;
+  --szuwara-gold-light:#d4af62;
+  --szuwara-gold-dark: #8c6e27;
 
-  /* Beige palette: #EDEDE9 · #D6CCC2 · #F5EBE0 · #E3D5CA · #D5BDAF */
-  --beige-1: #EDEDE9;   /* tło główne */
-  --beige-2: #D6CCC2;   /* obramowania */
-  --beige-3: #F5EBE0;   /* tło kart */
-  --beige-4: #E3D5CA;   /* hover, secondary */
-  --beige-5: #D5BDAF;   /* sidebar, akcenty */
+  /* Paleta piaskowa (#EDEDE9 · #D6CCC2 · #F5EBE0 · #E3D5CA · #D5BDAF) */
+  --beige-1: #EDEDE9;   /* sidebar bg — bardzo jasny piasek */
+  --beige-2: #D6CCC2;   /* obramowania, linie sep. */
+  --beige-3: #F5EBE0;   /* kafelki KPI — ciepły krem */
+  --beige-4: #E3D5CA;   /* kafelki KPI wariant 2 */
+  --beige-5: #D5BDAF;   /* kafelki KPI wariant 3 — ciemniejszy piasek */
 
-  /* Layout */
-  --ksws-sidebar-bg: var(--beige-5);
+  /* Layout — jak na screenshocie */
+  --ksws-sidebar-bg:  var(--beige-1);  /* jasny piasek */
   --ksws-sidebar-width: 260px;
+  --ksws-bg:          #ffffff;          /* treść — czysta biel */
+  --ksws-white:       #ffffff;
+  --ksws-card-bg:     #ffffff;          /* karty — białe */
+  --ksws-kpi-bg:      var(--beige-3);   /* kafelki KPI — krem */
+  --ksws-border:      #ede8e3;          /* obramowania — delikatne */
+
+  /* Tekst — czarny jak na screenshocie */
+  --ksws-text-dark:   #111111;
+  --ksws-text-muted:  #888888;
 
   /* Akcenty */
-  --ksws-magenta: var(--szuwara-gold);
-  --ksws-magenta-dark: var(--szuwara-gold-dark);
+  --ksws-magenta:          var(--szuwara-gold);
+  --ksws-magenta-dark:     var(--szuwara-gold-dark);
   --ksws-magenta-gradient: linear-gradient(135deg, #b8963e 0%, #d4af62 100%);
-
-  --ksws-green: #27ae60;
-  --ksws-blue: #8c7b72;
+  --ksws-green:  #27ae60;
+  --ksws-blue:   #555555;
   --ksws-orange: #e67e22;
-  --ksws-red: #e74c3c;
-  --ksws-gold: var(--szuwara-gold);
-  --ksws-bg: var(--beige-1);
-  --ksws-white: var(--beige-3);
-  --ksws-border: var(--beige-2);
-  --ksws-text-dark: #4a3728;
-  --ksws-text-muted: #9e8b83;
-  --ksws-shadow-sm: 0 2px 4px rgba(180,155,140,0.15);
-  --ksws-shadow-md: 0 4px 12px rgba(180,155,140,0.20);
-  --ksws-shadow-lg: 0 8px 24px rgba(180,155,140,0.25);
+  --ksws-red:    #e74c3c;
+  --ksws-gold:   var(--szuwara-gold);
+
+  /* Cienie — subtelne */
+  --ksws-shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --ksws-shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --ksws-shadow-lg: 0 8px 24px rgba(0,0,0,0.10);
 }
 
 /* ── RESET / BASE ─────────────────────────────────────────────────────────── */
@@ -57,7 +60,7 @@
   width: var(--ksws-sidebar-width);
   min-height: 100vh;
   background: var(--ksws-sidebar-bg);
-  color: #4a3728;
+  color: #111111;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -101,7 +104,7 @@
 .ksws-sidebar-logo-title {
   font-size: 1.22rem;
   font-weight: 800;
-  color: #4a3728;
+  color: #111111;
   letter-spacing: 2px;
   text-transform: uppercase;
   margin: 0 0 3px 0;
@@ -127,7 +130,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 24px;
-  color: rgba(74,55,40,0.70);
+  color: rgba(0,0,0,0.55);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -138,14 +141,14 @@
 }
 
 .ksws-sidebar-nav-item:hover {
-  color: #4a3728;
-  background: rgba(184,150,62,0.10);
-  border-left-color: rgba(184,150,62,0.40);
+  color: #111111;
+  background: rgba(0,0,0,0.05);
+  border-left-color: rgba(0,0,0,0.15);
 }
 
 .ksws-sidebar-nav-item.active {
-  color: #4a3728;
-  background: rgba(184,150,62,0.20);
+  color: #111111;
+  background: rgba(184,150,62,0.15);
   border-left-color: var(--szuwara-gold);
   font-weight: 700;
 }
@@ -158,9 +161,9 @@
 
 .ksws-sidebar-footer {
   padding: 14px 20px;
-  border-top: 1px solid rgba(184,150,62,0.25);
+  border-top: 1px solid rgba(0,0,0,0.08);
   font-size: 0.68rem;
-  color: rgba(74,55,40,0.50);
+  color: rgba(0,0,0,0.40);
   line-height: 1.6;
 }
 
