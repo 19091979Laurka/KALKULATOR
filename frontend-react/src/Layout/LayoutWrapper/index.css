@@ -23,6 +23,26 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
+/* Header Logo Area */
+.ksws-header .app-header__logo {
+  flex: 0 0 280px;
+  width: 280px;
+  height: 60px;
+  padding: 0 15px;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid #e2e8ed;
+  background: #ffffff;
+}
+
+.ksws-header .app-header__brand {
+  font-size: 1.1rem;
+  color: #1a1a2e;
+  font-weight: 700;
+  white-space: nowrap;
+  margin: 0;
+}
+
 /* Dark mode header */
 body.light-theme .ksws-header {
   background: #ffffff;
@@ -152,4 +172,71 @@ body.light-theme .ksws-content {
 .ksws-sidebar::-webkit-scrollbar-thumb:hover,
 .ksws-content::-webkit-scrollbar-thumb:hover {
   background: #888;
+}
+
+/* ── Navigation Menu Styling (Dark Mode) ──────────────────────── */
+.ksws-sidebar .vertical-nav-menu {
+  padding: 15px 0;
+}
+
+.ksws-sidebar .app-sidebar__heading {
+  color: #a0a0a0;
+  padding: 0 15px;
+  margin: 15px 0 10px 0;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.ksws-sidebar .metismenu-container .metismenu-link {
+  color: #e0e0e0;
+  padding: 0 15px 0 15px;
+  line-height: 2.5rem;
+  height: 2.5rem;
+  border-radius: 6px;
+  margin: 2px 8px;
+  transition: all 0.2s ease;
+}
+
+.ksws-sidebar .metismenu-container .metismenu-link:hover {
+  background: rgba(0, 212, 255, 0.1);
+  color: #00d4ff;
+}
+
+.ksws-sidebar .metismenu-container .metismenu-link.active {
+  background: rgba(0, 212, 255, 0.15);
+  color: #00d4ff;
+  font-weight: 600;
+}
+
+.ksws-sidebar .metismenu-icon {
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+  margin-right: 10px;
+  opacity: 0.7;
+}
+
+.ksws-sidebar .metismenu-state-icon {
+  opacity: 0.5;
+}
+
+/* Light mode navigation */
+body.light-theme .ksws-sidebar .vertical-nav-menu {
+  padding: 15px 0;
+}
+
+body.light-theme .ksws-sidebar .metismenu-link {
+  color: #1a1a2e;
+}
+
+body.light-theme .ksws-sidebar .metismenu-link:hover {
+  background: rgba(106, 76, 147, 0.1);
+  color: #6a4c93;
+}
+
+body.light-theme .ksws-sidebar .metismenu-link.active {
+  background: rgba(106, 76, 147, 0.15);
+  color: #6a4c93;
 }
