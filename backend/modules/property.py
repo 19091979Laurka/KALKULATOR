@@ -277,11 +277,31 @@ class PropertyAggregator:
             except Exception as e:
                 logger.error(f"Error calculating intersection length: {e}")
 
-        # Priorytet 3: placeholder tylko jeśli infrastruktura wykryta (np. NEARBY)
+        # Priorytet 3: gdy brak pomiaru — NIE tworzymy fałszywego placeholdera
+        measurement_source = "geodezyjne"
         if not line_length or line_length <= 0:
-            line_length = band_width * 50 if pl.get("detected") else 0.0
-            if line_length > 0:
-                logger.info("Using placeholder line_length: %.1f m (band_width=%d × 50)", line_length, band_width)
+            if pl.get("detected"):
+                # Infrastruktura wykryta ale brak pomiaru — szacunek z przekątnej działki
+                if geom_geojson and geom_geojson.get("coordinates"):
+                    try:
+                        ring = geom_geojson["coordinates"][0]
+                        lats = [c[1] for c in ring]
+                        lons = [c[0] for c in ring]
+                        lat0 = sum(lats) / len(lats)
+                        dx = (max(lons) - min(lons)) * 111319.0 * math.cos(math.radians(lat0))
+                        dy = (max(lats) - min(lats)) * 111132.0
+                        line_length = round(math.hypot(dx, dy) * 0.7, 1)  # 70% przekątnej
+                        measurement_source = "szacunek (przekątna)"
+                        logger.info("Estimated line_length from diagonal: %.1f m", line_length)
+                    except Exception:
+                        line_length = 0.0
+                        measurement_source = "brak pomiaru"
+                else:
+                    line_length = 0.0
+                    measurement_source = "brak pomiaru"
+            else:
+                line_length = 0.0
+                measurement_source = "brak — nie wykryto"
 
         band_area = line_length * band_width if line_length and line_length > 0 else 0.0
 
@@ -372,11 +392,13 @@ class PropertyAggregator:
             "ksws": {
                 "infra_type": infra_type,
                 "coeffs": coeffs,
+                "line_length_m": round(line_length, 1),
                 "band_width_m": band_width,
                 "band_area_m2": round(band_area, 2),
                 "property_value_total": round(property_value, 2),
                 "price_per_m2": avg_price,
                 "label": coeffs.get("label", ""),
+                "measurement_source": measurement_source,
             },
             "compensation": {
                 "track_a": track_a,

@@ -565,13 +565,16 @@ var woda = L.tileLayer.wms(kiutUrl,{{layers:'przewod_wodociagowy',format:'image/
 elektro.addTo(map);
 L.control.layers(null,{{'⚡ Elektroenergetyczny':elektro,'🔥 Gazowy':gaz,'💧 Wodociągowy':woda}},{{collapsed:false,position:'topright'}}).addTo(map);
 
-// Power lines (Overpass)
-var vColors = {{'WN':'#e60000','SN':'#00bb00','nN':'#2196f3'}};
+// Power lines (Overpass) — grube, jaskrawe
+var vColors = {{'WN':'#ff0000','SN':'#00ff00','nN':'#00bfff'}};
 var linesLayer = L.geoJSON(linesData,{{
-  style:function(f){{ return {{color:vColors[f.properties.voltage]||'#00bb00',weight:3,opacity:.8}} }}
+  style:function(f){{
+    var v=f.properties.voltage||'SN';
+    return {{color:vColors[v]||'#00ff00',weight:5,opacity:1,dashArray:v==='nN'?'8,4':null}}
+  }}
 }}).addTo(map);
 
-// Parcels
+// Parcels — mocne kolory, gruby border
 var parcelsLayer;
 function renderParcels(filter) {{
   if(parcelsLayer) map.removeLayer(parcelsLayer);
@@ -583,7 +586,7 @@ function renderParcels(filter) {{
   parcelsLayer = L.geoJSON({{type:'FeatureCollection',features:filtered}},{{
     style:function(f){{
       var d=f.properties.detected;
-      return {{color:d?'#e74c3c':'#2ecc71',weight:2,fillColor:d?'#e74c3c':'#2ecc71',fillOpacity:d?.35:.15}}
+      return {{color:d?'#ff0000':'#00ff00',weight:3,fillColor:d?'#ff0000':'#00e000',fillOpacity:d?.5:.2}}
     }},
     onEachFeature:function(f,layer){{
       var p=f.properties;

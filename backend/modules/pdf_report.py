@@ -608,7 +608,7 @@ def generate_pdf(
         ["impact", str(basis.get("impact_judicial","0,073")), "Wskaźnik wpływu OBN"],
         ["Mnożnik B", f"×{basis.get('track_b_multiplier',1.80)}", "Track B = Track A × mnożnik"],
         ["Pas ochronny", f"{ksws0.get('band_width_m',30)} m", "Szerokość strefy ochronnej"],
-        ["Cena gruntu", f"{ksws0.get('price_per_m2',8.50):.2f} zł/m²",
+        ["Cena gruntu", f"{ksws0.get('price_per_m2',6.50):.2f} zł/m²",
          "Źródło: " + (parcels_data[0].get("market_data") or {}).get("price_source","GUS")],
     ]
     story.append(std_table(ksws_rows,

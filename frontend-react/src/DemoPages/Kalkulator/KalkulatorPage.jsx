@@ -5,7 +5,6 @@ import "leaflet/dist/leaflet.css";
 import { toast } from "react-toastify";
 import CountUp from "react-countup";
 import { Spinner, Badge, Table, Progress } from "reactstrap";
-import jsPDF from "jspdf";
 import "./KalkulatorPage.css";
 
 // ── Leaflet default icon fix ──────────────────────────────────────────────────
@@ -317,44 +316,45 @@ function BatchParcelsLayer({ results }) {
       const collision = p.data?.infrastructure?.power_lines?.detected;
       const ta = p.data?.compensation?.track_a?.total || 0;
       const tb = p.data?.compensation?.track_b?.total || 0;
-      const color = collision ? "#e74c3c" : "#2ecc71";
+      const color = collision ? "#ff0000" : "#00e000";
 
       const popup = `<div style="font-size:12px;font-family:Arial;min-width:200px">
         <strong>${p.parcel_id}</strong><br/>
-        Kolizja: ${collision ? "✅ TAK" : "❌ NIE"}<br/>
+        Kolizja: ${collision ? '<b style="color:#ff0000">TAK</b>' : "NIE"}<br/>
         Napięcie: ${p.data?.infrastructure?.power_lines?.voltage || "—"}<br/>
         Pow: ${Math.round(p.data?.geometry?.area_m2 || 0)} m²<br/>
         <hr style="margin:4px 0;border:none;border-top:1px solid #ddd"/>
         Track A: <strong style="color:#27ae60">${Math.round(ta).toLocaleString()} PLN</strong><br/>
         Track B: <strong style="color:#f39c12">${Math.round(tb).toLocaleString()} PLN</strong><br/>
-        <strong style="color:${color}">Razem: ${Math.round(ta+tb).toLocaleString()} PLN</strong>
+        <strong style="font-size:14px">Razem: ${Math.round(ta+tb).toLocaleString()} PLN</strong>
       </div>`;
 
-      // Poligon działki
+      // Poligon działki — mocne kolory, gruby border
       if (geojson && geojson.coordinates) {
         try {
           const poly = L.geoJSON(geojson, {
-            style: { color, weight: 2, fillColor: color, fillOpacity: collision ? 0.35 : 0.15 },
+            style: { color, weight: 3, fillColor: color, fillOpacity: collision ? 0.5 : 0.2 },
           }).bindPopup(popup);
           parcelsGroup.addLayer(poly);
         } catch (e) { /* skip invalid */ }
       } else if (centroid && centroid[0]) {
         // Fallback: marker jeśli brak geometrii
         const marker = L.circleMarker([centroid[1], centroid[0]], {
-          radius: collision ? 8 : 5, fillColor: color, color, weight: 2, opacity: 1, fillOpacity: 0.7,
+          radius: collision ? 10 : 6, fillColor: color, color, weight: 3, opacity: 1, fillOpacity: 0.8,
         }).bindPopup(popup);
         parcelsGroup.addLayer(marker);
       }
 
-      // Linie energetyczne z danych Overpass
+      // Linie energetyczne z danych Overpass — grube, jaskrawe
       const plGeo = p.data?.infrastructure?.power_lines?.geojson;
       if (plGeo && plGeo.features) {
         plGeo.features.forEach((feat) => {
           try {
             const v = feat.properties?.voltage || "SN";
-            const lc = v === "WN" ? "#e60000" : v === "nN" ? "#2196f3" : "#00bb00";
+            const lc = v === "WN" ? "#ff0000" : v === "nN" ? "#00bfff" : "#00ff00";
+            const lw = v === "WN" ? 6 : v === "nN" ? 4 : 5;
             const line = L.geoJSON(feat.geometry, {
-              style: { color: lc, weight: 3, opacity: 0.8 },
+              style: { color: lc, weight: lw, opacity: 1 },
             });
             linesGroup.addLayer(line);
           } catch (e) { /* skip */ }
@@ -420,147 +420,29 @@ function InfrastructureLayer() {
 }
 
 // ── PDF Report Generator ────────────────────────────────────────────────────
-function generateParcelPDF(parcel, batchData) {
+async function generateParcelPDF(parcel) {
   try {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    let yPos = 20;
-
-    // Header
-    doc.setFontSize(18);
-    doc.setFont(undefined, "bold");
-    doc.text("RAPORT ODSZKODOWANIA - KSWS", pageWidth / 2, yPos, { align: "center" });
-
-    // Date
-    yPos += 10;
-    doc.setFontSize(10);
-    doc.setFont(undefined, "normal");
-    const now = new Date();
-    doc.text(`Data: ${now.toLocaleDateString("pl-PL")} ${now.toLocaleTimeString("pl-PL")}`, pageWidth / 2, yPos, { align: "center" });
-
-    // Separator
-    yPos += 15;
-    doc.setDrawColor(37, 117, 252);
-    doc.line(20, yPos, pageWidth - 20, yPos);
-
-    // Parcel ID Section
-    yPos += 8;
-    doc.setFontSize(12);
-    doc.setFont(undefined, "bold");
-    doc.text("IDENTYFIKACJA DZIAŁKI", 20, yPos);
-
-    yPos += 8;
-    doc.setFontSize(10);
-    doc.setFont(undefined, "normal");
-    const parcelInfo = [
-      [`Identyfikator działki:`, parcel.parcel_id],
-      [`Kolizja z liniami energetycznymi:`, parcel.data?.infrastructure?.power_lines?.detected ? "TAK" : "NIE"],
-      [`Napięcie linii [kV]:`, parcel.data?.infrastructure?.power_lines?.voltage || "—"],
-    ];
-
-    parcelInfo.forEach(([label, value]) => {
-      doc.setFont(undefined, "bold");
-      doc.text(label, 20, yPos);
-      doc.setFont(undefined, "normal");
-      doc.text(String(value), 100, yPos);
-      yPos += 6;
+    toast.info(`Generuję PDF dla ${parcel.parcel_id}...`);
+    const payload = {
+      parcels: [{ parcel_id: parcel.parcel_id, master_record: parcel.data || {} }],
+    };
+    const res = await fetch("/api/report/pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
-
-    // Geometry Section
-    yPos += 8;
-    doc.setFontSize(12);
-    doc.setFont(undefined, "bold");
-    doc.text("PARAMETRY GEOMETRYCZNE", 20, yPos);
-
-    yPos += 8;
-    doc.setFont(undefined, "normal");
-    const area = parcel.data?.geometry?.area_m2 || 0;
-    const price = parcel.data?.market_data?.average_price_m2 || 0;
-    const value = parcel.data?.ksws?.property_value_total || 0;
-    const lineLength = parcel.data?.infrastructure?.power_lines?.length_m || 0;
-    const bandWidth = parcel.data?.ksws?.band_width_m || 0;
-    const bandArea = parcel.data?.ksws?.band_area_m2 || 0;
-
-    const geoInfo = [
-      [`Pow. działki [m²]:`, Math.round(area).toLocaleString()],
-      [`Cena rynkowa [PLN/m²]:`, Math.round(price).toLocaleString()],
-      [`Wartość nieruchomości [PLN]:`, Math.round(value).toLocaleString()],
-      [`Dł. linii energetycznej [m]:`, Math.round(lineLength).toLocaleString()],
-      [`Szerokość pasa ochronnego [m]:`, Math.round(bandWidth).toLocaleString()],
-      [`Pow. pasa ochronnego [m²]:`, Math.round(bandArea).toLocaleString()],
-    ];
-
-    geoInfo.forEach(([label, val]) => {
-      doc.setFont(undefined, "bold");
-      doc.text(label, 20, yPos);
-      doc.setFont(undefined, "normal");
-      doc.text(String(val), 100, yPos);
-      yPos += 6;
-    });
-
-    // Compensation Section
-    yPos += 8;
-    doc.setFontSize(12);
-    doc.setFont(undefined, "bold");
-    doc.text("ODSZKODOWANIE KSWS", 20, yPos);
-
-    yPos += 8;
-    doc.setFont(undefined, "normal");
-    const ta = parcel.data?.compensation?.track_a?.total || 0;
-    const tb = parcel.data?.compensation?.track_b?.total || 0;
-    const total = ta + tb;
-
-    const compInfo = [
-      [`Track A [PLN]:`, Math.round(ta).toLocaleString()],
-      [`Track B [PLN]:`, Math.round(tb).toLocaleString()],
-      [`RAZEM [PLN]:`, Math.round(total).toLocaleString()],
-    ];
-
-    compInfo.forEach(([label, val], idx) => {
-      doc.setFont(undefined, "bold");
-      if (idx === 2) {
-        doc.setFontSize(11);
-        doc.setTextColor(39, 174, 96);
-      }
-      doc.text(label, 20, yPos);
-      doc.setFont(undefined, "bold");
-      doc.text(String(val), 100, yPos);
-      doc.setTextColor(0, 0, 0);
-      doc.setFontSize(10);
-      yPos += 8;
-    });
-
-    // Summary Box
-    yPos += 8;
-    doc.setDrawColor(37, 117, 252);
-    doc.setFillColor(245, 249, 255);
-    doc.rect(20, yPos - 5, pageWidth - 40, 30, "F");
-    doc.setDrawColor(37, 117, 252);
-    doc.rect(20, yPos - 5, pageWidth - 40, 30);
-
-    doc.setFontSize(11);
-    doc.setFont(undefined, "bold");
-    doc.setTextColor(37, 117, 252);
-    doc.text("PODSUMOWANIE", 25, yPos + 2);
-
-    doc.setFontSize(10);
-    doc.setFont(undefined, "normal");
-    doc.setTextColor(0, 0, 0);
-    doc.text(`Status kolizji: ${parcel.data?.infrastructure?.power_lines?.detected ? "WYKRYTA" : "BRAK"}`, 25, yPos + 10);
-    doc.text(`Całkowita kwota odszkodowania: ${Math.round(total).toLocaleString()} PLN`, 25, yPos + 17);
-
-    // Footer
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text("Raport wygenerowany automatycznie przez Kalkulator KSWS", pageWidth / 2, pageHeight - 10, { align: "center" });
-
-    // Save
-    doc.save(`${parcel.parcel_id}_KSWS_Report.pdf`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${parcel.parcel_id.replace(/\//g, "_")}_KSWS_Report.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
     toast.success(`PDF dla ${parcel.parcel_id} pobrany!`);
   } catch (err) {
     console.error("PDF Error:", err);
-    toast.error("Błąd przy generowaniu PDF");
+    toast.error("Błąd PDF: " + err.message);
   }
 }
 
@@ -893,7 +775,7 @@ function BatchCSVSection() {
                         <td style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>{Math.round(ta + tb).toLocaleString()}</td>
                         <td style={{ padding: "8px", textAlign: "center" }}>
                           <button
-                            onClick={() => generateParcelPDF(p, batchResults)}
+                            onClick={() => generateParcelPDF(p)}
                             style={{ padding: "4px 10px", background: "#2575fc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.85em" }}
                           >
                             📄
