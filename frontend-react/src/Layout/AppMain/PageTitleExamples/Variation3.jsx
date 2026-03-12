@@ -18,10 +18,10 @@ export default class TitleComponent3 extends Component {
           </BreadcrumbItem>
           <BreadcrumbItem>
             <a href="https://colorlib.com/" onClick={(e) => e.preventDefault()}>
-              Pulpity
+              Dashboards
             </a>
           </BreadcrumbItem>
-          <BreadcrumbItem active>Przykładowa nawigacja</BreadcrumbItem>
+          <BreadcrumbItem active>Example Breadcrumb</BreadcrumbItem>
         </Breadcrumb>
       </Fragment>
     );
