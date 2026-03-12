@@ -309,12 +309,14 @@ def chart_donut_band(parcels):
 
 
 def chart_bar_breakdown(parcels):
-    """Horizontal bar — WSP/WBK/OBN breakdown."""
+    """Horizontal bar — WSP/WBK/OBN breakdown. Max 15 działek dla czytelności."""
+    # Limituj do 15 działek żeby wykres był czytelny
+    parcels = parcels[:15]
     rows = []
     for p in parcels:
-        comp = p.get("compensation", {})
-        ta   = comp.get("track_a", {})
-        tb   = comp.get("track_b", {})
+        comp = p.get("compensation") or {}
+        ta   = comp.get("track_a") or {}
+        tb   = comp.get("track_b") or {}
         pid  = p.get("_parcel_id", "?")
         nr   = pid.split(".")[-1] if "." in pid else pid
         rows.append({
@@ -346,7 +348,7 @@ def chart_bar_breakdown(parcels):
         v_obn  += [r["obn"], 0]
         v_full += [0, r["track_b"]]
 
-    fig, ax = plt.subplots(figsize=(11, max(4, len(labels)*0.65 + 1.5)),
+    fig, ax = plt.subplots(figsize=(11, min(18, max(4, len(labels)*0.55 + 1.5))),
                            facecolor="#F4F6F8")
     ax.set_facecolor("#FDFEFE")
     y = np.arange(len(labels))
@@ -456,6 +458,17 @@ def generate_pdf(
     W, H = A4
     S = make_styles()
 
+    # Odfiltruj None / puste rekordy
+    pairs = [(pid, p) for pid, p in zip(parcel_ids, parcels_data) if p]
+    if not pairs:
+        raise ValueError("Brak danych do wygenerowania PDF")
+    # Limituj do 50 działek (PDF byłby zbyt duży)
+    MAX_PARCELS = 50
+    if len(pairs) > MAX_PARCELS:
+        pairs = pairs[:MAX_PARCELS]
+    parcel_ids    = [x[0] for x in pairs]
+    parcels_data  = [x[1] for x in pairs]
+
     # Wstrzykujemy _parcel_id do każdego rekordu
     for i, p in enumerate(parcels_data):
         p["_parcel_id"] = parcel_ids[i] if i < len(parcel_ids) else f"Dz.{i+1}"
@@ -497,8 +510,10 @@ def generate_pdf(
     story.append(Spacer(1, 16*mm))
 
     # Kwota-rama
-    total_a = sum((p.get("compensation",{}).get("track_a",{}).get("total") or 0) for p in parcels_data)
-    total_b = sum((p.get("compensation",{}).get("track_b",{}).get("total") or 0) for p in parcels_data)
+    def _safe_comp(p, track):
+        return ((p.get("compensation") or {}).get(track) or {}).get("total") or 0
+    total_a = sum(_safe_comp(p, "track_a") for p in parcels_data)
+    total_b = sum(_safe_comp(p, "track_b") for p in parcels_data)
     cover_tbl = Table([
         [Paragraph("ROSZCZENIE ŁĄCZNE (TRACK B):", S["bc"])],
         [Paragraph(f"{total_b:,.2f} PLN".replace(",", " "), S["money_gold"])],
@@ -514,60 +529,66 @@ def generate_pdf(
     story.append(cover_tbl)
     story.append(PageBreak())
 
-    # ═══ I. IDENTYFIKACJA ═══
+    # ═══ I. IDENTYFIKACJA — tabela wierszowa (działka = wiersz) ═══
     story.append(HRFlowable(width="100%", thickness=3, color=C_PRIMARY, spaceAfter=4))
     story.append(Paragraph("I. IDENTYFIKACJA NIERUCHOMOŚCI", S["h2"]))
     story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceAfter=6))
 
-    hdr_ids = [Paragraph("Parametr", S["th"])] + \
-              [Paragraph(f"Działka {pid}", S["th"]) for pid in parcel_ids]
-    id_rows = [hdr_ids]
+    id_rows = [[
+        Paragraph("TERYT / ID", S["th"]),
+        Paragraph("Gmina / Powiat", S["th"]),
+        Paragraph("Pow. [m²]", S["th"]),
+        Paragraph("Użytek", S["th"]),
+        Paragraph("Typ", S["th"]),
+        Paragraph("Cena [zł/m²]", S["th"]),
+    ]]
+    for p in parcels_data:
+        pm = p.get("parcel_metadata") or {}
+        geom = p.get("geometry") or {}
+        egib = p.get("egib") or {}
+        md   = p.get("market_data") or {}
+        teryt = (p.get("metadata") or {}).get("teryt_id","—")
+        gmina = f"{pm.get('commune','—')} / {pm.get('county','—')}"
+        area  = f"{(geom.get('area_m2') or 0):,.0f}"
+        klasa = egib.get("primary_class","—")
+        typ   = "Bud." if egib.get("land_type") == "building" else "Rolny"
+        cena  = f"{(md.get('average_price_m2') or 0):.2f}"
+        id_rows.append([teryt, gmina, area, klasa, typ, cena])
+    cw_id = [W_txt*0.25, W_txt*0.30, W_txt*0.12, W_txt*0.09, W_txt*0.10, W_txt*0.14]
+    story.append(std_table(id_rows, cw_id, C_PRIMARY))
 
-    def r(label, fn):
-        row = [label]
-        for p in parcels_data:
-            row.append(fn(p))
-        return row
-
-    loc = (parcels_data[0].get("parcel_metadata") or {})
-    id_rows += [
-        r("TERYT",          lambda p: p.get("metadata",{}).get("teryt_id","—")),
-        r("Gmina / Powiat", lambda p: f"{(p.get('parcel_metadata') or {}).get('commune','—')} / {(p.get('parcel_metadata') or {}).get('county','—')}"),
-        r("Województwo",    lambda p: (p.get("parcel_metadata") or {}).get("region","—")),
-        r("Powierzchnia",   lambda p: f"{(p.get('geometry') or {}).get('area_m2',0):,.1f} m²"),
-        r("Obwód",          lambda p: f"{(p.get('geometry') or {}).get('perimeter_m',0):,.1f} m"),
-        r("Użytek EGiB",    lambda p: (p.get("egib") or {}).get("primary_class","—")),
-        r("Typ gruntu",     lambda p: "Budowlany" if (p.get("egib") or {}).get("land_type") == "building" else "Rolny"),
-        r("Zabudowa",       lambda p: "DOM MIESZKALNY" if (p.get("buildings") or {}).get("count",0) > 0 else "brak budynków"),
-        r("Cena [zł/m²]",  lambda p: f"{(p.get('market_data') or {}).get('average_price_m2',0):,.2f}"),
-        r("Źródło ceny",    lambda p: (p.get("market_data") or {}).get("price_source","—")),
-    ]
-    cw = [W_txt * 0.28] + [W_txt * 0.72 / len(parcel_ids)] * len(parcel_ids)
-    story.append(std_table(id_rows, cw, C_PRIMARY))
-
-    # ═══ II. INFRASTRUKTURA ═══
+    # ═══ II. INFRASTRUKTURA — tabela wierszowa ═══
     story.append(Spacer(1, 5*mm))
     story.append(HRFlowable(width="100%", thickness=3, color=C_ACCENT, spaceAfter=4))
     story.append(Paragraph("II. INFRASTRUKTURA — LINIA PRZESYŁOWA", S["h2"]))
     story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceAfter=6))
 
-    infra_hdr = [Paragraph("Parametr", S["th"])] + \
-                [Paragraph(f"Dz. {pid}", S["th"]) for pid in parcel_ids]
-    infra_rows = [infra_hdr]
-    infra_rows += [
-        r("Typ infrastruktury", lambda p: (p.get("ksws") or {}).get("label","—")),
-        r("Wykryta",            lambda p: "✅ TAK" if (
-            (p.get("infrastructure") or {}).get("power_lines",{}).get("detected") or
-            (p.get("infrastructure") or {}).get("power",{}).get("exists")
-        ) else "⚠ Brak/nieokreślona"),
-        r("Szerokość pasa",     lambda p: f"{(p.get('ksws') or {}).get('band_width_m','—')} m"),
-        r("Pow. pasa",          lambda p: f"{(p.get('ksws') or {}).get('band_area_m2',0):,.0f} m²"),
-        r("% działki w pasie",  lambda p: (
-            f"{min(100,(p.get('ksws') or {}).get('band_area_m2',0) / max(1,(p.get('geometry') or {}).get('area_m2',1)) * 100):.0f}%"
-        )),
-        r("Wartość nieruchomości", lambda p: fmt_pln((p.get("ksws") or {}).get("property_value_total"))),
-    ]
-    story.append(std_table(infra_rows, cw, C_ACCENT))
+    infra_rows = [[
+        Paragraph("TERYT / ID", S["th"]),
+        Paragraph("Kolizja", S["th"]),
+        Paragraph("Napięcie", S["th"]),
+        Paragraph("Pas [m]", S["th"]),
+        Paragraph("Pow. pasa [m²]", S["th"]),
+        Paragraph("% w pasie", S["th"]),
+        Paragraph("Wart. nier. [PLN]", S["th"]),
+    ]]
+    for p in parcels_data:
+        teryt = (p.get("metadata") or {}).get("teryt_id","—")
+        ksws  = p.get("ksws") or {}
+        geom  = p.get("geometry") or {}
+        pl    = (p.get("infrastructure") or {}).get("power_lines") or {}
+        pw    = (p.get("infrastructure") or {}).get("power") or {}
+        wykr  = "TAK" if (pl.get("detected") or pw.get("exists")) else "NIE"
+        volt  = pl.get("voltage") or pw.get("voltage") or "—"
+        pas   = str(ksws.get("band_width_m","—"))
+        ppas  = f"{(ksws.get('band_area_m2') or 0):,.0f}"
+        a_m2  = (geom.get('area_m2') or 1)
+        b_m2  = (ksws.get('band_area_m2') or 0)
+        pct   = f"{min(100, b_m2/max(1,a_m2)*100):.0f}%"
+        wart  = fmt_pln(ksws.get("property_value_total"))
+        infra_rows.append([teryt, wykr, volt, pas, ppas, pct, wart])
+    cw_inf = [W_txt*0.24, W_txt*0.08, W_txt*0.10, W_txt*0.09, W_txt*0.13, W_txt*0.10, W_txt*0.26]
+    story.append(std_table(infra_rows, cw_inf, C_ACCENT))
 
     story.append(PageBreak())
 
@@ -615,8 +636,16 @@ def generate_pdf(
                            [W_txt*0.14, W_txt*0.16, W_txt*0.70], C_GREEN))
     story.append(Spacer(1, 4*mm))
 
-    # Szczegóły każdej działki
-    for p in parcels_data:
+    # Szczegóły każdej działki (max 20 — przy dużych batchach pokazuj tylko tabelę zbiorczą)
+    MAX_DETAIL = 20
+    detail_parcels = parcels_data[:MAX_DETAIL]
+    if len(parcels_data) > MAX_DETAIL:
+        story.append(Paragraph(
+            f"Uwaga: szczegółowe wyliczenia pokazane dla pierwszych {MAX_DETAIL} z {len(parcels_data)} działek. "
+            f"Pełne dane w tabeli zbiorczej poniżej.", S["body"]
+        ))
+        story.append(Spacer(1, 2*mm))
+    for p in detail_parcels:
         pid = p["_parcel_id"]
         nr  = pid.split(".")[-1] if "." in pid else pid
         comp = p.get("compensation") or {}
@@ -660,8 +689,8 @@ def generate_pdf(
     for p in parcels_data:
         pid = p["_parcel_id"]
         nr  = pid.split(".")[-1] if "." in pid else pid
-        ta  = (p.get("compensation") or {}).get("track_a", {})
-        tb  = (p.get("compensation") or {}).get("track_b", {})
+        ta  = (p.get("compensation") or {}).get("track_a") or {}
+        tb  = (p.get("compensation") or {}).get("track_b") or {}
         sum_rows.append([f"Dz. {nr}", fmt_pln(ta.get("total")), fmt_pln(tb.get("total"))])
     if len(parcels_data) > 1:
         sum_rows.append([
@@ -698,7 +727,8 @@ def generate_pdf(
     story.append(Spacer(1, 4*mm))
 
     story.append(Paragraph("Struktura składników odszkodowania:", S["h3"]))
-    story.append(RLImage(chart_bar_breakdown(parcels_data), width=15*cm, height=max(5, len(parcels_data)*3.2)*cm))
+    bar_h = min(18, max(5, min(15, len(parcels_data)) * 1.8 + 2))
+    story.append(RLImage(chart_bar_breakdown(parcels_data), width=15*cm, height=bar_h*cm))
 
     story.append(PageBreak())
 

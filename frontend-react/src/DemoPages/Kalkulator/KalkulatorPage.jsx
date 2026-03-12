@@ -419,31 +419,30 @@ function InfrastructureLayer() {
   return null;
 }
 
-// ── PDF Report Generator ────────────────────────────────────────────────────
-async function generateParcelPDF(parcel) {
-  try {
-    toast.info(`Generuję PDF dla ${parcel.parcel_id}...`);
-    const payload = {
-      parcels: [{ parcel_id: parcel.parcel_id, master_record: parcel.data || {} }],
-    };
-    const res = await fetch("/api/report/pdf", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${parcel.parcel_id.replace(/\//g, "_")}_KSWS_Report.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success(`PDF dla ${parcel.parcel_id} pobrany!`);
-  } catch (err) {
-    console.error("PDF Error:", err);
-    toast.error("Błąd PDF: " + err.message);
+// ── PDF Report Generator — otwiera raport-template-3d.html z danymi działki ─
+function generateParcelPDF(parcel) {
+  const mr = parcel.data || {};
+  const win = window.open("/raport-template-3d.html", "_blank");
+  if (!win) {
+    toast.error("Przeglądarka zablokowała popup — zezwól na wyskakujące okna dla tej strony");
+    return;
   }
+  win.addEventListener("load", () => {
+    try {
+      if (typeof win.fillReport === "function") {
+        win.fillReport(mr);
+        toast.success(`Raport dla ${parcel.parcel_id} otwarty — użyj Ctrl+P by zapisać PDF`);
+      } else {
+        // Fallback: ustaw dane i wywołaj po małym opóźnieniu
+        setTimeout(() => {
+          if (typeof win.fillReport === "function") win.fillReport(mr);
+        }, 500);
+      }
+    } catch (e) {
+      console.error("fillReport error:", e);
+      toast.error("Błąd raportu: " + e.message);
+    }
+  });
 }
 
 // ── Batch CSV Component ─────────────────────────────────────────────────────
