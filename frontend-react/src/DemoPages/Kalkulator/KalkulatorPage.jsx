@@ -385,32 +385,46 @@ function InfrastructureLayer() {
   const map = useMap();
 
   useEffect(() => {
+    // ── Open Infrastructure Map — kafelki linii energetycznych (ZAWSZE WIDOCZNE) ──
+    // Darmowe, publiczne, bazują na OSM. Pokrycie: globalne, w tym PL.
+    const oimPower = L.tileLayer(
+      "https://tiles.openinframap.org/power/{z}/{x}/{y}.png",
+      {
+        attribution: '⚡ <a href="https://openinframap.org" target="_blank">Open Infrastructure Map</a>',
+        opacity: 0.9,
+        maxZoom: 19,
+        zIndex: 6,
+      }
+    );
+
+    // ── KIUT GUGiK WMS — linie energetyczne PL (oficjalne dane PL) ──
     const KIUT_URL = "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu";
-    const wmsOpts = { format: "image/png", transparent: true, opacity: 0.65, zIndex: 5 };
+    const wmsBase = { format: "image/png", transparent: true, opacity: 0.8, zIndex: 5 };
+    const kiutElektro = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_elektroenergetyczny", attribution: "KIUT GUGiK" });
+    const kiutGaz     = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_gazowy" });
+    const kiutWoda    = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_wodociagowy" });
+    const kiutKanal   = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_kanalizacyjny" });
+    const kiutCieplo  = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_cieplowniczy" });
+    const kiutTelekom = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_telekomunikacyjny" });
 
-    const elektro = L.tileLayer.wms(KIUT_URL, { ...wmsOpts, layers: "przewod_elektroenergetyczny", attribution: "KIUT GUGiK" });
-    const gaz = L.tileLayer.wms(KIUT_URL, { ...wmsOpts, layers: "przewod_gazowy" });
-    const woda = L.tileLayer.wms(KIUT_URL, { ...wmsOpts, layers: "przewod_wodociagowy" });
-    const kanal = L.tileLayer.wms(KIUT_URL, { ...wmsOpts, layers: "przewod_kanalizacyjny" });
-    const cieplo = L.tileLayer.wms(KIUT_URL, { ...wmsOpts, layers: "przewod_cieplowniczy" });
-    const telekom = L.tileLayer.wms(KIUT_URL, { ...wmsOpts, layers: "przewod_telekomunikacyjny" });
-
-    // Domyślnie włączone: elektro
-    elektro.addTo(map);
+    // Domyślnie włączone: OIM (zawsze widoczna) + KIUT elektro
+    oimPower.addTo(map);
+    kiutElektro.addTo(map);
 
     const overlays = {
-      "⚡ Elektroenergetyczny": elektro,
-      "🔥 Gazowy": gaz,
-      "💧 Wodociągowy": woda,
-      "🚿 Kanalizacyjny": kanal,
-      "🌡 Ciepłowniczy": cieplo,
-      "📡 Telekomunikacyjny": telekom,
+      "⚡ Linie energetyczne (Open Infra Map)": oimPower,
+      "⚡ Linie elektroenergetyczne (KIUT GUGiK)": kiutElektro,
+      "🔥 Gazowy (KIUT)": kiutGaz,
+      "💧 Wodociągowy (KIUT)": kiutWoda,
+      "🚿 Kanalizacyjny (KIUT)": kiutKanal,
+      "🌡 Ciepłowniczy (KIUT)": kiutCieplo,
+      "📡 Telekomunikacyjny (KIUT)": kiutTelekom,
     };
     const ctrl = L.control.layers(null, overlays, { collapsed: false, position: "topright" }).addTo(map);
 
     return () => {
       map.removeControl(ctrl);
-      [elektro, gaz, woda, kanal, cieplo, telekom].forEach((l) => {
+      [oimPower, kiutElektro, kiutGaz, kiutWoda, kiutKanal, kiutCieplo, kiutTelekom].forEach((l) => {
         if (map.hasLayer(l)) map.removeLayer(l);
       });
     };
@@ -546,35 +560,301 @@ function BatchCSVSection() {
     toast.success("CSV pobrany!");
   };
 
-  const downloadBatchPDF = async () => {
+  const downloadBatchPDF = () => {
     if (!batchResults?.results) return;
-    try {
-      toast.info("Generuję raport PDF...");
-      // Wyślij do backendu (reportlab) — profesjonalny PDF
-      const payload = {
-        parcels: batchResults.results.map((p) => ({
-          parcel_id: p.parcel_id,
-          master_record: p.data || {},
-        })),
-      };
-      const res = await fetch("/api/report/pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Raport_KSWS_Batch_${new Date().toISOString().split("T")[0]}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("Raport PDF pobrany!");
-    } catch (err) {
-      console.error("PDF Error:", err);
-      toast.error("Błąd PDF: " + err.message);
-    }
+    const results = batchResults.results;
+    const dateStr = new Date().toLocaleDateString("pl-PL");
+    const fmtN = (v) => (v || 0).toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtI = (v) => Math.round(v || 0).toLocaleString("pl-PL");
+    const VOLT_LABEL = { WN: "WN >110 kV", SN: "SN 1–110 kV", nN: "nN <1 kV" };
+
+    const totalA = results.reduce((s, p) => s + (p.data?.compensation?.track_a?.total || 0), 0);
+    const totalB = results.reduce((s, p) => s + (p.data?.compensation?.track_b?.total || 0), 0);
+    const collisionCount = results.filter(p => p.data?.infrastructure?.power_lines?.detected).length;
+
+    const parcelCards = results.map((p, i) => {
+      const d = p.data || {};
+      const ta = (d.compensation?.track_a) || {};
+      const tb = (d.compensation?.track_b) || {};
+      const pl = d.infrastructure?.power_lines || {};
+      const ksws = d.ksws || {};
+      const geom = d.geometry || {};
+      const md = d.market_data || {};
+      const collision = !!pl.detected;
+      const volt = VOLT_LABEL[pl.voltage] || pl.voltage || "—";
+      const accentColor = collision ? "#e74c3c" : "#27ae60";
+      const bgLight = collision ? "#fff5f5" : "#f5fff8";
+
+      return `
+      <div class="parcel-card" style="border-left:5px solid ${accentColor};page-break-inside:avoid;">
+        <div class="parcel-header" style="background:${bgLight};border-bottom:1px solid #f0f0f0;">
+          <div class="parcel-header-left">
+            <span class="parcel-num">#${i + 1}</span>
+            <span class="parcel-id">${p.parcel_id || "—"}</span>
+            <a href="https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${encodeURIComponent(p.parcel_id || "")}"
+               target="_blank" class="geo-link">🔗 geoportal</a>
+            <span class="collision-badge" style="background:${accentColor};">
+              ${collision ? "⚡ KOLIZJA" : "✓ BEZ KOLIZJI"}
+            </span>
+          </div>
+          <div class="no-print">
+            <a href="https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${encodeURIComponent(p.parcel_id || "")}"
+               target="_blank" class="btn-geo">Otwórz mapę</a>
+          </div>
+        </div>
+
+        <div class="parcel-body">
+          <div class="parcel-data-grid">
+            <div class="data-box">
+              <div class="db-label">📐 Pow. działki</div>
+              <div class="db-value">${fmtI(geom.area_m2)} m²</div>
+            </div>
+            <div class="data-box">
+              <div class="db-label">💰 Cena gruntu</div>
+              <div class="db-value">${fmtN(md.average_price_m2)} zł/m²</div>
+            </div>
+            <div class="data-box">
+              <div class="db-label">🏠 Wartość nier.</div>
+              <div class="db-value">${fmtI(ksws.property_value_total)} PLN</div>
+            </div>
+            <div class="data-box ${collision ? "data-box-red" : "data-box-gray"}">
+              <div class="db-label">⚡ Napięcie linii</div>
+              <div class="db-value">${volt}</div>
+            </div>
+            <div class="data-box">
+              <div class="db-label">📏 Dł. linii</div>
+              <div class="db-value">${(ksws.line_length_m || pl.length_m || 0) > 0 ? fmtI(ksws.line_length_m || pl.length_m) + " m" : "—"}
+                ${ksws.measurement_source && ksws.measurement_source !== "geodezyjne" ? `<span class="db-hint">⚠ ${ksws.measurement_source}</span>` : ""}
+              </div>
+            </div>
+            <div class="data-box">
+              <div class="db-label">↔️ Szer. pasa</div>
+              <div class="db-value">${ksws.band_width_m || "—"} m</div>
+            </div>
+            <div class="data-box">
+              <div class="db-label">🔲 Pow. pasa</div>
+              <div class="db-value">${(ksws.band_area_m2 || 0) > 0 ? fmtI(ksws.band_area_m2) + " m²" : "—"}</div>
+            </div>
+            <div class="data-box">
+              <div class="db-label">📊 % w pasie</div>
+              <div class="db-value">${geom.area_m2 > 0 && ksws.band_area_m2 > 0 ? Math.min(100, Math.round(ksws.band_area_m2 / geom.area_m2 * 100)) + "%" : "—"}</div>
+            </div>
+          </div>
+
+          <div class="track-grid">
+            <div class="track-a">
+              <div class="track-tag sad">ŚCIEŻKA SĄDOWA</div>
+              <div class="track-name">Track A</div>
+              <div class="track-amount">${fmtN(ta.total)} PLN</div>
+              <div class="track-breakdown">
+                <div class="track-row"><span class="tl">WSP — służebność</span><span class="tv">${fmtN(ta.wsp)} PLN</span></div>
+                <div class="track-row"><span class="tl">WBK — bezumowne</span><span class="tv">${fmtN(ta.wbk)} PLN</span></div>
+                <div class="track-row"><span class="tl">OBN — obniżenie wart.</span><span class="tv">${fmtN(ta.obn)} PLN</span></div>
+              </div>
+            </div>
+            <div class="track-b">
+              <div class="track-tag neg">NEGOCJACJE</div>
+              <div class="track-name">Track B</div>
+              <div class="track-amount" style="color:#e67e22;">${fmtN(tb.total)} PLN</div>
+              <div class="track-breakdown">
+                <div class="track-row"><span class="tl">Podstawa (Track A)</span><span class="tv">${fmtN(ta.total)} PLN</span></div>
+                <div class="track-row"><span class="tl">Mnożnik negocjacyjny</span><span class="tv">×${tb.multiplier || 1.80}</span></div>
+                <div class="track-row"><span class="tl">Zalecany próg</span><span class="tv" style="color:#e67e22;font-size:14px;font-weight:800;">${fmtN(tb.total)} PLN</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="razem-box" style="background:${collision ? "linear-gradient(135deg,#c0392b,#e74c3c)" : "linear-gradient(135deg,#1e8449,#27ae60)"};">
+            <div class="razem-label">💰 RAZEM ODSZKODOWANIE (Track A + B)</div>
+            <div class="razem-amount">${fmtN((ta.total || 0) + (tb.total || 0))} PLN</div>
+          </div>
+        </div>
+      </div>`;
+    }).join("\n");
+
+    const summaryRows = results.map((p, i) => {
+      const ta = p.data?.compensation?.track_a?.total || 0;
+      const tb = p.data?.compensation?.track_b?.total || 0;
+      const collision = !!p.data?.infrastructure?.power_lines?.detected;
+      return `<tr style="border-bottom:1px solid #f0f0f0;">
+        <td style="padding:8px 12px;font-weight:600;">#${i+1} ${p.parcel_id || ""}</td>
+        <td style="padding:8px 12px;text-align:center;">
+          <span style="padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;background:${collision?"#e74c3c":"#27ae60"};color:white;">
+            ${collision ? "KOLIZJA" : "OK"}
+          </span>
+        </td>
+        <td style="padding:8px 12px;text-align:right;color:#27ae60;font-weight:700;">${fmtN(ta)} PLN</td>
+        <td style="padding:8px 12px;text-align:right;color:#e67e22;font-weight:700;">${fmtN(tb)} PLN</td>
+        <td style="padding:8px 12px;text-align:right;font-weight:800;font-size:14px;">${fmtN(ta + tb)} PLN</td>
+      </tr>`;
+    }).join("\n");
+
+    const html = `<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Raport Zbiorczy KSWS — Batch — ${dateStr}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1a2035;font-size:14px;line-height:1.5}
+@media print{
+  body{background:white}
+  .no-print{display:none!important}
+  .parcel-card{page-break-inside:avoid;break-inside:avoid}
+  .page-break{page-break-before:always;break-before:always}
+  .report-header,.kpi-card,.razem-box,.track-a,.track-b,.collision-badge{
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+.wrap{max-width:1100px;margin:0 auto;padding:28px 20px 60px}
+/* PRINT BAR */
+.print-bar{text-align:right;margin-bottom:20px}
+.btn-print{background:linear-gradient(135deg,#a91079,#d81b60);color:white;border:none;padding:10px 28px;border-radius:50px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(169,16,121,.35)}
+/* HEADER */
+.report-header{background:linear-gradient(135deg,#1a1a2e 0%,#2c3e50 60%,#1a2a5c 100%);color:white;padding:36px 44px;border-radius:16px;margin-bottom:28px;box-shadow:0 8px 30px rgba(0,0,0,.25);display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap}
+.report-header h1{font-size:24px;font-weight:800;margin-bottom:6px;letter-spacing:-.5px}
+.report-header .subtitle{font-size:13px;opacity:.8;margin-bottom:18px}
+.meta-grid{display:grid;grid-template-columns:repeat(3,auto);gap:20px}
+.meta-item{display:flex;flex-direction:column;gap:2px}
+.meta-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.65;font-weight:600}
+.meta-value{font-size:13px;font-weight:600}
+.header-badge-col{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0}
+.badge{padding:5px 16px;border-radius:50px;font-size:11px;font-weight:700;letter-spacing:.8px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.15);color:white}
+/* KPI */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px}
+.kpi-card{background:white;border-radius:12px;padding:20px 18px;box-shadow:0 2px 10px rgba(0,0,0,.07);border-top:4px solid #ccc}
+.kpi-card.blue{border-top-color:#3498db}.kpi-card.red{border-top-color:#e74c3c}.kpi-card.green{border-top-color:#27ae60}.kpi-card.gold{border-top-color:#f39c12}.kpi-card.dark{border-top-color:#1a2035}
+.kpi-icon{font-size:20px;margin-bottom:6px}
+.kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#7f8c8d;font-weight:600;margin-bottom:4px}
+.kpi-value{font-size:22px;font-weight:800;color:#1a2035;line-height:1.1}
+.kpi-value.sm{font-size:16px}
+/* SECTION TITLE */
+.section-title{font-size:15px;font-weight:700;color:#1a2035;margin:28px 0 14px;padding-bottom:10px;border-bottom:2px solid #a91079;display:flex;align-items:center;gap:8px}
+/* RAZEM BANNER */
+.razem-banner{background:linear-gradient(135deg,#1a1a2e,#2c3e50);color:white;padding:22px 32px;border-radius:12px;text-align:center;margin-bottom:24px;box-shadow:0 4px 15px rgba(0,0,0,.15)}
+.razem-banner-label{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;opacity:.65;margin-bottom:6px}
+.razem-banner-amount{font-size:34px;font-weight:900;color:#f39c12}
+/* PARCEL CARD */
+.parcel-card{background:white;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.07);margin-bottom:16px;overflow:hidden}
+.parcel-header{padding:12px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.parcel-header-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.parcel-num{font-size:13px;font-weight:700;color:#7f8c8d}
+.parcel-id{font-size:15px;font-weight:800;color:#1a2035}
+.geo-link{font-size:12px;color:#3498db;text-decoration:none;font-weight:500}
+.collision-badge{padding:3px 12px;border-radius:50px;font-size:11px;font-weight:700;letter-spacing:.5px;color:white}
+.btn-geo{padding:5px 14px;background:#3498db;color:white;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600}
+.parcel-body{padding:16px 20px}
+/* DATA GRID */
+.parcel-data-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+.data-box{background:#f8f9fa;border-radius:8px;padding:10px 12px}
+.data-box-red{background:#fff5f5}.data-box-gray{background:#f0f0f0}
+.db-label{font-size:10px;color:#7f8c8d;font-weight:600;margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}
+.db-value{font-size:14px;font-weight:700;color:#1a2035}
+.db-hint{display:block;font-size:10px;color:#e67e22;font-weight:500;margin-top:2px}
+/* TRACK GRID */
+.track-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px}
+.track-a{background:#f8f9fa;border:1px solid #dee2e6;border-left:6px solid #2c3e50;border-radius:12px;padding:22px}
+.track-b{background:#fffdf0;border:1px solid #f39c12;border-left:6px solid #f39c12;border-radius:12px;padding:22px}
+.track-tag{display:inline-block;padding:3px 12px;border-radius:50px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px}
+.track-tag.sad{background:#1a2035;color:white}.track-tag.neg{background:#f39c12;color:white}
+.track-name{font-size:15px;font-weight:700;margin-bottom:4px}
+.track-amount{font-size:26px;font-weight:800;color:#1a2035;margin-bottom:4px}
+.track-breakdown{margin-top:14px;padding-top:12px;border-top:1px solid rgba(0,0,0,.08)}
+.track-row{display:flex;justify-content:space-between;padding:4px 0;font-size:12px}
+.track-row .tl{color:#7f8c8d}.track-row .tv{font-weight:600}
+/* RAZEM BOX */
+.razem-box{padding:14px 20px;border-radius:8px;display:flex;justify-content:space-between;align-items:center}
+.razem-label{font-size:12px;color:rgba(255,255,255,.8);font-weight:600}
+.razem-amount{font-size:22px;font-weight:900;color:white}
+/* SUMMARY TABLE */
+.summary-table{width:100%;border-collapse:collapse;background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.07)}
+.summary-table thead tr{background:#1a2035;color:white}
+.summary-table thead th{padding:11px 12px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px}
+.summary-table tfoot tr{background:#f4f6f9;border-top:2px solid #1a2035}
+.summary-table tfoot td{padding:12px;font-weight:800;font-size:14px}
+/* FOOTER */
+.report-footer{text-align:center;margin-top:40px;font-size:11px;color:#95a5a6;padding:20px;border-top:1px solid #e8ecf0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="print-bar no-print">
+    <button class="btn-print" onclick="window.print()">🖨️ Drukuj / Zapisz PDF</button>
+  </div>
+
+  <!-- HEADER -->
+  <div class="report-header">
+    <div>
+      <h1>📋 Raport Zbiorczy KSWS</h1>
+      <div class="subtitle">Analiza roszczeń z tytułu służebności przesyłu — ${results.length} działek</div>
+      <div class="meta-grid">
+        <div class="meta-item"><span class="meta-label">Data</span><span class="meta-value">${dateStr}</span></div>
+        <div class="meta-item"><span class="meta-label">Działek</span><span class="meta-value">${results.length}</span></div>
+        <div class="meta-item"><span class="meta-label">Z kolizją</span><span class="meta-value">${collisionCount}</span></div>
+      </div>
+    </div>
+    <div class="header-badge-col">
+      <span class="badge">✓ REAL DATA POLICY</span>
+      <span class="badge">KSWS-V.5 · TK P 10/16</span>
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-row">
+    <div class="kpi-card blue"><div class="kpi-icon">📦</div><div class="kpi-label">Działek razem</div><div class="kpi-value">${results.length}</div></div>
+    <div class="kpi-card red"><div class="kpi-icon">⚡</div><div class="kpi-label">Z kolizją</div><div class="kpi-value">${collisionCount}</div></div>
+    <div class="kpi-card green"><div class="kpi-icon">✅</div><div class="kpi-label">Bez kolizji</div><div class="kpi-value">${results.length - collisionCount}</div></div>
+    <div class="kpi-card dark"><div class="kpi-icon">⚖️</div><div class="kpi-label">Track A (sąd)</div><div class="kpi-value sm">${fmtN(totalA)} PLN</div></div>
+    <div class="kpi-card gold"><div class="kpi-icon">🤝</div><div class="kpi-label">Track B (negocjacje)</div><div class="kpi-value sm">${fmtN(totalB)} PLN</div></div>
+  </div>
+  <div class="razem-banner">
+    <div class="razem-banner-label">💰 Razem odszkodowanie (Track A + B)</div>
+    <div class="razem-banner-amount">${fmtN(totalA + totalB)} PLN</div>
+  </div>
+
+  <!-- PER-PARCEL CARDS -->
+  <div class="section-title">📋 Analiza poszczególnych działek</div>
+  ${parcelCards}
+
+  <!-- SUMMARY TABLE -->
+  <div class="section-title page-break">📊 Zestawienie zbiorcze</div>
+  <table class="summary-table">
+    <thead>
+      <tr>
+        <th>Działka</th>
+        <th>Status</th>
+        <th>Track A — Sąd</th>
+        <th>Track B — Negocjacje</th>
+        <th>RAZEM</th>
+      </tr>
+    </thead>
+    <tbody>${summaryRows}</tbody>
+    <tfoot>
+      <tr>
+        <td colspan="2">SUMA (${results.length} działek)</td>
+        <td style="text-align:right;color:#27ae60;">${fmtN(totalA)} PLN</td>
+        <td style="text-align:right;color:#e67e22;">${fmtN(totalB)} PLN</td>
+        <td style="text-align:right;color:#1a2035;">${fmtN(totalA + totalB)} PLN</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="report-footer">
+    Raport wygenerowany automatycznie przez <strong>KALKULATOR KSWS v3.0</strong> · ${dateStr} ·
+    Dane: ULDK GUGiK, OSM Overpass, GUS BDL · Metodyka: KSWS-V.5 Track A/B · TK P 10/16<br>
+    <em>Dokument ma charakter informacyjno-analityczny i nie zastępuje operatu szacunkowego.</em>
+  </div>
+</div>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank");
+    if (!win) { toast.error("Zablokowano popup — zezwól na okienka dla tej strony"); return; }
+    win.document.write(html);
+    win.document.close();
+    toast.success(`Raport otwarty — ${results.length} działek · użyj Ctrl+P by zapisać PDF`);
   };
 
   const downloadMapHTML = async () => {
@@ -633,8 +913,8 @@ function BatchCSVSection() {
             <button type="button" onClick={downloadCSV} disabled={!batchResults?.results} className="ksws-btn" style={{ whiteSpace: "nowrap" }}>
               ⬇️ CSV
             </button>
-            <button type="button" onClick={downloadBatchPDF} disabled={!batchResults?.results} className="ksws-btn" style={{ whiteSpace: "nowrap", background: "#27ae60", color: "white", border: "none" }}>
-              📄 PDF Raport
+            <button type="button" onClick={downloadBatchPDF} disabled={!batchResults?.results} className="ksws-btn" style={{ whiteSpace: "nowrap", background: "#a91079", color: "white", border: "none", fontWeight: "700" }}>
+              📊 Raport Zbiorczy
             </button>
             <button type="button" onClick={downloadMapHTML} disabled={!batchResults?.results} className="ksws-btn" style={{ whiteSpace: "nowrap", background: "#2575fc", color: "white", border: "none" }}>
               🗺️ Mapa
@@ -674,31 +954,37 @@ function BatchCSVSection() {
         {stats && (
           <>
             {/* ── KPI SUMMARY ROW ── */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px", marginBottom: "16px" }}>
-              <div style={{ background: "white", padding: "14px", borderRadius: "10px", border: "1px solid #e0e0e0", textAlign: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.05)" }}>
-                <div style={{ fontSize: "2em", fontWeight: "900", color: "#1a1a2e" }}>{stats.total}</div>
-                <div style={{ fontSize: "0.74em", color: "#888", marginTop: "3px" }}>📦 Działek razem</div>
-              </div>
-              <div style={{ background: "white", padding: "14px", borderRadius: "10px", border: "2px solid #e74c3c", textAlign: "center", boxShadow: "0 2px 6px rgba(231,76,60,0.1)" }}>
-                <div style={{ fontSize: "2em", fontWeight: "900", color: "#e74c3c" }}>{stats.collision}</div>
-                <div style={{ fontSize: "0.74em", color: "#888", marginTop: "3px" }}>⚡ Z kolizją</div>
-              </div>
-              <div style={{ background: "white", padding: "14px", borderRadius: "10px", border: "2px solid #27ae60", textAlign: "center", boxShadow: "0 2px 6px rgba(39,174,96,0.1)" }}>
-                <div style={{ fontSize: "2em", fontWeight: "900", color: "#27ae60" }}>{stats.total - stats.collision}</div>
-                <div style={{ fontSize: "0.74em", color: "#888", marginTop: "3px" }}>✅ Bez kolizji</div>
-              </div>
-              <div style={{ background: "white", padding: "14px", borderRadius: "10px", border: "1px solid #e0e0e0", textAlign: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.05)" }}>
-                <div style={{ fontSize: "1.1em", fontWeight: "800", color: "#27ae60", lineHeight: 1.2 }}>{fmtPLN(stats.trackA)}</div>
-                <div style={{ fontSize: "0.74em", color: "#888", marginTop: "3px" }}>⚖️ Track A (sądowy)</div>
-              </div>
-              <div style={{ background: "white", padding: "14px", borderRadius: "10px", border: "1px solid #e0e0e0", textAlign: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.05)" }}>
-                <div style={{ fontSize: "1.1em", fontWeight: "800", color: "#f39c12", lineHeight: 1.2 }}>{fmtPLN(stats.trackB)}</div>
-                <div style={{ fontSize: "0.74em", color: "#888", marginTop: "3px" }}>🤝 Track B (negocjacje)</div>
-              </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(155px, 1fr))", gap: "12px", marginBottom: "16px" }}>
+              {[
+                { icon: "📦", label: "Działek razem",    value: stats.total,                         sub: "załadowanych z CSV",      color: "#3498db" },
+                { icon: "⚡", label: "Z kolizją",         value: stats.collision,                     sub: "wykryta infrastruktura",   color: "#e74c3c" },
+                { icon: "✅", label: "Bez kolizji",       value: stats.total - stats.collision,       sub: "brak linii w pasie",       color: "#27ae60" },
+                { icon: "⚖️", label: "Track A — sąd",    value: fmtPLN(stats.trackA), isAmount: true, sub: "ścieżka sądowa",          color: "#2c3e50" },
+                { icon: "🤝", label: "Track B — negocjacje", value: fmtPLN(stats.trackB), isAmount: true, sub: "próg negocjacyjny",     color: "#f39c12" },
+              ].map((k, i) => (
+                <div key={i} style={{
+                  background: "white", borderRadius: "12px",
+                  padding: "18px 16px", boxShadow: "0 2px 10px rgba(0,0,0,0.07)",
+                  borderTop: `4px solid ${k.color}`,
+                  display: "flex", flexDirection: "column", gap: "4px",
+                }}>
+                  <div style={{ fontSize: "20px", marginBottom: "2px" }}>{k.icon}</div>
+                  <div style={{ fontSize: "0.67em", textTransform: "uppercase", letterSpacing: "1px", color: "#7f8c8d", fontWeight: "700" }}>{k.label}</div>
+                  <div style={{ fontSize: k.isAmount ? "1.05em" : "1.7em", fontWeight: "900", color: "#1a1a2e", lineHeight: 1.1 }}>{k.value}</div>
+                  <div style={{ fontSize: "0.68em", color: "#b2bec3", marginTop: "2px" }}>{k.sub}</div>
+                </div>
+              ))}
             </div>
-            <div style={{ background: "linear-gradient(135deg, #1a1a2e, #2c3e50)", color: "white", padding: "18px 24px", borderRadius: "10px", textAlign: "center", marginBottom: "20px", boxShadow: "0 4px 15px rgba(0,0,0,0.15)" }}>
-              <div style={{ fontSize: "0.82em", color: "rgba(255,255,255,0.65)", marginBottom: "4px" }}>💰 RAZEM ODSZKODOWANIE (Track A + B)</div>
-              <div style={{ fontSize: "2.2em", fontWeight: "900", color: "#f39c12", textShadow: "0 2px 8px rgba(243,156,18,0.3)" }}>{fmtPLN(stats.trackA + stats.trackB)}</div>
+            <div style={{ background: "linear-gradient(135deg, #1a1a2e, #2c3e50)", color: "white", padding: "18px 28px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", boxShadow: "0 4px 15px rgba(0,0,0,0.2)", flexWrap: "wrap", gap: "12px" }}>
+              <div>
+                <div style={{ fontSize: "0.72em", textTransform: "uppercase", letterSpacing: "1.5px", color: "rgba(255,255,255,0.55)", marginBottom: "4px" }}>💰 Razem odszkodowanie (Track A + B)</div>
+                <div style={{ fontSize: "2em", fontWeight: "900", color: "#f39c12", textShadow: "0 2px 8px rgba(243,156,18,0.3)" }}>{fmtPLN(stats.trackA + stats.trackB)}</div>
+              </div>
+              <div style={{ textAlign: "right", fontSize: "0.8em", color: "rgba(255,255,255,0.5)", lineHeight: 1.8 }}>
+                <div>Track A: <strong style={{ color: "#74b9ff" }}>{fmtPLN(stats.trackA)}</strong></div>
+                <div>Track B: <strong style={{ color: "#fdcb6e" }}>{fmtPLN(stats.trackB)}</strong></div>
+                <div>Działek: <strong style={{ color: "white" }}>{stats.total}</strong> ({stats.collision} z kolizją)</div>
+              </div>
             </div>
 
             {/* MAPA ZBIORCZA Z WARSTWĄ UZBROJENIA TERENU */}
@@ -723,7 +1009,8 @@ function BatchCSVSection() {
                     <strong style={{ color: "#00aa00" }}>🟢 {stats.total - stats.collision}</strong> działek <strong>bez kolizji</strong>
                   </div>
                   <div style={{ gridColumn: "1 / -1", marginTop: "5px", paddingTop: "8px", borderTop: "1px solid #ddd" }}>
-                    <strong style={{ color: "#2575fc" }}>📡 Warstwa uzbrojenia terenu</strong> - drogi, gazociągi, wodociągi, przewody energetyczne (GESUT GUGiK)
+                    <strong style={{ color: "#e74c3c" }}>⚡ Open Infrastructure Map</strong> — linie energetyczne WN/SN (OSM) · widoczne od zoom 6+<br/>
+                    <strong style={{ color: "#2575fc" }}>📡 KIUT GUGiK</strong> — oficjalne dane PL: elektro, gaz, woda (wymagany zoom 14+)
                   </div>
                 </div>
               </div>
@@ -798,7 +1085,7 @@ function BatchCSVSection() {
                         { label: "Pow. działki", value: `${Math.round(area).toLocaleString()} m²`, icon: "📐" },
                         { label: "Cena gruntu", value: `${price.toFixed(2)} zł/m²`, icon: "💰" },
                         { label: "Wartość nier.", value: `${Math.round(value).toLocaleString()} PLN`, icon: "🏠" },
-                        { label: "Napięcie", value: voltage ? `${voltage} kV` : "—", icon: "⚡" },
+                        { label: "Napięcie", value: voltage && voltage !== "—" ? ({"WN":"WN >110 kV","SN":"SN 1-110 kV","nN":"nN <1 kV"}[voltage] || voltage) : "—", icon: "⚡" },
                         { label: "Dł. linii", value: lineLength > 0 ? `${Math.round(lineLength)} m` : "—", icon: "📏", hint: msrc },
                         { label: "Szer. pasa", value: bandWidth > 0 ? `${bandWidth} m` : "—", icon: "↔️" },
                         { label: "Pow. pasa", value: bandArea > 0 ? `${Math.round(bandArea).toLocaleString()} m²` : "—", icon: "🔲" },
