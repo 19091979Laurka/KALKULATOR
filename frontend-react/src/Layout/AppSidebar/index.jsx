@@ -16,7 +16,8 @@ class AppSidebar extends Component {
     items: [
       { id: 1, text: 'Buy eggs' },
     ],
-    darkMode: localStorage.getItem('ksws-dark-mode') === 'true' || false
+    // Default to dark mode (true), can be overridden by localStorage
+    darkMode: localStorage.getItem('ksws-dark-mode') === null ? true : localStorage.getItem('ksws-dark-mode') === 'true'
   };
 
   componentDidMount() {
