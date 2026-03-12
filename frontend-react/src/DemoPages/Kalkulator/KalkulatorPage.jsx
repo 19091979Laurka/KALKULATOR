@@ -74,37 +74,38 @@ function ParcelMiniMap({ geojson, centroid, collision, height = 260 }) {
       scrollWheelZoom: false, dragging: true, doubleClickZoom: false,
     });
 
-    // ── satelita jak geoportal (Esri WorldImagery) ──
+    // ── 1. TOPOGRAFICZNA — Esri World Topo Map (podkład) ──
     L.tileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      { maxZoom: 19 }
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 18, attribution: "© Esri" }
     ).addTo(map);
 
-    // ── siatka katastralna GUGIK — niebieskie linie jak w geoportalu ──
+    // ── 2. GUGIK EGiB — siatka katastralna (niebieskie linie działek + numery) ──
     L.tileLayer.wms(
       "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow",
       { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.9 }
     ).addTo(map);
 
-    // ── OpenInfraMap — linie energetyczne (kafelki OSM, zawsze widoczne w PL) ──
-    L.tileLayer(
-      "https://tiles.openinframap.org/power/{z}/{x}/{y}.png",
-      { opacity: 1.0, maxZoom: 19, zIndex: 5 }
+    // ── 3. GESUT — uzbrojenie terenu (linie energetyczne, gaz, woda, kanalizacja) ──
+    L.tileLayer.wms(
+      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
+      {
+        layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny,przewod_cieplowniczy",
+        format: "image/png", transparent: true, opacity: 0.9,
+      }
     ).addTo(map);
 
-    // ── obrys działki: ZIELONY fill + CZARNY gruby obrys — jak geoportal ──
+    // ── 4. Obrys działki — TYLKO OBRYS, bez zielonego filla ──
     if (geojson?.coordinates) {
       const layer = L.geoJSON(geojson, {
         style: {
-          color: "#000000",     // czarny gruby obrys jak zaznaczona działka w geoportalu
-          weight: 4,
-          fillColor: "#33cc33", // zielony fill
-          fillOpacity: 0.30,
-          dashArray: null,
+          color: "#e53935",   // czerwony wyraźny obrys widoczny na topo
+          weight: 3,
+          fillOpacity: 0,     // BEZ WYPEŁNIENIA
           opacity: 1,
         }
       }).addTo(map);
-      try { map.fitBounds(layer.getBounds(), { padding: [12, 12], maxZoom: 17 }); }
+      try { map.fitBounds(layer.getBounds(), { padding: [14, 14], maxZoom: 17 }); }
       catch(_) { map.setView(center, 15); }
     } else {
       map.setView(center, 15);
