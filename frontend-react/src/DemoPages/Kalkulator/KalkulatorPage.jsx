@@ -663,156 +663,34 @@ function BatchCSVSection() {
     toast.success("CSV pobrany!");
   };
 
-  const downloadBatchPDF = () => {
+  const downloadBatchPDF = async () => {
     if (!batchResults?.results) return;
     try {
-      const doc = new jsPDF();
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      let yPos = 20;
-
-      // Header
-      doc.setFontSize(18);
-      doc.setFont(undefined, "bold");
-      doc.text("RAPORT ZBIORCZY - BATCH KSWS", pageWidth / 2, yPos, { align: "center" });
-
-      // Date
-      yPos += 10;
-      doc.setFontSize(10);
-      doc.setFont(undefined, "normal");
-      const now = new Date();
-      doc.text(`Data: ${now.toLocaleDateString("pl-PL")} ${now.toLocaleTimeString("pl-PL")}`, pageWidth / 2, yPos, { align: "center" });
-
-      // Separator
-      yPos += 12;
-      doc.setDrawColor(37, 117, 252);
-      doc.line(20, yPos, pageWidth - 20, yPos);
-
-      // Summary Stats
-      yPos += 10;
-      doc.setFontSize(12);
-      doc.setFont(undefined, "bold");
-      doc.text("PODSUMOWANIE ANALIZY", 20, yPos);
-
-      yPos += 8;
-      doc.setFontSize(10);
-      doc.setFont(undefined, "normal");
-
-      const totalTrackA = stats.trackA;
-      const totalTrackB = stats.trackB;
-      const collision = batchResults.results.filter(p => p.data?.infrastructure?.power_lines?.detected).length;
-
-      const summaryInfo = [
-        [`Liczba działek:`, stats.total],
-        [`Działek z kolizją:`, collision],
-        [`Działek bez kolizji:`, stats.total - collision],
-        [`Track A razem [PLN]:`, Math.round(totalTrackA).toLocaleString()],
-        [`Track B razem [PLN]:`, Math.round(totalTrackB).toLocaleString()],
-        [`RAZEM ODSZKODOWANIE [PLN]:`, Math.round(totalTrackA + totalTrackB).toLocaleString()],
-      ];
-
-      summaryInfo.forEach(([label, value], idx) => {
-        doc.setFont(undefined, "bold");
-        if (idx === 5) {
-          doc.setFontSize(11);
-          doc.setTextColor(39, 174, 96);
-        }
-        doc.text(label, 20, yPos);
-        doc.setFont(undefined, "bold");
-        doc.text(String(value), 100, yPos);
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(10);
-        yPos += 7;
+      toast.info("Generuję raport PDF...");
+      // Wyślij do backendu (reportlab) — profesjonalny PDF
+      const payload = {
+        parcels: batchResults.results.map((p) => ({
+          parcel_id: p.parcel_id,
+          master_record: p.data || {},
+        })),
+      };
+      const res = await fetch("/api/report/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
-
-      // Detailed Table
-      yPos += 10;
-      if (yPos > pageHeight - 60) {
-        doc.addPage();
-        yPos = 20;
-      }
-
-      doc.setFontSize(11);
-      doc.setFont(undefined, "bold");
-      doc.text("SZCZEGÓŁY DZIAŁEK", 20, yPos);
-
-      yPos += 8;
-      doc.setFontSize(9);
-      doc.setFont(undefined, "normal");
-
-      const tableData = batchResults.results.map(p => [
-        p.parcel_id,
-        p.data?.infrastructure?.power_lines?.detected ? "✓" : "—",
-        p.data?.infrastructure?.power_lines?.voltage || "—",
-        Math.round(p.data?.geometry?.area_m2 || 0),
-        Math.round(p.data?.compensation?.track_a?.total || 0),
-        Math.round(p.data?.compensation?.track_b?.total || 0),
-        Math.round((p.data?.compensation?.track_a?.total || 0) + (p.data?.compensation?.track_b?.total || 0)),
-      ]);
-
-      const headers = ["ID", "Kolizja", "kV", "Pow[m²]", "Track A", "Track B", "Razem"];
-      const startY = yPos;
-      let currentY = startY;
-      const rowHeight = 6;
-      const cellPadding = 2;
-
-      // Draw header
-      doc.setFillColor(26, 32, 53);
-      doc.setTextColor(255, 255, 255);
-      doc.setFont(undefined, "bold");
-      const colWidths = [30, 15, 15, 20, 20, 20, 25];
-      let xPos = 20;
-      headers.forEach((header, idx) => {
-        doc.text(header, xPos + cellPadding, currentY + rowHeight - 1, { maxWidth: colWidths[idx] - 2 * cellPadding });
-        xPos += colWidths[idx];
-      });
-      currentY += rowHeight;
-
-      // Draw rows
-      doc.setTextColor(0, 0, 0);
-      doc.setFont(undefined, "normal");
-      tableData.forEach((row, idx) => {
-        if (currentY > pageHeight - 20) {
-          doc.addPage();
-          currentY = 20;
-          // Redraw header on new page
-          doc.setFillColor(26, 32, 53);
-          doc.setTextColor(255, 255, 255);
-          doc.setFont(undefined, "bold");
-          xPos = 20;
-          headers.forEach((header, hIdx) => {
-            doc.text(header, xPos + cellPadding, currentY + rowHeight - 1, { maxWidth: colWidths[hIdx] - 2 * cellPadding });
-            xPos += colWidths[hIdx];
-          });
-          currentY += rowHeight;
-          doc.setTextColor(0, 0, 0);
-          doc.setFont(undefined, "normal");
-        }
-
-        if (idx % 2 === 0) {
-          doc.setFillColor(250, 250, 250);
-          doc.rect(20, currentY - 2, pageWidth - 40, rowHeight, "F");
-        }
-
-        xPos = 20;
-        row.forEach((cell, cellIdx) => {
-          const align = cellIdx === 0 ? "left" : "right";
-          doc.text(String(cell), xPos + cellPadding, currentY + rowHeight - 1, { maxWidth: colWidths[cellIdx] - 2 * cellPadding, align });
-          xPos += colWidths[cellIdx];
-        });
-        currentY += rowHeight;
-      });
-
-      // Footer
-      doc.setFontSize(8);
-      doc.setTextColor(150, 150, 150);
-      doc.text("Raport wygenerowany automatycznie przez Kalkulator KSWS", pageWidth / 2, pageHeight - 10, { align: "center" });
-
-      doc.save(`Batch_KSWS_Report_${new Date().toISOString().split("T")[0]}.pdf`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Raport_KSWS_Batch_${new Date().toISOString().split("T")[0]}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
       toast.success("Raport PDF pobrany!");
     } catch (err) {
       console.error("PDF Error:", err);
-      toast.error("Błąd przy generowaniu PDF");
+      toast.error("Błąd PDF: " + err.message);
     }
   };
 

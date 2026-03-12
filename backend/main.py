@@ -127,14 +127,44 @@ async def analyze_batch_csv(file: UploadFile = File(...)):
     Returns analysis for all parcels + saves to history.
     """
     try:
-        # Read CSV
+        # Read CSV (obsługa BOM, różnych kodowań, separatorów)
         content = await file.read()
-        csv_str = content.decode('utf-8')
-        csv_reader = csv.DictReader(StringIO(csv_str))
+        # Próbuj UTF-8 z BOM, potem bez, potem latin-1
+        for enc in ('utf-8-sig', 'utf-8', 'cp1250', 'latin-1'):
+            try:
+                csv_str = content.decode(enc)
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            csv_str = content.decode('utf-8', errors='replace')
+
+        # Auto-detect separator (; lub ,)
+        first_line = csv_str.split('\n')[0] if csv_str else ''
+        delimiter = ';' if ';' in first_line and ',' not in first_line else ','
+
+        csv_reader = csv.DictReader(StringIO(csv_str), delimiter=delimiter)
         rows = list(csv_reader)
 
+        # Jeśli brak kolumny parcel_id, szukaj alternatywnych nazw
+        if rows and 'parcel_id' not in rows[0]:
+            alt_keys = [k for k in rows[0].keys() if k and k.strip().lower() in (
+                'parcel_id', 'id', 'dzialka', 'działka', 'numer', 'identyfikator', 'nr_dzialki'
+            )]
+            if alt_keys:
+                real_key = alt_keys[0]
+                rows = [{**r, 'parcel_id': r[real_key]} for r in rows]
+                logger.info("BATCH: Mapped column '%s' → 'parcel_id'", real_key)
+            else:
+                # Może CSV ma jedną kolumnę bez nagłówka — traktuj jako listę ID
+                all_vals = [v.strip() for r in rows for v in r.values() if v and v.strip()]
+                logger.warning("BATCH: No 'parcel_id' column found, keys=%s, trying first column", list(rows[0].keys()))
+                first_key = list(rows[0].keys())[0] if rows[0] else None
+                if first_key:
+                    rows = [{'parcel_id': r[first_key].strip()} for r in rows if r.get(first_key, '').strip()]
+
         if not rows:
-            raise ValueError("CSV jest pusty")
+            raise ValueError("CSV jest pusty lub brak kolumny parcel_id")
 
         aggregator = PropertyAggregator()
         all_results = []
