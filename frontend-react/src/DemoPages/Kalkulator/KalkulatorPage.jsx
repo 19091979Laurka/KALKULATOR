@@ -74,10 +74,10 @@ function ParcelMiniMap({ geojson, centroid, collision, height = 260 }) {
       scrollWheelZoom: false, dragging: true, doubleClickZoom: false,
     });
 
-    // ── 1. TOPOGRAFICZNA — Esri World Topo Map (podkład) ──
+    // ── 1. CartoDB Positron — czysty biały podkład mapowy (jak Mapbox Light) ──
     L.tileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
-      { maxZoom: 18, attribution: "© Esri" }
+      "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+      { subdomains: "abcd", maxZoom: 19, attribution: "© OSM © CARTO" }
     ).addTo(map);
 
     // ── 2. GUGIK EGiB — siatka katastralna (niebieskie linie działek + numery) ──
@@ -598,6 +598,7 @@ function BatchMapLayerControl() {
   const map = useMap();
   useEffect(() => {
     // Base layers
+    // Base layers
     const topo = L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
       { maxZoom: 18, attribution: "© Esri" }
@@ -606,26 +607,29 @@ function BatchMapLayerControl() {
       "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
       { maxZoom: 19 }
     );
-    topo.addTo(map); // default base layer
+    satellite.addTo(map); // ── SATELITA domyślnie ──
 
-    // Overlays
+    // Overlays — wszystkie 3 włączone od razu
     const oimPower = L.tileLayer(
       "https://tiles.openinframap.org/power/{z}/{x}/{y}.png",
-      { opacity: 0.85, maxZoom: 19 }
+      { opacity: 0.9, maxZoom: 19 }
     );
     const gugikEw = L.tileLayer.wms(
       "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow",
-      { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.6 }
+      { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.65 }
     );
     const kiutElektro = L.tileLayer.wms(
       "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
-      { layers: "przewod_elektroenergetyczny", format: "image/png", transparent: true, opacity: 0.8 }
+      { layers: "przewod_elektroenergetyczny", format: "image/png", transparent: true, opacity: 0.85 }
     );
-    oimPower.addTo(map); // default overlay on
+    // Wszystkie 3 nakładki domyślnie włączone
+    oimPower.addTo(map);
+    gugikEw.addTo(map);
+    kiutElektro.addTo(map);
 
     const baseLayers = {
-      "🗺️ Topo (Esri)": topo,
       "🛰️ Satelita": satellite,
+      "🗺️ Topo (Esri)": topo,
     };
     const overlays = {
       "⚡ Linie energetyczne (OIM)": oimPower,
@@ -1125,11 +1129,11 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
         } catch(e) {}
       }
       var map = L.map(el, { zoomControl: false, attributionControl: false, scrollWheelZoom: false, dragging: false, doubleClickZoom: false });
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
-      L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.7 }).addTo(map);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { subdomains:'abcd', maxZoom:19 }).addTo(map);
+      L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.75 }).addTo(map);
       if (parcel.geojson && parcel.geojson.coordinates) {
-        var color = parcel.collision ? '#e74c3c' : '#27ae60';
-        var layer = L.geoJSON(parcel.geojson, { style: { color: color, weight: 2.5, fillColor: color, fillOpacity: 0.25 } }).addTo(map);
+        var color = parcel.collision ? '#e53935' : '#1e88e5';
+        var layer = L.geoJSON(parcel.geojson, { style: { color: color, weight: 3, fillColor: color, fillOpacity: 0.12 } }).addTo(map);
         try { map.fitBounds(layer.getBounds(), { padding: [8, 8] }); } catch(e) { map.setView(center, 14); }
       } else {
         map.setView(center, 14);
@@ -2353,51 +2357,6 @@ export default function KalkulatorPage() {
             </div>
           </div>
 
-          {/* ════ MAPA POGLĄDOWA (przed analizą) ════ */}
-          {!result && !loading && (
-            <div className="ksws-card">
-              <div className="ksws-card-header">
-                <span className="ksws-card-header-icon">📡</span>
-                <div>
-                  <div className="ksws-card-header-title">Mapa infrastruktury energetycznej</div>
-                  <div className="ksws-card-header-sub">
-                    OSM Power Grid · linie WN/SN/nN · słupy · stacje (powiększ, aby zobaczyć)
-                  </div>
-                </div>
-              </div>
-              <div className="ksws-card-body" style={{ padding: 0, overflow: "hidden", borderRadius: "0 0 10px 10px" }}>
-                <div className="ksws-map-container" style={{ height: 460, position: "relative" }}>
-                  <MapContainer
-                    center={DEFAULT_CENTER}
-                    zoom={DEFAULT_ZOOM}
-                    style={{ height: "100%", width: "100%" }}
-                    scrollWheelZoom
-                  >
-                    {/* ESRI World Imagery — satelita */}
-                    <TileLayer
-                      url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                      attribution='© ESRI World Imagery'
-                      maxZoom={19}
-                    />
-                  </MapContainer>
-                  {/* Legenda */}
-                  <div className="ksws-map-legend">
-                    <div className="ksws-map-legend-title">Linie energetyczne</div>
-                    {INFRA_LEGEND.filter(i => i.label !== "Działka").map((item) => (
-                      <div key={item.label} className="ksws-map-legend-item">
-                        <div className="ksws-map-legend-swatch" style={{ background: item.color }} />
-                        <span>{item.label}</span>
-                      </div>
-                    ))}
-                    <div className="ksws-map-legend-source">OSM (widoczne od zoom 13+)</div>
-                  </div>
-                </div>
-                <div style={{ padding: "12px 20px", fontSize: "0.82rem", color: "#7f8c8d", background: "#f9f9f9", borderTop: "1px solid #eee" }}>
-                  ℹ Znajdź działkę na mapie, następnie wpisz jej numer ewidencyjny powyżej i kliknij <strong>Generuj raport</strong>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* ════ BANER BŁĘDU — ULDK niedostępny ════ */}
           {apiError && !result && (
