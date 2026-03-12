@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # Źródło: GUS "Ceny gruntów rolnych" BDL + ARiMR transakcje
 # ============================================================
 _AGRICULTURAL_PRICES: Dict[str, float] = {
-    "mazowieckie": 8.50,
+    "mazowieckie": 6.50,
     "małopolskie": 12.00,
     "dolnośląskie": 10.50,
     "wielkopolskie": 11.00,

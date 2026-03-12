@@ -285,7 +285,7 @@ class PropertyAggregator:
 
         band_area = line_length * band_width if line_length and line_length > 0 else 0.0
 
-        property_value = (avg_price or 8.50) * area_m2
+        property_value = (avg_price or 6.50) * area_m2
         # Compensation: zawsze oblicz (0 gdy brak infrastruktury)
         if pl.get("detected") and area_m2 > 0 and band_area > 0:
             track_a = calculate_track_a(property_value, band_area, area_m2, coeffs)

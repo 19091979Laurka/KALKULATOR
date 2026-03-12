@@ -301,73 +301,119 @@ const nowPL = () =>
     minute: "2-digit",
   });
 
-// ── Batch Parcels Layer - wyświetla wszystkie działki na mapie ──────────────
+// ── Batch Parcels Layer - poligony działek + linie energetyczne + auto-fit ──
 function BatchParcelsLayer({ results }) {
   const map = useMap();
 
   useEffect(() => {
     if (!results || !map) return;
 
-    const featureGroup = L.featureGroup();
+    const parcelsGroup = L.featureGroup();
+    const linesGroup = L.featureGroup();
 
     results.forEach((p) => {
+      const geojson = p.data?.geometry?.geojson_ll || p.data?.geometry?.geojson;
       const centroid = p.data?.geometry?.centroid_ll;
-      if (!centroid || !centroid[0]) return;
-
       const collision = p.data?.infrastructure?.power_lines?.detected;
       const ta = p.data?.compensation?.track_a?.total || 0;
       const tb = p.data?.compensation?.track_b?.total || 0;
-      const color = collision ? "#ff0000" : "#00aa00";
+      const color = collision ? "#e74c3c" : "#2ecc71";
 
-      const popup = `<div style="font-size: 12px; font-family: Arial; min-width: 200px;">
+      const popup = `<div style="font-size:12px;font-family:Arial;min-width:200px">
         <strong>${p.parcel_id}</strong><br/>
         Kolizja: ${collision ? "✅ TAK" : "❌ NIE"}<br/>
         Napięcie: ${p.data?.infrastructure?.power_lines?.voltage || "—"}<br/>
         Pow: ${Math.round(p.data?.geometry?.area_m2 || 0)} m²<br/>
-        <hr style="margin: 5px 0; border: none; border-top: 1px solid #ddd;" />
-        Track A: <strong style="color: #27ae60">${Math.round(ta)} PLN</strong><br/>
-        Track B: <strong style="color: #f39c12">${Math.round(tb)} PLN</strong><br/>
-        <strong style="color: ${color}">Razem: ${Math.round(ta + tb)} PLN</strong>
+        <hr style="margin:4px 0;border:none;border-top:1px solid #ddd"/>
+        Track A: <strong style="color:#27ae60">${Math.round(ta).toLocaleString()} PLN</strong><br/>
+        Track B: <strong style="color:#f39c12">${Math.round(tb).toLocaleString()} PLN</strong><br/>
+        <strong style="color:${color}">Razem: ${Math.round(ta+tb).toLocaleString()} PLN</strong>
       </div>`;
 
-      const marker = L.circleMarker([centroid[1], centroid[0]], {
-        radius: collision ? 8 : 6,
-        fillColor: color,
-        color: color,
-        weight: 2,
-        opacity: 1,
-        fillOpacity: collision ? 0.85 : 0.6,
-      }).bindPopup(popup);
+      // Poligon działki
+      if (geojson && geojson.coordinates) {
+        try {
+          const poly = L.geoJSON(geojson, {
+            style: { color, weight: 2, fillColor: color, fillOpacity: collision ? 0.35 : 0.15 },
+          }).bindPopup(popup);
+          parcelsGroup.addLayer(poly);
+        } catch (e) { /* skip invalid */ }
+      } else if (centroid && centroid[0]) {
+        // Fallback: marker jeśli brak geometrii
+        const marker = L.circleMarker([centroid[1], centroid[0]], {
+          radius: collision ? 8 : 5, fillColor: color, color, weight: 2, opacity: 1, fillOpacity: 0.7,
+        }).bindPopup(popup);
+        parcelsGroup.addLayer(marker);
+      }
 
-      featureGroup.addLayer(marker);
+      // Linie energetyczne z danych Overpass
+      const plGeo = p.data?.infrastructure?.power_lines?.geojson;
+      if (plGeo && plGeo.features) {
+        plGeo.features.forEach((feat) => {
+          try {
+            const v = feat.properties?.voltage || "SN";
+            const lc = v === "WN" ? "#e60000" : v === "nN" ? "#2196f3" : "#00bb00";
+            const line = L.geoJSON(feat.geometry, {
+              style: { color: lc, weight: 3, opacity: 0.8 },
+            });
+            linesGroup.addLayer(line);
+          } catch (e) { /* skip */ }
+        });
+      }
     });
 
-    featureGroup.addTo(map);
-    return () => featureGroup.remove();
+    parcelsGroup.addTo(map);
+    linesGroup.addTo(map);
+
+    // Auto-fit do granic wszystkich działek
+    const allBounds = L.featureGroup([parcelsGroup, linesGroup]).getBounds();
+    if (allBounds.isValid()) {
+      map.fitBounds(allBounds, { padding: [30, 30], maxZoom: 16 });
+    }
+
+    return () => {
+      parcelsGroup.remove();
+      linesGroup.remove();
+    };
   }, [map, results]);
 
   return null;
 }
 
-// ── Infrastruktura terenu - warstwa GESUT ──────────────────────────────────
+// ── Infrastruktura terenu - warstwy KIUT GUGiK z kontrolką włącz/wyłącz ────
 function InfrastructureLayer() {
   const map = useMap();
 
   useEffect(() => {
-    const gesutLayer = L.tileLayer.wms(
-      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
-      {
-        layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy",
-        format: "image/png",
-        transparent: true,
-        opacity: 0.6,
-        attribution: "GESUT GUGiK",
-        zIndex: 5,
-      }
-    );
-    gesutLayer.addTo(map);
+    const KIUT_URL = "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu";
+    const wmsOpts = { format: "image/png", transparent: true, opacity: 0.65, zIndex: 5 };
 
-    return () => map.removeLayer(gesutLayer);
+    const elektro = L.tileLayer.wms(KIUT_URL, { ...wmsOpts, layers: "przewod_elektroenergetyczny", attribution: "KIUT GUGiK" });
+    const gaz = L.tileLayer.wms(KIUT_URL, { ...wmsOpts, layers: "przewod_gazowy" });
+    const woda = L.tileLayer.wms(KIUT_URL, { ...wmsOpts, layers: "przewod_wodociagowy" });
+    const kanal = L.tileLayer.wms(KIUT_URL, { ...wmsOpts, layers: "przewod_kanalizacyjny" });
+    const cieplo = L.tileLayer.wms(KIUT_URL, { ...wmsOpts, layers: "przewod_cieplowniczy" });
+    const telekom = L.tileLayer.wms(KIUT_URL, { ...wmsOpts, layers: "przewod_telekomunikacyjny" });
+
+    // Domyślnie włączone: elektro
+    elektro.addTo(map);
+
+    const overlays = {
+      "⚡ Elektroenergetyczny": elektro,
+      "🔥 Gazowy": gaz,
+      "💧 Wodociągowy": woda,
+      "🚿 Kanalizacyjny": kanal,
+      "🌡 Ciepłowniczy": cieplo,
+      "📡 Telekomunikacyjny": telekom,
+    };
+    const ctrl = L.control.layers(null, overlays, { collapsed: false, position: "topright" }).addTo(map);
+
+    return () => {
+      map.removeControl(ctrl);
+      [elektro, gaz, woda, kanal, cieplo, telekom].forEach((l) => {
+        if (map.hasLayer(l)) map.removeLayer(l);
+      });
+    };
   }, [map]);
 
   return null;
@@ -860,8 +906,12 @@ function BatchCSVSection() {
             {/* MAPA ZBIORCZA Z WARSTWĄ UZBROJENIA TERENU */}
             <div style={{ background: "white", borderRadius: "8px", border: "1px solid #eee", padding: "20px", marginBottom: "20px" }}>
               <h3 style={{ marginTop: 0, marginBottom: "15px" }}>🗺️ Mapa geograficzna - wszystkie {stats.total} działek</h3>
-              <MapContainer center={[52.0, 20.0]} zoom={7} style={{ height: "550px", width: "100%", borderRadius: "6px", marginBottom: "15px", border: "1px solid #ddd" }}>
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap contributors' />
+              <MapContainer center={[52.0, 20.0]} zoom={7} style={{ height: "650px", width: "100%", borderRadius: "6px", marginBottom: "15px", border: "1px solid #ddd" }}>
+                <TileLayer
+                  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                  attribution='© ESRI | KIUT GUGiK'
+                  maxZoom={19}
+                />
                 <InfrastructureLayer />
                 <BatchParcelsLayer results={batchResults.results} />
               </MapContainer>
@@ -1749,9 +1799,11 @@ export default function KalkulatorPage() {
                   {hasLine && (
                     <span className="ksws-badge ksws-badge-danger">⚡ Kolizja z linią</span>
                   )}
-                  <span className="ksws-badge ksws-badge-outline">
-                    {ksws.label || infraType || "ELEKTRO_SN"}
-                  </span>
+                  {hasLine && (
+                    <span className="ksws-badge ksws-badge-outline">
+                      {ksws.label || infraType || "ELEKTRO_SN"}
+                    </span>
+                  )}
                   <button
                     className="ksws-btn ksws-btn-pdf"
                     onClick={downloadPdf}
@@ -1870,10 +1922,10 @@ export default function KalkulatorPage() {
                   <div className="ksws-kpi-value" style={{ fontSize: "1.1rem" }}>
                     {hasLine
                       ? power.voltage || powerL.voltage || "Wykryto"
-                      : "Brak / 15kV"}
+                      : "Brak"}
                   </div>
                   <div className="ksws-kpi-source">
-                    {hasLine ? "GESUT GUGiK" : "Brak kolizji"}
+                    {hasLine ? "GESUT GUGiK" : "Nie wykryto kolizji"}
                   </div>
                   {hasLine && (ksws.band_width_m || power.buffer_zone_m) && (
                     <div className="ksws-kpi-sub">
@@ -2275,7 +2327,7 @@ export default function KalkulatorPage() {
               </div>
 
               {/* ── KSWS szczegóły ── */}
-              {ksws.infra_type && (
+              {ksws.infra_type && hasLine && (
                 <div className="ksws-card">
                   <div className="ksws-card-header">
                     <span className="ksws-card-header-icon">🔢</span>
