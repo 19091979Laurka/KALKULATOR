@@ -80,34 +80,31 @@ function ParcelMiniMap({ geojson, centroid, collision, height = 260 }) {
       { maxZoom: 19 }
     ).addTo(map);
 
-    // ── siatka katastralna GUGIK — wyraźna jak w geoportalu (niebieskie linie) ──
+    // ── siatka katastralna GUGIK — niebieskie linie jak w geoportalu ──
     L.tileLayer.wms(
       "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow",
-      { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.85 }
+      { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.9 }
     ).addTo(map);
 
-    // ── GESUT — uzbrojenie terenu (linie, rury, kable) ──
-    L.tileLayer.wms(
-      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
-      {
-        layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny,przewod_cieplowniczy",
-        format: "image/png", transparent: true, opacity: 0.9,
-      }
+    // ── OpenInfraMap — linie energetyczne (kafelki OSM, zawsze widoczne w PL) ──
+    L.tileLayer(
+      "https://tiles.openinframap.org/power/{z}/{x}/{y}.png",
+      { opacity: 1.0, maxZoom: 19, zIndex: 5 }
     ).addTo(map);
 
-    // ── obrys działki: ZIELONY fill + CZARNY gruby obrys — dokładnie jak geoportal ──
+    // ── obrys działki: ZIELONY fill + CZARNY gruby obrys — jak geoportal ──
     if (geojson?.coordinates) {
       const layer = L.geoJSON(geojson, {
         style: {
-          color: "#000000",      // czarny gruby obrys — jak zaznaczona działka w geoportalu
+          color: "#000000",     // czarny gruby obrys jak zaznaczona działka w geoportalu
           weight: 4,
-          fillColor: "#33cc33",  // zielony fill jak w geoportalu
-          fillOpacity: 0.35,
+          fillColor: "#33cc33", // zielony fill
+          fillOpacity: 0.30,
           dashArray: null,
           opacity: 1,
         }
       }).addTo(map);
-      try { map.fitBounds(layer.getBounds(), { padding: [10, 10], maxZoom: 18 }); }
+      try { map.fitBounds(layer.getBounds(), { padding: [12, 12], maxZoom: 17 }); }
       catch(_) { map.setView(center, 15); }
     } else {
       map.setView(center, 15);
