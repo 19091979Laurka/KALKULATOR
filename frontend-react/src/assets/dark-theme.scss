@@ -637,6 +637,313 @@ body.dark-theme {
   .border-left {
     border-left-color: var(--border) !important;
   }
+
+  /* ============================================================================
+     PAGE-SPECIFIC DARK MODE OVERRIDES
+     ============================================================================ */
+
+  /* BATCH ANALYSIS PAGE */
+  .batch-wrapper {
+    background-color: var(--bg-primary);
+  }
+
+  .batch-header h1 {
+    color: var(--accent-cyan);
+  }
+
+  .batch-header p {
+    color: var(--text-secondary);
+  }
+
+  .batch-upload-section,
+  .stat-card,
+  .content-box,
+  .map-box,
+  .table-box {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 12px var(--shadow);
+  }
+
+  .file-label {
+    border: 2px dashed var(--accent-cyan);
+    color: var(--accent-cyan);
+    background: var(--bg-tertiary);
+
+    &:hover {
+      background: rgba(0, 217, 255, 0.1);
+      border-color: var(--accent-cyan);
+    }
+  }
+
+  .submit-btn {
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-green));
+    color: #000;
+
+    &:hover:not(:disabled) {
+      box-shadow: 0 4px 15px rgba(0, 217, 255, 0.3);
+    }
+  }
+
+  .stat-card {
+    border-left-color: var(--accent-cyan);
+
+    &.success {
+      border-left-color: var(--accent-green);
+    }
+
+    &.orange {
+      border-left-color: var(--accent-red);
+    }
+
+    &.money {
+      border-left-color: var(--accent-yellow);
+    }
+
+    &.money2 {
+      border-left-color: var(--accent-cyan);
+    }
+  }
+
+  .stat-value {
+    color: var(--text-primary);
+  }
+
+  .stat-label {
+    color: var(--text-secondary);
+  }
+
+  .summary-box {
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-green));
+    color: #000;
+    box-shadow: 0 4px 15px rgba(0, 217, 255, 0.2);
+  }
+
+  .tab {
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--accent-cyan);
+
+    &:hover {
+      background: rgba(0, 217, 255, 0.1);
+      color: var(--accent-cyan);
+      border-color: var(--accent-cyan);
+    }
+
+    &.active {
+      background: var(--accent-cyan);
+      color: #000;
+      border-color: var(--accent-cyan);
+    }
+  }
+
+  .tab-download {
+    border: 1px solid var(--accent-green);
+    background: var(--bg-tertiary);
+    color: var(--accent-green);
+
+    &:hover {
+      background: rgba(0, 255, 136, 0.1);
+    }
+  }
+
+  .content-box h3 {
+    color: var(--accent-cyan);
+  }
+
+  .results-table {
+    thead th {
+      background: var(--accent-cyan);
+      color: #000;
+      border-bottom: 2px solid var(--accent-green);
+    }
+
+    tbody td {
+      border-bottom: 1px solid var(--border);
+      color: var(--text-primary);
+    }
+
+    tbody tr {
+      &:hover {
+        background: rgba(0, 217, 255, 0.05);
+      }
+
+      &.collision {
+        background: rgba(0, 255, 136, 0.08);
+
+        &:hover {
+          background: rgba(0, 255, 136, 0.15);
+        }
+      }
+    }
+  }
+
+  .leaflet-container {
+    background: var(--bg-secondary);
+  }
+
+  /* CLIENTS PAGE */
+  .cp-wrapper,
+  .clients-page {
+    background-color: var(--bg-primary);
+  }
+
+  .cp-header h1,
+  .clients-header h1 {
+    color: var(--accent-cyan);
+  }
+
+  .cp-sidebar,
+  .clients-sidebar {
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+
+    .cp-list-item,
+    .client-item {
+      border-bottom: 1px solid var(--border);
+      color: var(--text-primary);
+
+      &:hover {
+        background: rgba(0, 217, 255, 0.05);
+      }
+
+      &.active {
+        background: rgba(0, 217, 255, 0.15);
+        color: var(--accent-cyan);
+      }
+    }
+  }
+
+  .cp-main,
+  .clients-main {
+    background: var(--bg-primary);
+
+    .cp-card,
+    .client-card,
+    .form-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      box-shadow: 0 2px 8px var(--shadow);
+    }
+
+    .cp-form-input,
+    .client-form-input {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+
+      &:focus {
+        border-color: var(--accent-cyan);
+        box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1);
+      }
+    }
+
+    .cp-btn,
+    .client-btn {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-green));
+      color: #000;
+      border: none;
+
+      &:hover {
+        box-shadow: 0 4px 15px rgba(0, 217, 255, 0.3);
+      }
+    }
+
+    .cp-data-grid,
+    .client-data-grid,
+    table {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+
+      th {
+        background: rgba(0, 217, 255, 0.05);
+        color: var(--accent-cyan);
+        border-bottom: 2px solid var(--accent-cyan);
+      }
+
+      td {
+        border-bottom: 1px solid var(--border);
+      }
+
+      tr:hover {
+        background: rgba(0, 217, 255, 0.05);
+      }
+    }
+  }
+
+  /* LANDING PAGE */
+  .lp-hero {
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    color: var(--text-primary);
+
+    h1,
+    h2 {
+      color: var(--accent-cyan);
+    }
+
+    p {
+      color: var(--text-secondary);
+    }
+  }
+
+  .lp-card,
+  .lp-feature-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px var(--shadow);
+
+    h3 {
+      color: var(--accent-cyan);
+    }
+
+    p {
+      color: var(--text-secondary);
+    }
+  }
+
+  .lp-cta-button {
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-green));
+    color: #000;
+    border: none;
+
+    &:hover {
+      box-shadow: 0 4px 15px rgba(0, 217, 255, 0.3);
+    }
+  }
+
+  /* WZORY PAGE */
+  .wzory-wrapper {
+    background: var(--bg-primary);
+  }
+
+  .wzory-header h1 {
+    color: var(--accent-cyan);
+  }
+
+  .wzory-card,
+  .template-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px var(--shadow);
+
+    h3 {
+      color: var(--accent-cyan);
+    }
+
+    p {
+      color: var(--text-secondary);
+    }
+  }
+
+  .wzory-button {
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-green));
+    color: #000;
+    border: none;
+
+    &:hover {
+      box-shadow: 0 4px 15px rgba(0, 217, 255, 0.3);
+    }
+  }
 }
 
 /* Print Mode - Always light */
