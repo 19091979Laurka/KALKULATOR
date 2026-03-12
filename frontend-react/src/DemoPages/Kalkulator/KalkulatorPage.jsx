@@ -1924,6 +1924,9 @@ export default function KalkulatorPage() {
                             maxZoom={19}
                           />
 
+                          {/* KIUT GUGiK — uzbrojenie terenu (WMS) */}
+                          <InfrastructureLayer />
+
                           {/* Overpass OSM — linie i słupy energetyczne (pre-loaded) */}
                           <PreloadedPowerLayer geoJSON={powerGeoJSON} />
 

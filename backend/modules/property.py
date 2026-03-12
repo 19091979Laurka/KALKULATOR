@@ -6,6 +6,7 @@ KROK 2: Shapely integration for real infrastructure intersection calculation.
 import logging
 import asyncio
 import json
+import math
 from typing import Dict, Any, Optional, List, Tuple
 from shapely.geometry import shape, LineString, Polygon, GeometryCollection
 from shapely.ops import unary_union
@@ -54,29 +55,68 @@ def calculate_track_b(track_a_total: float, infra_type: str = "elektro_SN") -> d
     return {"total": round(track_a_total * mult, 2), "multiplier": mult}
 
 
+def _shapely_length_meters(geom) -> float:
+    """Oblicz długość geometrii Shapely w metrach (WGS84 → geodezyjne przybliżenie)."""
+    try:
+        coords = list(geom.coords)
+        if len(coords) < 2:
+            return 0.0
+        lat0 = sum(c[1] for c in coords) / len(coords)
+        dy_m = 111132.0
+        dx_m = 111319.0 * math.cos(math.radians(lat0))
+        total = 0.0
+        for i in range(len(coords) - 1):
+            x1, y1 = coords[i][0], coords[i][1]
+            x2, y2 = coords[i + 1][0], coords[i + 1][1]
+            dx = (x2 - x1) * dx_m
+            dy = (y2 - y1) * dy_m
+            total += math.hypot(dx, dy)
+        return total
+    except Exception:
+        return 0.0
+
+
+def _collect_intersection_length(intersection) -> float:
+    """Zbierz długość z wyniku Shapely intersection (LineString / Multi / Collection)."""
+    total = 0.0
+    if intersection.is_empty:
+        return 0.0
+    if intersection.geom_type == "LineString":
+        total += _shapely_length_meters(intersection)
+    elif intersection.geom_type == "MultiLineString":
+        for ls in intersection.geoms:
+            total += _shapely_length_meters(ls)
+    elif intersection.geom_type == "GeometryCollection":
+        for g in intersection.geoms:
+            if g.geom_type == "LineString":
+                total += _shapely_length_meters(g)
+            elif g.geom_type == "MultiLineString":
+                for ls in g.geoms:
+                    total += _shapely_length_meters(ls)
+    return total
+
+
 def calculate_intersection_length(parcel_geojson: Dict[str, Any], wfs_features: List[Dict[str, Any]]) -> float:
     """
-    KROK 2: Calculate actual infrastructure line intersection with parcel boundary.
+    Calculate actual infrastructure line intersection with parcel boundary.
 
-    Uses Shapely to compute real-world intersection length in meters.
-    This replaces pixel-based guessing with vector-based measurements.
+    Uses Shapely intersection + geodesic length approximation for WGS84.
+    Wynik w METRACH (nie stopniach!).
 
     Args:
-        parcel_geojson: GeoJSON geometry of parcel (Polygon)
-        wfs_features: List of WFS GeoJSON features (LineString geometries)
+        parcel_geojson: GeoJSON geometry of parcel (Polygon, WGS84)
+        wfs_features: List of GeoJSON features (LineString geometries)
 
     Returns:
-        float: Total intersection length in meters (sum of all feature intersections)
+        float: Total intersection length in meters
     """
     try:
-        # Parse parcel geometry
         if not parcel_geojson or parcel_geojson.get("type") != "Polygon":
             logger.warning("Invalid or missing parcel geometry")
             return 0.0
 
         parcel_poly = shape(parcel_geojson)
         if not parcel_poly.is_valid:
-            logger.warning("Parcel polygon is invalid, attempting to fix...")
             parcel_poly = parcel_poly.buffer(0)
 
         total_length = 0.0
@@ -90,43 +130,13 @@ def calculate_intersection_length(parcel_geojson: Dict[str, Any], wfs_features: 
 
                 geom_type = geom.get("type")
 
-                # Handle LineString (typical for infrastructure lines)
-                if geom_type == "LineString":
+                if geom_type in ("LineString", "MultiLineString"):
                     line = shape(geom)
                     if not line.is_valid:
                         line = line.buffer(0)
 
-                    # Calculate intersection
                     intersection = parcel_poly.intersection(line)
-                    if intersection.geom_type == "LineString":
-                        total_length += intersection.length
-                    elif intersection.geom_type == "MultiLineString":
-                        for linestring in intersection.geoms:
-                            total_length += linestring.length
-                    elif intersection.geom_type == "GeometryCollection":
-                        for geom_part in intersection.geoms:
-                            if geom_part.geom_type in ["LineString", "MultiLineString"]:
-                                if hasattr(geom_part, "geoms"):
-                                    for ls in geom_part.geoms:
-                                        total_length += ls.length
-                                else:
-                                    total_length += geom_part.length
-
-                    feature_count += 1
-
-                # Handle MultiLineString (rare but possible)
-                elif geom_type == "MultiLineString":
-                    multi_line = shape(geom)
-                    if not multi_line.is_valid:
-                        multi_line = multi_line.buffer(0)
-
-                    intersection = parcel_poly.intersection(multi_line)
-                    if intersection.geom_type == "LineString":
-                        total_length += intersection.length
-                    elif intersection.geom_type == "MultiLineString":
-                        for linestring in intersection.geoms:
-                            total_length += linestring.length
-
+                    total_length += _collect_intersection_length(intersection)
                     feature_count += 1
 
             except Exception as e:
@@ -134,10 +144,8 @@ def calculate_intersection_length(parcel_geojson: Dict[str, Any], wfs_features: 
                 continue
 
         logger.info(
-            "Intersection calculation: parcel_area=%.0f m² features=%d total_length=%.2f m",
-            parcel_poly.area if hasattr(parcel_poly, "area") else 0,
-            feature_count,
-            total_length
+            "Intersection calculation: features=%d total_length=%.2f m",
+            feature_count, total_length
         )
 
         return round(total_length, 2)
@@ -254,24 +262,26 @@ class PropertyAggregator:
         coeffs = KSWS_STANDARDS.get(infra_type, KSWS_STANDARDS["default"])
         band_width = coeffs["band_width_m"]
 
-        # KROK 2: Calculate real intersection length from WFS features (vector data)
-        line_length = 0.0
-        if pl.get("features") and geom_geojson:  # WFS features available
+        # KROK 2: Długość linii przecinającej działkę [metry]
+        # Priorytet 1: z infrastructure.py — geodezyjne obliczenie w metrach
+        line_length = pl.get("length_m", 0.0) or 0.0
+        logger.info("Infra length_m from infrastructure.py: %.2f m", line_length)
+
+        # Priorytet 2: recalculate z features via Shapely (jeśli infra nie policzyła)
+        if line_length <= 0 and pl.get("features") and geom_geojson:
             try:
                 wfs_features = pl.get("features", [])
                 if wfs_features and isinstance(wfs_features, list):
                     line_length = calculate_intersection_length(geom_geojson, wfs_features)
-                    logger.info("Real intersection length (WFS Shapely): %.2f m", line_length)
+                    logger.info("Recalculated intersection length (Shapely): %.2f m", line_length)
             except Exception as e:
                 logger.error(f"Error calculating intersection length: {e}")
-                line_length = 0.0
 
-        # Fallback: if no WFS data or calculation failed, use placeholder
+        # Priorytet 3: placeholder tylko jeśli infrastruktura wykryta (np. NEARBY)
         if not line_length or line_length <= 0:
-            line_length = pl.get("length_m", 0) or 0.0
-            if not line_length or line_length <= 0:
-                # No real data: use placeholder only if infrastructure detected
-                line_length = band_width * 50 if pl.get("detected") else 0.0
+            line_length = band_width * 50 if pl.get("detected") else 0.0
+            if line_length > 0:
+                logger.info("Using placeholder line_length: %.1f m (band_width=%d × 50)", line_length, band_width)
 
         band_area = line_length * band_width if line_length and line_length > 0 else 0.0
 
