@@ -896,14 +896,20 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
 .meta-value{font-size:13px;font-weight:600}
 .header-badge-col{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0}
 .badge{padding:5px 16px;border-radius:50px;font-size:11px;font-weight:700;letter-spacing:.8px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.15);color:white}
-/* KPI */
-.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px}
-.kpi-card{background:white;border-radius:12px;padding:20px 18px;box-shadow:0 2px 10px rgba(0,0,0,.07);border-top:4px solid #ccc}
-.kpi-card.blue{border-top-color:#3498db}.kpi-card.red{border-top-color:#e74c3c}.kpi-card.green{border-top-color:#27ae60}.kpi-card.gold{border-top-color:#f39c12}.kpi-card.dark{border-top-color:#1a2035}
-.kpi-icon{font-size:20px;margin-bottom:6px}
-.kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#7f8c8d;font-weight:600;margin-bottom:4px}
-.kpi-value{font-size:22px;font-weight:800;color:#1a2035;line-height:1.1}
-.kpi-value.sm{font-size:16px}
+/* KPI — Dompet full-color style */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px}
+.kpi-card{border-radius:14px;padding:20px 18px;box-shadow:0 6px 20px rgba(0,0,0,.14);display:flex;justify-content:space-between;align-items:flex-start;position:relative;overflow:hidden}
+.kpi-card.blue{background:linear-gradient(135deg,#1e88e5,#42a5f5)}
+.kpi-card.red{background:linear-gradient(135deg,#e53935,#ef5350)}
+.kpi-card.green{background:linear-gradient(135deg,#43a047,#66bb6a)}
+.kpi-card.gold{background:linear-gradient(135deg,#f7971e,#ffd200)}
+.kpi-card.dark{background:linear-gradient(135deg,#1a1a2e,#16213e)}
+.kpi-card.purple{background:linear-gradient(135deg,#8e24aa,#ab47bc)}
+.kpi-icon{width:42px;height:42px;border-radius:12px;background:rgba(0,0,0,0.15);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.75);font-weight:700;margin-bottom:6px}
+.kpi-value{font-size:26px;font-weight:900;color:white;line-height:1.1;margin-bottom:3px}
+.kpi-value.sm{font-size:16px;font-weight:900;color:white}
+.kpi-sub{font-size:10px;color:rgba(255,255,255,0.65);font-weight:500}
 /* SECTION TITLE */
 .section-title{font-size:15px;font-weight:700;color:#1a2035;margin:28px 0 14px;padding-bottom:10px;border-bottom:2px solid #a91079;display:flex;align-items:center;gap:8px}
 /* RAZEM BANNER */
@@ -984,11 +990,11 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
 
   <!-- KPI -->
   <div class="kpi-row">
-    <div class="kpi-card blue"><div class="kpi-icon">📦</div><div class="kpi-label">Działek razem</div><div class="kpi-value">${results.length}</div></div>
-    <div class="kpi-card red"><div class="kpi-icon">⚡</div><div class="kpi-label">Z kolizją</div><div class="kpi-value">${collisionCount}</div></div>
-    <div class="kpi-card green"><div class="kpi-icon">✅</div><div class="kpi-label">Bez kolizji</div><div class="kpi-value">${results.length - collisionCount}</div></div>
-    <div class="kpi-card dark"><div class="kpi-icon">⚖️</div><div class="kpi-label">Track A (sąd)</div><div class="kpi-value sm">${fmtN(totalA)} PLN</div></div>
-    <div class="kpi-card gold"><div class="kpi-icon">🤝</div><div class="kpi-label">Track B (negocjacje)</div><div class="kpi-value sm">${fmtN(totalB)} PLN</div></div>
+    <div class="kpi-card gold"><div><div class="kpi-label">Działek razem</div><div class="kpi-value">${results.length}</div><div class="kpi-sub">załadowanych z CSV</div></div><div class="kpi-icon">📦</div></div>
+    <div class="kpi-card red"><div><div class="kpi-label">Z kolizją</div><div class="kpi-value">${collisionCount}</div><div class="kpi-sub">wykryta infrastr.</div></div><div class="kpi-icon">⚡</div></div>
+    <div class="kpi-card green"><div><div class="kpi-label">Bez kolizji</div><div class="kpi-value">${results.length - collisionCount}</div><div class="kpi-sub">brak infrastruktury</div></div><div class="kpi-icon">✅</div></div>
+    <div class="kpi-card blue"><div><div class="kpi-label">Track A · Sąd</div><div class="kpi-value sm">${fmtN(totalA)} PLN</div><div class="kpi-sub">ścieżka sądowa</div></div><div class="kpi-icon">⚖️</div></div>
+    <div class="kpi-card purple"><div><div class="kpi-label">Track B · Neg.</div><div class="kpi-value sm">${fmtN(totalB)} PLN</div><div class="kpi-sub">negocjacje</div></div><div class="kpi-icon">🤝</div></div>
   </div>
   <div class="razem-banner">
     <div class="razem-banner-label">💰 Razem odszkodowanie (Track A + B)</div>
@@ -1216,26 +1222,37 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
             {/* ════ DASHBOARD WRAPPER ════ */}
             <div style={{ background: "#f0f3f8", borderRadius: "16px", padding: "20px", marginBottom: "20px" }}>
 
-              {/* ── Row 1: KPI cards (5 kolumn) ── */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))", gap: "14px", marginBottom: "16px" }}>
+              {/* ── Row 1: KPI cards — Dompet/ArchitectUI full-color style ── */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "16px", marginBottom: "18px" }}>
                 {[
-                  { label: "Działek razem",     value: stats.total,               sub: "załadowanych z CSV",    icon: "📦", accent: "#3498db", big: true },
-                  { label: "Z kolizją",          value: stats.collision,           sub: "wykryta linia",         icon: "⚡", accent: "#e74c3c", big: true },
-                  { label: "Bez kolizji",        value: stats.total-stats.collision, sub: "brak infrastruktury", icon: "✅", accent: "#27ae60", big: true },
-                  { label: "Track A (sądowy)",   value: fmtPLN(stats.trackA),     sub: "ścieżka sądowa",        icon: "⚖️", accent: "#2c3e50", big: false },
-                  { label: "Track B (negocjacje)", value: fmtPLN(stats.trackB),   sub: "próg negocjacyjny",     icon: "🤝", accent: "#f39c12", big: false },
+                  { label:"Działek",    value:stats.total,                      sub:"załadowanych z CSV",   icon:"📦", grad:"linear-gradient(135deg,#f7971e,#ffd200)", iconBg:"rgba(0,0,0,0.12)" },
+                  { label:"Kolizji",    value:stats.collision,                  sub:"wykryta infrastr.",    icon:"⚡", grad:"linear-gradient(135deg,#e53935,#ef5350)", iconBg:"rgba(0,0,0,0.15)" },
+                  { label:"Bez kol.",   value:stats.total-stats.collision,      sub:"brak infrastruktury",  icon:"✅", grad:"linear-gradient(135deg,#43a047,#66bb6a)", iconBg:"rgba(0,0,0,0.12)" },
+                  { label:"Track A",    value:fmtPLN(stats.trackA),             sub:"ścieżka sądowa",       icon:"⚖️", grad:"linear-gradient(135deg,#1e88e5,#42a5f5)", iconBg:"rgba(0,0,0,0.12)" },
+                  { label:"Track B",    value:fmtPLN(stats.trackB),             sub:"negocjacje",           icon:"🤝", grad:"linear-gradient(135deg,#8e24aa,#ab47bc)", iconBg:"rgba(0,0,0,0.12)" },
                 ].map((k, i) => (
                   <div key={i} style={{
-                    background: "white", borderRadius: "12px", padding: "18px 16px",
-                    boxShadow: "0 1px 6px rgba(0,0,0,0.06)", position: "relative", overflow: "hidden",
+                    background: k.grad,
+                    borderRadius: "14px",
+                    padding: "20px 18px",
+                    boxShadow: "0 6px 20px rgba(0,0,0,0.14)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    position: "relative",
+                    overflow: "hidden",
                   }}>
-                    {/* accent line left */}
-                    <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "4px", background: k.accent, borderRadius: "12px 0 0 12px" }} />
-                    <div style={{ paddingLeft: "8px" }}>
-                      <div style={{ fontSize: "18px", marginBottom: "6px" }}>{k.icon}</div>
-                      <div style={{ fontSize: "0.65em", textTransform: "uppercase", letterSpacing: "1.2px", color: "#95a5a6", fontWeight: "700", marginBottom: "4px" }}>{k.label}</div>
-                      <div style={{ fontSize: k.big ? "2em" : "1.1em", fontWeight: "800", color: "#1a2035", lineHeight: 1.1, marginBottom: "3px" }}>{k.value}</div>
-                      <div style={{ fontSize: "0.65em", color: "#b2bec3" }}>{k.sub}</div>
+                    {/* decorative circle */}
+                    <div style={{ position:"absolute", bottom:-20, right:-20, width:90, height:90, borderRadius:"50%", background:"rgba(255,255,255,0.08)", pointerEvents:"none" }} />
+                    {/* LEFT: label + number + sub */}
+                    <div>
+                      <div style={{ fontSize:"0.6em", textTransform:"uppercase", letterSpacing:"1.2px", color:"rgba(255,255,255,0.75)", fontWeight:"700", marginBottom:"6px" }}>{k.label}</div>
+                      <div style={{ fontSize: typeof k.value === "number" ? "2.2em" : "1.15em", fontWeight:"900", color:"white", lineHeight:1.1, marginBottom:"4px" }}>{k.value}</div>
+                      <div style={{ fontSize:"0.62em", color:"rgba(255,255,255,0.65)", fontWeight:"500" }}>{k.sub}</div>
+                    </div>
+                    {/* RIGHT: icon circle */}
+                    <div style={{ width:"42px", height:"42px", borderRadius:"12px", background:k.iconBg, backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.3em", flexShrink:0 }}>
+                      {k.icon}
                     </div>
                   </div>
                 ))}
