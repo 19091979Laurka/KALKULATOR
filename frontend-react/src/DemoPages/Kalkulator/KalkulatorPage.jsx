@@ -80,10 +80,19 @@ function ParcelMiniMap({ geojson, centroid, collision, height = 260 }) {
       { maxZoom: 19 }
     ).addTo(map);
 
-    // ── siatka katastralna GUGIK (działki + numery jak geoportal) ──
+    // ── GESUT — uzbrojenie terenu (linie energetyczne, rury, kable) ──
+    L.tileLayer.wms(
+      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
+      {
+        layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny,przewod_cieplowniczy",
+        format: "image/png", transparent: true, opacity: 0.85,
+      }
+    ).addTo(map);
+
+    // ── siatka katastralna GUGIK (działki + numery — lżejsza) ──
     L.tileLayer.wms(
       "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow",
-      { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.75 }
+      { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.5 }
     ).addTo(map);
 
     // ── obrys działki: zielony fill + ciemna granica — jak geoportal ──
@@ -116,7 +125,7 @@ function ParcelMiniMap({ geojson, centroid, collision, height = 260 }) {
       {!ready && (
         <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", color: "#7f8c8d" }}>
           <div style={{ fontSize: "1.6em" }}>🛰️</div>
-          <div style={{ fontSize: "0.7em", fontWeight: "600" }}>Satelita · ładowanie…</div>
+          <div style={{ fontSize: "0.7em", fontWeight: "600" }}>Ortofoto · ładowanie…</div>
         </div>
       )}
       {/* Leaflet target */}
@@ -584,6 +593,57 @@ function InfrastructureLayer() {
   return null;
 }
 
+// ── Batch CSV Collective Map — layer control (base + overlays) ──────────────
+function BatchMapLayerControl() {
+  const map = useMap();
+  useEffect(() => {
+    // Base layers
+    const topo = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 18, attribution: "© Esri" }
+    );
+    const satellite = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 19 }
+    );
+    topo.addTo(map); // default base layer
+
+    // Overlays
+    const oimPower = L.tileLayer(
+      "https://tiles.openinframap.org/power/{z}/{x}/{y}.png",
+      { opacity: 0.85, maxZoom: 19 }
+    );
+    const gugikEw = L.tileLayer.wms(
+      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow",
+      { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.6 }
+    );
+    const kiutElektro = L.tileLayer.wms(
+      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
+      { layers: "przewod_elektroenergetyczny", format: "image/png", transparent: true, opacity: 0.8 }
+    );
+    oimPower.addTo(map); // default overlay on
+
+    const baseLayers = {
+      "🗺️ Topo (Esri)": topo,
+      "🛰️ Satelita": satellite,
+    };
+    const overlays = {
+      "⚡ Linie energetyczne (OIM)": oimPower,
+      "📋 Siatka działek (GUGIK)": gugikEw,
+      "⚡ Elektroenergetyczny (KIUT)": kiutElektro,
+    };
+    const ctrl = L.control.layers(baseLayers, overlays, { collapsed: false, position: "topright" }).addTo(map);
+
+    return () => {
+      try { map.removeControl(ctrl); } catch(_) {}
+      [topo, satellite, oimPower, gugikEw, kiutElektro].forEach(l => {
+        try { if (map.hasLayer(l)) map.removeLayer(l); } catch(_) {}
+      });
+    };
+  }, [map]);
+  return null;
+}
+
 // ── PDF Report Generator — otwiera raport-template-3d.html z danymi działki ─
 function generateParcelPDF(parcel) {
   const mr = parcel.data || {};
@@ -738,24 +798,20 @@ function BatchCSVSection() {
 
       return `
       <div class="parcel-card" style="page-break-inside:avoid;break-inside:avoid;">
-        <!-- TOP ACCENT BAR — Material Dashboard style -->
-        <div style="height:6px;background:${collision ? 'linear-gradient(90deg,#e74c3c,#c0392b,#e74c3c)' : 'linear-gradient(90deg,#27ae60,#1abc9c,#27ae60)'};"></div>
-
-        <!-- HEADER — Material Dashboard gradient -->
-        <div class="parcel-header" style="background:${collision ? 'linear-gradient(135deg,#c62828,#d32f2f)' : 'linear-gradient(135deg,#1565c0,#1976d2)'};border-bottom:none;position:relative;overflow:hidden;">
-          <div style="position:absolute;top:-20px;right:-20px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.08);pointer-events:none;"></div>
+        <!-- LIGHT HEADER — colored top border + white bg -->
+        <div class="parcel-header" style="background:#f8f9fc;border-top:4px solid ${collision ? '#e53935' : '#43a047'};border-bottom:1px solid #eef0f7;">
           <div class="parcel-header-left">
-            <div class="parcel-num-badge" style="background:rgba(255,255,255,0.2);border:1.5px solid rgba(255,255,255,0.4);">#${i + 1}</div>
+            <div class="parcel-num-badge" style="background:${collision ? '#fde8e8' : '#e8f5e9'};border:2px solid ${collision ? '#e53935' : '#43a047'};color:${collision ? '#c62828' : '#2e7d32'};font-size:12px;">#${i + 1}</div>
             <div>
-              <div class="parcel-id" style="color:white;">${p.parcel_id || "—"}</div>
+              <div class="parcel-id" style="color:#1a2035;">${p.parcel_id || "—"}</div>
               <a href="https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${encodeURIComponent(p.parcel_id || "")}"
-                 target="_blank" class="geo-link" style="color:rgba(255,255,255,0.55);">🔗 geoportal</a>
+                 target="_blank" class="geo-link" style="color:#3498db;">🔗 geoportal</a>
             </div>
-            <span class="collision-badge" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);">
+            <span class="collision-badge" style="background:${collision ? '#fde8e8' : '#e8f5e9'};color:${collision ? '#c62828' : '#2e7d32'};border:1px solid ${collision ? '#ef9a9a' : '#a5d6a7'};">
               ${collision ? "⚡ KOLIZJA" : "✓ BEZ KOLIZJI"}
             </span>
           </div>
-          <div style="font-size:2.5em;color:rgba(255,255,255,0.15);font-weight:900;line-height:1;user-select:none;">§</div>
+          <div style="font-size:2em;color:${collision ? '#e53935' : '#43a047'};font-weight:900;line-height:1;opacity:0.18;user-select:none;">§</div>
         </div>
 
         <!-- BODY: 2-column grid (data left | map right) -->
@@ -804,9 +860,9 @@ function BatchCSVSection() {
             <div style="padding:4px 20px 18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
               <!-- Track A -->
               <div class="track-box-a">
-                <div class="track-label" style="color:#3498db;">⚖️ TRACK A</div>
-                <div class="track-amount-lg" style="color:#2c3e50;">${fmtN(ta.total)} PLN</div>
-                <div class="track-sub">ścieżka sądowa</div>
+                <div class="track-label" style="color:#5c7aaa;">⚖️ TRACK A · SĄD</div>
+                <div class="track-amount-lg" style="color:#1565c0;font-size:20px;">${fmtN(ta.total)}</div>
+                <div class="track-sub" style="color:#7f9bbf;font-weight:700;">PLN · ścieżka sądowa</div>
                 <div style="margin-top:10px;padding-top:10px;border-top:1px solid #dce8ff;">
                   <div class="track-detail-row"><span class="tl">WSP służebność</span><span class="tv">${fmtN(ta.wsp)}</span></div>
                   <div class="track-detail-row"><span class="tl">WBK bezumowne</span><span class="tv">${fmtN(ta.wbk)}</span></div>
@@ -815,20 +871,20 @@ function BatchCSVSection() {
               </div>
               <!-- Track B -->
               <div class="track-box-b">
-                <div class="track-label" style="color:#f39c12;">🤝 TRACK B</div>
-                <div class="track-amount-lg" style="color:#e67e22;">${fmtN(tb.total)} PLN</div>
-                <div class="track-sub">negocjacje</div>
+                <div class="track-label" style="color:#b08050;">🤝 TRACK B · NEG.</div>
+                <div class="track-amount-lg" style="color:#e65100;font-size:20px;">${fmtN(tb.total)}</div>
+                <div class="track-sub" style="color:#c19060;font-weight:700;">PLN · negocjacje</div>
                 <div style="margin-top:10px;padding-top:10px;border-top:1px solid #fde8c0;">
                   <div class="track-detail-row"><span class="tl">Podstawa (A)</span><span class="tv">${fmtN(ta.total)}</span></div>
                   <div class="track-detail-row"><span class="tl">Mnożnik</span><span class="tv">×${tb.multiplier || 1.80}</span></div>
-                  <div class="track-detail-row"><span class="tl">Próg neg.</span><span class="tv" style="color:#e67e22;">${fmtN(tb.total)}</span></div>
+                  <div class="track-detail-row"><span class="tl">Próg neg.</span><span class="tv" style="color:#e65100;">${fmtN(tb.total)}</span></div>
                 </div>
               </div>
               <!-- RAZEM -->
-              <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:10px;padding:14px;">
+              <div style="background:#1a2035;border-radius:10px;padding:14px;">
                 <div class="track-label" style="color:rgba(255,193,7,0.85);">💰 RAZEM A+B</div>
-                <div style="font-size:20px;font-weight:900;color:white;">${fmtN((ta.total || 0) + (tb.total || 0))} PLN</div>
-                <div style="font-size:10px;color:rgba(255,255,255,0.6);margin-top:2px;">Track A + B łącznie</div>
+                <div style="font-size:22px;font-weight:900;color:white;margin-top:4px;">${fmtN((ta.total || 0) + (tb.total || 0))}</div>
+                <div style="font-size:10px;color:rgba(255,255,255,0.5);margin-top:2px;font-weight:700;">PLN · Track A + B łącznie</div>
               </div>
             </div>
           </div>
@@ -1205,17 +1261,12 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
                 </div>
               </div>
               <MapContainer center={[52.0, 20.0]} zoom={7} style={{ height: "480px", width: "100%" }}>
-                <TileLayer
-                  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
-                  attribution="© Esri" maxZoom={18}
-                />
-                <TileLayer url="https://tiles.openinframap.org/power/{z}/{x}/{y}.png" opacity={0.9} maxZoom={19} />
-                <InfrastructureLayer />
+                <BatchMapLayerControl />
                 <BatchParcelsLayer results={batchResults.results} />
               </MapContainer>
               <div style={{ padding: "10px 20px", background: "#f8f9fc", display: "flex", gap: "20px", fontSize: "0.75em", color: "#636e72", flexWrap: "wrap", alignItems: "center" }}>
                 <span>⚡ <strong style={{ color: "#e74c3c" }}>Linie WN</strong> / <strong style={{ color: "#f39c12" }}>SN</strong> — Open Infrastructure Map (OIM)</span>
-                <span>📡 <strong>KIUT GUGiK</strong> — zoom 14+ wymagany</span>
+                <span>📋 <strong>Warstwy</strong> — przełączaj w kontrolce (prawy górny róg)</span>
               </div>
             </div>
 
@@ -1376,11 +1427,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
                 const VOLT = { WN: "WN >110 kV", SN: "SN 1-110 kV", nN: "nN <1 kV" };
                 const pct = area > 0 && bandArea > 0 ? Math.min(100, Math.round(bandArea / area * 100)) : 0;
                 const MAP_H = 320;
-                // Material Dashboard: blue header for normal, red for collision
-                const hdrGrad = collision
-                  ? "linear-gradient(135deg,#c62828 0%,#d32f2f 100%)"
-                  : "linear-gradient(135deg,#1565c0 0%,#1976d2 100%)";
-                // 8 floating icon metric boxes (Material Dashboard KPI style)
+                // metric boxes
                 const metrics = [
                   { label:"Pow. działki",  val:`${Math.round(area).toLocaleString()} m²`,             icon:"📐", grad:"linear-gradient(135deg,#FF6B35,#F7931E)", sh:"rgba(255,107,53,0.4)" },
                   { label:"Cena gruntu",   val:`${price.toFixed(2)} zł/m²`,                           icon:"💰", grad:"linear-gradient(135deg,#43A047,#2E7D32)", sh:"rgba(67,160,71,0.4)" },
@@ -1393,78 +1440,100 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
                 ];
                 return (
                   <div key={i} style={{
-                    background:"white", borderRadius:"18px",
-                    boxShadow:"0 8px 32px rgba(0,0,0,0.11), 0 2px 8px rgba(0,0,0,0.06)",
+                    background:"white", borderRadius:"14px",
+                    boxShadow:"0 2px 14px rgba(0,0,0,0.08)",
+                    border:"1px solid #dde3ef",
                     overflow:"hidden", isolation:"isolate",
                   }}>
-                    {/* ── GRADIENT HEADER (Material Dashboard chart-card style) ── */}
-                    <div style={{ background:hdrGrad, padding:"18px 22px 22px", position:"relative", overflow:"hidden" }}>
-                      <div style={{ position:"absolute", top:-28, right:-28, width:150, height:150, borderRadius:"50%", background:"rgba(255,255,255,0.07)", pointerEvents:"none" }} />
-                      <div style={{ position:"absolute", bottom:-35, left:130, width:110, height:110, borderRadius:"50%", background:"rgba(255,255,255,0.05)", pointerEvents:"none" }} />
-                      <div style={{ display:"flex", alignItems:"center", gap:"14px", position:"relative", flexWrap:"wrap" }}>
-                        {/* § glass box */}
-                        <div style={{ width:"46px", height:"46px", borderRadius:"12px", background:"rgba(255,255,255,0.18)", border:"1px solid rgba(255,255,255,0.3)", backdropFilter:"blur(8px)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, color:"white", fontWeight:"900", fontSize:"1.4em" }}>§</div>
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ color:"rgba(255,255,255,0.55)", fontSize:"0.6em", fontWeight:"700", textTransform:"uppercase", letterSpacing:"1.5px", marginBottom:"2px" }}>Działka #{i+1}</div>
-                          <div style={{ color:"white", fontWeight:"900", fontSize:"1.05em", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.parcel_id}</div>
-                          <a href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${p.parcel_id||""}`}
-                            target="_blank" rel="noopener noreferrer"
-                            style={{ color:"rgba(255,255,255,0.5)", fontSize:"0.62em", textDecoration:"none", fontWeight:"600" }}>🔗 geoportal.gov.pl</a>
-                        </div>
-                        <span style={{ padding:"5px 15px", borderRadius:"50px", background:"rgba(255,255,255,0.18)", color:"white", fontSize:"0.72em", fontWeight:"800", flexShrink:0, border:"1px solid rgba(255,255,255,0.35)", backdropFilter:"blur(4px)", whiteSpace:"nowrap" }}>
-                          {collision?"⚡ KOLIZJA":"✓ BEZ KOLIZJI"}
-                        </span>
-                        <button onClick={()=>generateParcelPDF(p)} style={{ padding:"7px 16px", background:"rgba(255,255,255,0.18)", color:"white", border:"1px solid rgba(255,255,255,0.35)", borderRadius:"9px", cursor:"pointer", fontSize:"0.72em", fontWeight:"700", flexShrink:0, backdropFilter:"blur(4px)", whiteSpace:"nowrap" }}>
-                          📄 Raport
-                        </button>
+                    {/* ── LIGHT HEADER — colored top stripe + white bg ── */}
+                    <div style={{
+                      background:"#f8f9fc",
+                      borderTop:`4px solid ${collision ? "#e53935" : "#43a047"}`,
+                      borderBottom:"1px solid #eef0f7",
+                      padding:"13px 18px",
+                      display:"flex", alignItems:"center", gap:"12px", flexWrap:"wrap",
+                    }}>
+                      {/* Big parcel number badge */}
+                      <div style={{
+                        width:"46px", height:"46px", borderRadius:"12px",
+                        background:collision ? "#fde8e8" : "#e8f5e9",
+                        border:`2px solid ${collision ? "#e53935" : "#43a047"}`,
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                        fontWeight:"900", fontSize:"1em", color:collision ? "#c62828" : "#2e7d32",
+                        flexShrink:0,
+                      }}>#{i+1}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight:"800", fontSize:"0.95em", color:"#1a2035", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.parcel_id}</div>
+                        <a href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${p.parcel_id||""}`}
+                          target="_blank" rel="noopener noreferrer"
+                          style={{ color:"#3498db", fontSize:"0.65em", textDecoration:"none", fontWeight:"600" }}>🔗 geoportal.gov.pl</a>
                       </div>
+                      <span style={{
+                        padding:"4px 14px", borderRadius:"50px",
+                        background:collision ? "#fde8e8" : "#e8f5e9",
+                        color:collision ? "#c62828" : "#2e7d32",
+                        fontSize:"0.7em", fontWeight:"800", flexShrink:0,
+                        border:`1px solid ${collision ? "#ef9a9a" : "#a5d6a7"}`,
+                        whiteSpace:"nowrap",
+                      }}>
+                        {collision ? "⚡ KOLIZJA" : "✓ BEZ KOLIZJI"}
+                      </span>
+                      <button onClick={()=>generateParcelPDF(p)} style={{
+                        padding:"6px 14px", background:"#1a2035", color:"white",
+                        border:"none", borderRadius:"8px", cursor:"pointer",
+                        fontSize:"0.7em", fontWeight:"700", flexShrink:0, whiteSpace:"nowrap",
+                      }}>
+                        📄 Raport
+                      </button>
                     </div>
 
                     {/* ── BODY: 2 columns ── */}
                     <div style={{ display:"flex", alignItems:"stretch" }}>
-                      {/* LEFT: floating icon metric cards + Track A/B/RAZEM */}
-                      <div style={{ flex:1, minWidth:0, padding:"28px 18px 18px" }}>
-                        {/* 8 Material Dashboard KPI mini cards */}
-                        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(126px,1fr))", gap:"20px", marginBottom:"20px" }}>
+                      {/* LEFT: metric cards + Track A/B/RAZEM */}
+                      <div style={{ flex:1, minWidth:0, padding:"22px 18px 18px" }}>
+                        {/* 8 metric KPI cards — bigger numbers */}
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(150px,1fr))", gap:"12px", marginBottom:"18px" }}>
                           {metrics.map((m, j) => (
                             <div key={j} title={m.hint||""} style={{
-                              background:"white", borderRadius:"12px",
-                              boxShadow:"0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)",
-                              border:"1px solid #f0f2f7",
-                              padding:"10px 14px 12px",
-                              paddingTop:"32px",
-                              position:"relative",
+                              background:"white", borderRadius:"10px",
+                              boxShadow:"0 2px 10px rgba(0,0,0,0.06)",
+                              border:"1px solid #eef0f7",
+                              borderLeft:`3px solid ${m.grad.match(/#[0-9a-fA-F]{6}/)?.[0] || "#3498db"}`,
+                              padding:"12px 14px",
                             }}>
-                              {/* floating colored icon box — Material Dashboard signature */}
-                              <div style={{
-                                position:"absolute", top:"-16px", left:"14px",
-                                width:"46px", height:"46px", borderRadius:"12px",
-                                background:m.grad, boxShadow:`0 6px 16px ${m.sh}`,
-                                display:"flex", alignItems:"center", justifyContent:"center",
-                                fontSize:"1.2em",
-                              }}>{m.icon}</div>
-                              <div style={{ textAlign:"right" }}>
-                                <div style={{ fontSize:"0.57em", color:"#aab4c0", fontWeight:"700", textTransform:"uppercase", letterSpacing:"0.5px", marginBottom:"3px" }}>{m.label}</div>
-                                <div style={{ fontSize:"0.9em", fontWeight:"900", color:"#1a1a2e" }}>{m.val}</div>
+                              <div style={{ display:"flex", alignItems:"flex-start", gap:"8px" }}>
+                                <div style={{
+                                  width:"34px", height:"34px", borderRadius:"8px",
+                                  background:m.grad, flexShrink:0,
+                                  display:"flex", alignItems:"center", justifyContent:"center",
+                                  fontSize:"1em",
+                                }}>{m.icon}</div>
+                                <div style={{ flex:1, minWidth:0 }}>
+                                  <div style={{ fontSize:"0.6em", color:"#9eaab8", fontWeight:"700", textTransform:"uppercase", letterSpacing:"0.5px", marginBottom:"3px" }}>{m.label}</div>
+                                  <div style={{ fontSize:"1.05em", fontWeight:"900", color:"#1a1a2e", lineHeight:1.2 }}>{m.val}</div>
+                                  {m.hint && <div style={{ fontSize:"0.58em", color:"#f39c12", marginTop:"3px" }}>⚠ {m.hint}</div>}
+                                </div>
                               </div>
-                              {m.hint && <div style={{ fontSize:"0.55em", color:"#f39c12", marginTop:"4px", textAlign:"right" }}>⚠ {m.hint}</div>}
                             </div>
                           ))}
                         </div>
 
-                        {/* Track A / B / RAZEM — gradient boxes */}
+                        {/* Track A / B / RAZEM — clean light boxes, big numbers */}
                         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"10px" }}>
-                          <div style={{ background:"linear-gradient(135deg,#1976d2,#1565c0)", borderRadius:"12px", padding:"14px 16px" }}>
-                            <div style={{ color:"rgba(255,255,255,0.6)", fontSize:"0.56em", fontWeight:"800", textTransform:"uppercase", letterSpacing:"1px", marginBottom:"5px" }}>⚖️ TRACK A · SĄD</div>
-                            <div style={{ color:"white", fontSize:"1.1em", fontWeight:"900" }}>{Math.round(ta).toLocaleString()} <span style={{ fontSize:"0.5em", opacity:0.6 }}>PLN</span></div>
+                          <div style={{ background:"#eef4ff", borderRadius:"12px", padding:"14px 16px", border:"1px solid #d0e2ff" }}>
+                            <div style={{ color:"#5c7aaa", fontSize:"0.6em", fontWeight:"700", textTransform:"uppercase", letterSpacing:"1px", marginBottom:"5px" }}>⚖️ Track A · Sąd</div>
+                            <div style={{ color:"#1565c0", fontSize:"1.45em", fontWeight:"900", lineHeight:1.1 }}>{Math.round(ta).toLocaleString()}</div>
+                            <div style={{ color:"#7f9bbf", fontSize:"0.6em", marginTop:"2px" }}>PLN</div>
                           </div>
-                          <div style={{ background:"linear-gradient(135deg,#f57c00,#e65100)", borderRadius:"12px", padding:"14px 16px" }}>
-                            <div style={{ color:"rgba(255,255,255,0.6)", fontSize:"0.56em", fontWeight:"800", textTransform:"uppercase", letterSpacing:"1px", marginBottom:"5px" }}>🤝 TRACK B · NEG.</div>
-                            <div style={{ color:"white", fontSize:"1.1em", fontWeight:"900" }}>{Math.round(tb).toLocaleString()} <span style={{ fontSize:"0.5em", opacity:0.6 }}>PLN</span></div>
+                          <div style={{ background:"#fff8ee", borderRadius:"12px", padding:"14px 16px", border:"1px solid #fde8c0" }}>
+                            <div style={{ color:"#b08050", fontSize:"0.6em", fontWeight:"700", textTransform:"uppercase", letterSpacing:"1px", marginBottom:"5px" }}>🤝 Track B · Neg.</div>
+                            <div style={{ color:"#e65100", fontSize:"1.45em", fontWeight:"900", lineHeight:1.1 }}>{Math.round(tb).toLocaleString()}</div>
+                            <div style={{ color:"#c19060", fontSize:"0.6em", marginTop:"2px" }}>PLN</div>
                           </div>
-                          <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", borderRadius:"12px", padding:"14px 16px" }}>
-                            <div style={{ color:"rgba(255,193,7,0.9)", fontSize:"0.56em", fontWeight:"800", textTransform:"uppercase", letterSpacing:"1px", marginBottom:"5px" }}>💰 RAZEM A+B</div>
-                            <div style={{ color:"white", fontSize:"1.15em", fontWeight:"900" }}>{Math.round(razem).toLocaleString()} <span style={{ fontSize:"0.5em", opacity:0.6 }}>PLN</span></div>
+                          <div style={{ background:"#1a2035", borderRadius:"12px", padding:"14px 16px" }}>
+                            <div style={{ color:"rgba(255,193,7,0.85)", fontSize:"0.6em", fontWeight:"700", textTransform:"uppercase", letterSpacing:"1px", marginBottom:"5px" }}>💰 Razem A+B</div>
+                            <div style={{ color:"white", fontSize:"1.45em", fontWeight:"900", lineHeight:1.1 }}>{Math.round(razem).toLocaleString()}</div>
+                            <div style={{ color:"rgba(255,255,255,0.45)", fontSize:"0.6em", marginTop:"2px" }}>PLN</div>
                           </div>
                         </div>
                       </div>
