@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { MapContainer, TileLayer, WMSTileLayer, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, WMSTileLayer, useMap, GeoJSON } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { toast } from "react-toastify";
@@ -14,6 +14,93 @@ L.Icon.Default.mergeOptions({
   iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
+
+// ── Mini map layers (parcel polygon + OIM power lines) ───────────────────────
+function MiniMapLayers({ geojson, collision }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!geojson || !geojson.coordinates) return;
+    const color = collision ? "#e74c3c" : "#27ae60";
+    const layer = L.geoJSON(geojson, {
+      style: { color, weight: 2.5, fillColor: color, fillOpacity: 0.25, dashArray: null },
+    }).addTo(map);
+    try { map.fitBounds(layer.getBounds(), { padding: [8, 8] }); } catch (_) {}
+    return () => { try { map.removeLayer(layer); } catch (_) {} };
+  }, [map, geojson, collision]);
+  return null;
+}
+
+function ParcelMiniMap({ geojson, centroid, collision }) {
+  const [ready, setReady] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setReady(true); obs.disconnect(); } },
+      { threshold: 0.05 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  // Compute center: prefer centroid_ll [lon,lat], fallback to polygon centroid
+  let center = [52.069, 19.480];
+  if (Array.isArray(centroid) && centroid.length >= 2 && centroid[0] != null) {
+    center = [Number(centroid[1]), Number(centroid[0])];
+  } else if (geojson?.coordinates) {
+    try {
+      const ring = geojson.type === "Polygon"
+        ? geojson.coordinates[0]
+        : geojson.type === "MultiPolygon"
+        ? geojson.coordinates[0][0] : null;
+      if (ring?.length) {
+        center = [
+          ring.reduce((s, c) => s + c[1], 0) / ring.length,
+          ring.reduce((s, c) => s + c[0], 0) / ring.length,
+        ];
+      }
+    } catch (_) {}
+  }
+
+  return (
+    <div ref={containerRef} style={{ height: "100%", minHeight: "200px", borderRadius: "0 0 12px 0", overflow: "hidden", background: "#e8ecf0", position: "relative" }}>
+      {!ready ? (
+        <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "8px", color: "#95a5a6" }}>
+          <div style={{ fontSize: "2em" }}>🗺️</div>
+          <div style={{ fontSize: "0.72em" }}>Ładowanie mapy…</div>
+        </div>
+      ) : (
+        <MapContainer
+          center={center} zoom={14}
+          style={{ height: "100%", width: "100%", minHeight: "200px" }}
+          zoomControl={false} attributionControl={false}
+          scrollWheelZoom={false} dragging={true} doubleClickZoom={false}
+        >
+          <TileLayer
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
+            attribution="© Esri" maxZoom={18}
+          />
+          <TileLayer
+            url="https://tiles.openinframap.org/power/{z}/{x}/{y}.png"
+            opacity={0.95} maxZoom={19}
+          />
+          <MiniMapLayers geojson={geojson} collision={collision} />
+        </MapContainer>
+      )}
+      {/* badge overlay */}
+      <div style={{
+        position: "absolute", bottom: "8px", left: "8px", zIndex: 999,
+        background: collision ? "rgba(231,76,60,0.9)" : "rgba(39,174,96,0.9)",
+        color: "white", padding: "2px 8px", borderRadius: "10px",
+        fontSize: "0.68em", fontWeight: "700", pointerEvents: "none",
+      }}>
+        {collision ? "⚡ kolizja" : "✓ ok"}
+      </div>
+    </div>
+  );
+}
 
 // ── GeoJSON działki + GESUT WMS overlay ──────────────────────────────────────
 function GeoJSONLayers({ parcelGeojson }) {
@@ -586,87 +673,106 @@ function BatchCSVSection() {
       const bgLight = collision ? "#fff5f5" : "#f5fff8";
 
       return `
-      <div class="parcel-card" style="border-left:5px solid ${accentColor};page-break-inside:avoid;">
-        <div class="parcel-header" style="background:${bgLight};border-bottom:1px solid #f0f0f0;">
+      <div class="parcel-card" style="page-break-inside:avoid;break-inside:avoid;">
+        <!-- TOP ACCENT BAR — Material Dashboard style -->
+        <div style="height:6px;background:${collision ? 'linear-gradient(90deg,#e74c3c,#c0392b,#e74c3c)' : 'linear-gradient(90deg,#27ae60,#1abc9c,#27ae60)'};"></div>
+
+        <!-- HEADER -->
+        <div class="parcel-header" style="background:${bgLight};border-bottom:1px solid #f0f2f5;">
           <div class="parcel-header-left">
-            <span class="parcel-num">#${i + 1}</span>
-            <span class="parcel-id">${p.parcel_id || "—"}</span>
-            <a href="https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${encodeURIComponent(p.parcel_id || "")}"
-               target="_blank" class="geo-link">🔗 geoportal</a>
-            <span class="collision-badge" style="background:${accentColor};">
+            <div class="parcel-num-badge" style="background:${accentColor};">#${i + 1}</div>
+            <div>
+              <div class="parcel-id">${p.parcel_id || "—"}</div>
+              <a href="https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${encodeURIComponent(p.parcel_id || "")}"
+                 target="_blank" class="geo-link">🔗 geoportal</a>
+            </div>
+            <span class="collision-badge" style="background:${accentColor};box-shadow:0 2px 8px ${accentColor}55;">
               ${collision ? "⚡ KOLIZJA" : "✓ BEZ KOLIZJI"}
             </span>
           </div>
-          <div class="no-print">
-            <a href="https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${encodeURIComponent(p.parcel_id || "")}"
-               target="_blank" class="btn-geo">Otwórz mapę</a>
-          </div>
         </div>
 
-        <div class="parcel-body">
-          <div class="parcel-data-grid">
-            <div class="data-box">
-              <div class="db-label">📐 Pow. działki</div>
-              <div class="db-value">${fmtI(geom.area_m2)} m²</div>
-            </div>
-            <div class="data-box">
-              <div class="db-label">💰 Cena gruntu</div>
-              <div class="db-value">${fmtN(md.average_price_m2)} zł/m²</div>
-            </div>
-            <div class="data-box">
-              <div class="db-label">🏠 Wartość nier.</div>
-              <div class="db-value">${fmtI(ksws.property_value_total)} PLN</div>
-            </div>
-            <div class="data-box ${collision ? "data-box-red" : "data-box-gray"}">
-              <div class="db-label">⚡ Napięcie linii</div>
-              <div class="db-value">${volt}</div>
-            </div>
-            <div class="data-box">
-              <div class="db-label">📏 Dł. linii</div>
-              <div class="db-value">${(ksws.line_length_m || pl.length_m || 0) > 0 ? fmtI(ksws.line_length_m || pl.length_m) + " m" : "—"}
+        <!-- BODY: 2-column grid (data left | map right) -->
+        <div class="parcel-body-grid">
+
+          <!-- LEFT: data grid + Track A/B/RAZEM -->
+          <div style="display:flex;flex-direction:column;">
+            <!-- Data grid 8 boxes -->
+            <div style="padding:16px 20px 12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;flex:1;">
+              <div class="data-box-v2" style="border-left:3px solid #3498db;">
+                <div class="db-label">📐 Pow. działki</div>
+                <div class="db-value">${fmtI(geom.area_m2)} m²</div>
+              </div>
+              <div class="data-box-v2" style="border-left:3px solid #8e44ad;">
+                <div class="db-label">💰 Cena gruntu</div>
+                <div class="db-value">${fmtN(md.average_price_m2)} zł/m²</div>
+              </div>
+              <div class="data-box-v2" style="border-left:3px solid #2c3e50;">
+                <div class="db-label">🏠 Wartość nier.</div>
+                <div class="db-value">${fmtI(ksws.property_value_total)} PLN</div>
+              </div>
+              <div class="data-box-v2" style="border-left:3px solid ${accentColor};background:${collision?'#fff5f5':'#f5fff8'};">
+                <div class="db-label">⚡ Napięcie</div>
+                <div class="db-value">${volt}</div>
+              </div>
+              <div class="data-box-v2" style="border-left:3px solid #16a085;">
+                <div class="db-label">📏 Dł. linii</div>
+                <div class="db-value">${(ksws.line_length_m || pl.length_m || 0) > 0 ? fmtI(ksws.line_length_m || pl.length_m) + " m" : "—"}</div>
                 ${ksws.measurement_source && ksws.measurement_source !== "geodezyjne" ? `<span class="db-hint">⚠ ${ksws.measurement_source}</span>` : ""}
               </div>
+              <div class="data-box-v2" style="border-left:3px solid #27ae60;">
+                <div class="db-label">↔️ Szer. pasa</div>
+                <div class="db-value">${ksws.band_width_m || "—"} m</div>
+              </div>
+              <div class="data-box-v2" style="border-left:3px solid #f39c12;">
+                <div class="db-label">🔲 Pow. pasa</div>
+                <div class="db-value">${(ksws.band_area_m2 || 0) > 0 ? fmtI(ksws.band_area_m2) + " m²" : "—"}</div>
+              </div>
+              <div class="data-box-v2" style="border-left:3px solid #e67e22;">
+                <div class="db-label">📊 % w pasie</div>
+                <div class="db-value">${geom.area_m2 > 0 && ksws.band_area_m2 > 0 ? Math.min(100, Math.round(ksws.band_area_m2 / geom.area_m2 * 100)) + "%" : "—"}</div>
+              </div>
             </div>
-            <div class="data-box">
-              <div class="db-label">↔️ Szer. pasa</div>
-              <div class="db-value">${ksws.band_width_m || "—"} m</div>
-            </div>
-            <div class="data-box">
-              <div class="db-label">🔲 Pow. pasa</div>
-              <div class="db-value">${(ksws.band_area_m2 || 0) > 0 ? fmtI(ksws.band_area_m2) + " m²" : "—"}</div>
-            </div>
-            <div class="data-box">
-              <div class="db-label">📊 % w pasie</div>
-              <div class="db-value">${geom.area_m2 > 0 && ksws.band_area_m2 > 0 ? Math.min(100, Math.round(ksws.band_area_m2 / geom.area_m2 * 100)) + "%" : "—"}</div>
+
+            <!-- Track A / B / RAZEM -->
+            <div style="padding:4px 20px 18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+              <!-- Track A -->
+              <div class="track-box-a">
+                <div class="track-label" style="color:#3498db;">⚖️ TRACK A</div>
+                <div class="track-amount-lg" style="color:#2c3e50;">${fmtN(ta.total)} PLN</div>
+                <div class="track-sub">ścieżka sądowa</div>
+                <div style="margin-top:10px;padding-top:10px;border-top:1px solid #dce8ff;">
+                  <div class="track-detail-row"><span class="tl">WSP służebność</span><span class="tv">${fmtN(ta.wsp)}</span></div>
+                  <div class="track-detail-row"><span class="tl">WBK bezumowne</span><span class="tv">${fmtN(ta.wbk)}</span></div>
+                  <div class="track-detail-row"><span class="tl">OBN obniżenie</span><span class="tv">${fmtN(ta.obn)}</span></div>
+                </div>
+              </div>
+              <!-- Track B -->
+              <div class="track-box-b">
+                <div class="track-label" style="color:#f39c12;">🤝 TRACK B</div>
+                <div class="track-amount-lg" style="color:#e67e22;">${fmtN(tb.total)} PLN</div>
+                <div class="track-sub">negocjacje</div>
+                <div style="margin-top:10px;padding-top:10px;border-top:1px solid #fde8c0;">
+                  <div class="track-detail-row"><span class="tl">Podstawa (A)</span><span class="tv">${fmtN(ta.total)}</span></div>
+                  <div class="track-detail-row"><span class="tl">Mnożnik</span><span class="tv">×${tb.multiplier || 1.80}</span></div>
+                  <div class="track-detail-row"><span class="tl">Próg neg.</span><span class="tv" style="color:#e67e22;">${fmtN(tb.total)}</span></div>
+                </div>
+              </div>
+              <!-- RAZEM -->
+              <div style="background:${collision ? 'linear-gradient(135deg,#e74c3c,#c0392b)' : 'linear-gradient(135deg,#27ae60,#1abc9c)'};border-radius:10px;padding:14px;">
+                <div class="track-label" style="color:rgba(255,255,255,0.75);">💰 RAZEM</div>
+                <div style="font-size:20px;font-weight:900;color:white;">${fmtN((ta.total || 0) + (tb.total || 0))} PLN</div>
+                <div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:2px;">Track A + B łącznie</div>
+              </div>
             </div>
           </div>
 
-          <div class="track-grid">
-            <div class="track-a">
-              <div class="track-tag sad">ŚCIEŻKA SĄDOWA</div>
-              <div class="track-name">Track A</div>
-              <div class="track-amount">${fmtN(ta.total)} PLN</div>
-              <div class="track-breakdown">
-                <div class="track-row"><span class="tl">WSP — służebność</span><span class="tv">${fmtN(ta.wsp)} PLN</span></div>
-                <div class="track-row"><span class="tl">WBK — bezumowne</span><span class="tv">${fmtN(ta.wbk)} PLN</span></div>
-                <div class="track-row"><span class="tl">OBN — obniżenie wart.</span><span class="tv">${fmtN(ta.obn)} PLN</span></div>
-              </div>
+          <!-- RIGHT: mini Leaflet map (Topo + OIM power lines) -->
+          <div class="map-col">
+            <div id="parcel-map-${i}" style="height:100%;min-height:290px;"></div>
+            <div class="map-badge" style="background:${collision ? 'rgba(231,76,60,0.9)' : 'rgba(39,174,96,0.9)'};">
+              ${collision ? "⚡ kolizja" : "✓ ok"}
             </div>
-            <div class="track-b">
-              <div class="track-tag neg">NEGOCJACJE</div>
-              <div class="track-name">Track B</div>
-              <div class="track-amount" style="color:#e67e22;">${fmtN(tb.total)} PLN</div>
-              <div class="track-breakdown">
-                <div class="track-row"><span class="tl">Podstawa (Track A)</span><span class="tv">${fmtN(ta.total)} PLN</span></div>
-                <div class="track-row"><span class="tl">Mnożnik negocjacyjny</span><span class="tv">×${tb.multiplier || 1.80}</span></div>
-                <div class="track-row"><span class="tl">Zalecany próg</span><span class="tv" style="color:#e67e22;font-size:14px;font-weight:800;">${fmtN(tb.total)} PLN</span></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="razem-box" style="background:${collision ? "linear-gradient(135deg,#c0392b,#e74c3c)" : "linear-gradient(135deg,#1e8449,#27ae60)"};">
-            <div class="razem-label">💰 RAZEM ODSZKODOWANIE (Track A + B)</div>
-            <div class="razem-amount">${fmtN((ta.total || 0) + (tb.total || 0))} PLN</div>
           </div>
         </div>
       </div>`;
@@ -697,6 +803,8 @@ function BatchCSVSection() {
 <title>Raport Zbiorczy KSWS — Batch — ${dateStr}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1a2035;font-size:14px;line-height:1.5}
@@ -736,38 +844,33 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
 .razem-banner{background:linear-gradient(135deg,#1a1a2e,#2c3e50);color:white;padding:22px 32px;border-radius:12px;text-align:center;margin-bottom:24px;box-shadow:0 4px 15px rgba(0,0,0,.15)}
 .razem-banner-label{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;opacity:.65;margin-bottom:6px}
 .razem-banner-amount{font-size:34px;font-weight:900;color:#f39c12}
-/* PARCEL CARD */
-.parcel-card{background:white;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.07);margin-bottom:16px;overflow:hidden}
-.parcel-header{padding:12px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-.parcel-header-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.parcel-num{font-size:13px;font-weight:700;color:#7f8c8d}
+/* PARCEL CARD — Material Dashboard style */
+.parcel-card{background:white;border-radius:16px;box-shadow:0 6px 28px rgba(0,0,0,.09);border:1px solid #e8eaf0;margin-bottom:24px;overflow:hidden}
+.parcel-header{padding:14px 22px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.parcel-header-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.parcel-num-badge{width:36px;height:36px;border-radius:50%;color:white;font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .parcel-id{font-size:15px;font-weight:800;color:#1a2035}
-.geo-link{font-size:12px;color:#3498db;text-decoration:none;font-weight:500}
-.collision-badge{padding:3px 12px;border-radius:50px;font-size:11px;font-weight:700;letter-spacing:.5px;color:white}
-.btn-geo{padding:5px 14px;background:#3498db;color:white;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600}
-.parcel-body{padding:16px 20px}
-/* DATA GRID */
-.parcel-data-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px}
-.data-box{background:#f8f9fa;border-radius:8px;padding:10px 12px}
-.data-box-red{background:#fff5f5}.data-box-gray{background:#f0f0f0}
-.db-label{font-size:10px;color:#7f8c8d;font-weight:600;margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}
-.db-value{font-size:14px;font-weight:700;color:#1a2035}
+.parcel-sub{font-size:11px;color:#95a5a6;margin-top:2px}
+.geo-link{font-size:11px;color:#3498db;text-decoration:none;font-weight:600}
+.collision-badge{padding:4px 14px;border-radius:50px;font-size:12px;font-weight:700;letter-spacing:.5px;color:white}
+.parcel-body-grid{display:grid;grid-template-columns:1fr 290px}
+/* DATA BOXES */
+.data-box-v2{background:#f8f9fc;border-radius:10px;padding:10px 12px;border:1px solid #eef0f5}
+.db-label{font-size:10px;color:#95a5a6;margin-bottom:4px;text-transform:uppercase;letter-spacing:.7px;font-weight:700}
+.db-value{font-size:13px;font-weight:800;color:#1a2035}
 .db-hint{display:block;font-size:10px;color:#e67e22;font-weight:500;margin-top:2px}
-/* TRACK GRID */
-.track-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px}
-.track-a{background:#f8f9fa;border:1px solid #dee2e6;border-left:6px solid #2c3e50;border-radius:12px;padding:22px}
-.track-b{background:#fffdf0;border:1px solid #f39c12;border-left:6px solid #f39c12;border-radius:12px;padding:22px}
-.track-tag{display:inline-block;padding:3px 12px;border-radius:50px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px}
-.track-tag.sad{background:#1a2035;color:white}.track-tag.neg{background:#f39c12;color:white}
-.track-name{font-size:15px;font-weight:700;margin-bottom:4px}
-.track-amount{font-size:26px;font-weight:800;color:#1a2035;margin-bottom:4px}
-.track-breakdown{margin-top:14px;padding-top:12px;border-top:1px solid rgba(0,0,0,.08)}
-.track-row{display:flex;justify-content:space-between;padding:4px 0;font-size:12px}
-.track-row .tl{color:#7f8c8d}.track-row .tv{font-weight:600}
-/* RAZEM BOX */
-.razem-box{padding:14px 20px;border-radius:8px;display:flex;justify-content:space-between;align-items:center}
-.razem-label{font-size:12px;color:rgba(255,255,255,.8);font-weight:600}
-.razem-amount{font-size:22px;font-weight:900;color:white}
+/* TRACK BOXES */
+.track-box-a{background:#eef4ff;border-radius:10px;padding:14px;border:1px solid #dce8ff}
+.track-box-b{background:#fff8ee;border-radius:10px;padding:14px;border:1px solid #fde8c0}
+.track-label{font-size:9px;text-transform:uppercase;letter-spacing:1.2px;font-weight:700;margin-bottom:4px}
+.track-amount-lg{font-size:16px;font-weight:900}
+.track-sub{font-size:10px;color:#95a5a6;margin-top:2px}
+.track-detail-row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0}
+.track-detail-row .tl{color:#7f8c8d}.track-detail-row .tv{font-weight:700}
+/* MAP COLUMN */
+.map-col{border-left:1px solid #eef0f3;min-height:280px;position:relative}
+.map-badge{position:absolute;bottom:8px;left:8px;z-index:999;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;pointer-events:none;color:white}
+.leaflet-container{height:100%;min-height:280px}
 /* SUMMARY TABLE */
 .summary-table{width:100%;border-collapse:collapse;background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.07)}
 .summary-table thead tr{background:#1a2035;color:white}
@@ -847,6 +950,50 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
     <em>Dokument ma charakter informacyjno-analityczny i nie zastępuje operatu szacunkowego.</em>
   </div>
 </div>
+
+<script>
+(function() {
+  var PARCEL_MAPS = ${JSON.stringify(results.map(p => ({
+    centroid: p.data?.geometry?.centroid_ll,
+    geojson: p.data?.geometry?.geojson_ll || p.data?.geometry?.geojson,
+    collision: !!p.data?.infrastructure?.power_lines?.detected,
+  })))};
+
+  function initMaps() {
+    if (typeof L === 'undefined') { setTimeout(initMaps, 300); return; }
+    PARCEL_MAPS.forEach(function(parcel, i) {
+      var el = document.getElementById('parcel-map-' + i);
+      if (!el || el._leaflet_id) return;
+      var center = [52.069, 19.480];
+      if (Array.isArray(parcel.centroid) && parcel.centroid.length >= 2 && parcel.centroid[0] != null) {
+        center = [Number(parcel.centroid[1]), Number(parcel.centroid[0])];
+      } else if (parcel.geojson && parcel.geojson.coordinates) {
+        try {
+          var ring = parcel.geojson.type === 'Polygon' ? parcel.geojson.coordinates[0]
+                   : parcel.geojson.type === 'MultiPolygon' ? parcel.geojson.coordinates[0][0] : null;
+          if (ring && ring.length) {
+            center = [ring.reduce(function(s,c){return s+c[1]},0)/ring.length,
+                      ring.reduce(function(s,c){return s+c[0]},0)/ring.length];
+          }
+        } catch(e) {}
+      }
+      var map = L.map(el, { zoomControl: false, attributionControl: false, scrollWheelZoom: false, dragging: false, doubleClickZoom: false });
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 }).addTo(map);
+      L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png', { opacity: 0.9, maxZoom: 19 }).addTo(map);
+      if (parcel.geojson && parcel.geojson.coordinates) {
+        var color = parcel.collision ? '#e74c3c' : '#27ae60';
+        var layer = L.geoJSON(parcel.geojson, { style: { color: color, weight: 2.5, fillColor: color, fillOpacity: 0.25 } }).addTo(map);
+        try { map.fitBounds(layer.getBounds(), { padding: [8, 8] }); } catch(e) { map.setView(center, 14); }
+      } else {
+        map.setView(center, 14);
+      }
+    });
+  }
+
+  if (document.readyState === 'complete') { initMaps(); }
+  else { window.addEventListener('load', initMaps); }
+})();
+</script>
 </body>
 </html>`;
 
@@ -953,6 +1100,34 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
 
         {stats && (
           <>
+            {/* ══ MAPA ZBIORCZA — na górze, widoczna od razu ══ */}
+            <div style={{ background: "white", borderRadius: "14px", border: "1px solid #e8eaf0", overflow: "hidden", marginBottom: "24px", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}>
+              <div style={{ height: "5px", background: "linear-gradient(90deg,#e74c3c,#f39c12,#27ae60,#3498db)" }} />
+              <div style={{ padding: "16px 20px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #f0f2f5" }}>
+                <div style={{ fontWeight: "800", fontSize: "0.95em", color: "#1a2035", display: "flex", alignItems: "center", gap: "10px" }}>
+                  🗺️ Mapa zbiorcza
+                  <span style={{ fontWeight: "400", fontSize: "0.85em", color: "#95a5a6" }}>— wszystkie {stats.total} działek</span>
+                </div>
+                <div style={{ display: "flex", gap: "16px", fontSize: "0.78em" }}>
+                  <span><strong style={{ color: "#e74c3c" }}>🔴 {stats.collision}</strong> z kolizją</span>
+                  <span><strong style={{ color: "#27ae60" }}>🟢 {stats.total - stats.collision}</strong> bez kolizji</span>
+                </div>
+              </div>
+              <MapContainer center={[52.0, 20.0]} zoom={7} style={{ height: "480px", width: "100%" }}>
+                <TileLayer
+                  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
+                  attribution="© Esri" maxZoom={18}
+                />
+                <TileLayer url="https://tiles.openinframap.org/power/{z}/{x}/{y}.png" opacity={0.9} maxZoom={19} />
+                <InfrastructureLayer />
+                <BatchParcelsLayer results={batchResults.results} />
+              </MapContainer>
+              <div style={{ padding: "10px 20px", background: "#f8f9fc", display: "flex", gap: "20px", fontSize: "0.75em", color: "#636e72", flexWrap: "wrap", alignItems: "center" }}>
+                <span>⚡ <strong style={{ color: "#e74c3c" }}>Linie WN</strong> / <strong style={{ color: "#f39c12" }}>SN</strong> — Open Infrastructure Map (OIM)</span>
+                <span>📡 <strong>KIUT GUGiK</strong> — zoom 14+ wymagany</span>
+              </div>
+            </div>
+
             {/* ════ DASHBOARD WRAPPER ════ */}
             <div style={{ background: "#f0f3f8", borderRadius: "16px", padding: "20px", marginBottom: "20px" }}>
 
@@ -1079,37 +1254,8 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
               </div>
             </div>
 
-            {/* MAPA ZBIORCZA Z WARSTWĄ UZBROJENIA TERENU */}
-            <div style={{ background: "white", borderRadius: "8px", border: "1px solid #eee", padding: "20px", marginBottom: "20px" }}>
-              <h3 style={{ marginTop: 0, marginBottom: "15px" }}>🗺️ Mapa geograficzna - wszystkie {stats.total} działek</h3>
-              <MapContainer center={[52.0, 20.0]} zoom={7} style={{ height: "650px", width: "100%", borderRadius: "6px", marginBottom: "15px", border: "1px solid #ddd" }}>
-                <TileLayer
-                  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                  attribution='© ESRI | KIUT GUGiK'
-                  maxZoom={19}
-                />
-                <InfrastructureLayer />
-                <BatchParcelsLayer results={batchResults.results} />
-              </MapContainer>
-              <div style={{ padding: "12px", background: "#f9f9f9", borderRadius: "6px", fontSize: "0.85em", color: "#555", lineHeight: "1.6" }}>
-                <div style={{ marginBottom: "8px", fontWeight: "600" }}>Legenda:</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                  <div>
-                    <strong style={{ color: "#ff0000" }}>🔴 {stats.collision}</strong> działek z <strong>kolizją</strong>
-                  </div>
-                  <div>
-                    <strong style={{ color: "#00aa00" }}>🟢 {stats.total - stats.collision}</strong> działek <strong>bez kolizji</strong>
-                  </div>
-                  <div style={{ gridColumn: "1 / -1", marginTop: "5px", paddingTop: "8px", borderTop: "1px solid #ddd" }}>
-                    <strong style={{ color: "#e74c3c" }}>⚡ Open Infrastructure Map</strong> — linie energetyczne WN/SN (OSM) · widoczne od zoom 6+<br/>
-                    <strong style={{ color: "#2575fc" }}>📡 KIUT GUGiK</strong> — oficjalne dane PL: elektro, gaz, woda (wymagany zoom 14+)
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* ── KARTY DZIAŁEK ── */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {/* ── KARTY DZIAŁEK — 2-kolumnowy layout z mini mapką ── */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
               {batchResults.results.map((p, i) => {
                 const ta = p.data?.compensation?.track_a?.total || 0;
                 const tb = p.data?.compensation?.track_b?.total || 0;
@@ -1123,89 +1269,130 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1
                 const voltage = p.data?.infrastructure?.power_lines?.voltage || "—";
                 const razem = ta + tb;
                 const msrc = p.data?.ksws?.measurement_source || "";
+                const geojson = p.data?.geometry?.geojson_ll || p.data?.geometry?.geojson;
+                const centroid = p.data?.geometry?.centroid_ll;
+                const accentColor = collision ? "#e74c3c" : "#27ae60";
+                const VOLT = { WN: "WN >110 kV", SN: "SN 1-110 kV", nN: "nN <1 kV" };
 
                 return (
                   <div key={i} style={{
                     background: "white",
-                    borderRadius: "10px",
-                    border: "1px solid #e8e8e8",
-                    borderLeft: `5px solid ${collision ? "#e74c3c" : "#27ae60"}`,
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                    borderRadius: "16px",
+                    boxShadow: "0 6px 28px rgba(0,0,0,0.09)",
+                    border: "1px solid #e8eaf0",
                     overflow: "hidden",
                   }}>
-                    {/* — nagłówek karty — */}
+                    {/* ── TOP ACCENT BAR — Material Dashboard style ── */}
+                    <div style={{ height: "6px", background: collision
+                      ? "linear-gradient(90deg,#e74c3c 0%,#c0392b 50%,#e74c3c 100%)"
+                      : "linear-gradient(90deg,#27ae60 0%,#1abc9c 50%,#27ae60 100%)"
+                    }} />
+
+                    {/* ── HEADER ── */}
                     <div style={{
-                      padding: "10px 16px",
-                      background: collision ? "#fff5f5" : "#f5fff8",
+                      padding: "14px 22px",
+                      background: collision ? "#fdf3f3" : "#f3fdf7",
                       display: "flex", justifyContent: "space-between", alignItems: "center",
-                      borderBottom: "1px solid #f0f0f0", gap: "10px", flexWrap: "wrap",
+                      borderBottom: "1px solid #f0f2f5",
+                      gap: "10px", flexWrap: "wrap",
                     }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                        <span style={{ fontWeight: "800", fontSize: "0.97em", color: "#1a1a2e" }}>
-                          #{i + 1} &nbsp;{p.parcel_id}
-                        </span>
-                        <a
-                          href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${p.parcel_id || ""}`}
-                          target="_blank" rel="noopener noreferrer"
-                          style={{ fontSize: "0.75em", color: "#2575fc", textDecoration: "none" }}
-                        >🔗 geoportal</a>
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                        {/* Number badge */}
+                        <div style={{
+                          width: "34px", height: "34px", borderRadius: "50%",
+                          background: collision ? "#e74c3c" : "#27ae60",
+                          color: "white", fontWeight: "900", fontSize: "0.8em",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          flexShrink: 0,
+                        }}>#{i + 1}</div>
+                        <div>
+                          <div style={{ fontWeight: "800", fontSize: "1.05em", color: "#1a2035", letterSpacing: "-0.3px" }}>{p.parcel_id}</div>
+                          <div style={{ display: "flex", gap: "10px", marginTop: "3px", flexWrap: "wrap" }}>
+                            <a href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${p.parcel_id || ""}`}
+                              target="_blank" rel="noopener noreferrer"
+                              style={{ fontSize: "0.72em", color: "#3498db", textDecoration: "none", fontWeight: "600" }}>
+                              🔗 geoportal
+                            </a>
+                          </div>
+                        </div>
                         <span style={{
-                          padding: "3px 10px", borderRadius: "12px", fontSize: "0.74em", fontWeight: "700",
-                          background: collision ? "#e74c3c" : "#27ae60", color: "white", letterSpacing: "0.5px",
+                          padding: "4px 14px", borderRadius: "50px",
+                          fontSize: "0.75em", fontWeight: "700",
+                          background: collision ? "#e74c3c" : "#27ae60",
+                          color: "white", letterSpacing: "0.6px",
+                          boxShadow: collision ? "0 2px 8px rgba(231,76,60,0.3)" : "0 2px 8px rgba(39,174,96,0.3)",
                         }}>
                           {collision ? "⚡ KOLIZJA" : "✓ BEZ KOLIZJI"}
                         </span>
                       </div>
-                      <button
-                        onClick={() => generateParcelPDF(p)}
-                        style={{
-                          padding: "6px 14px", background: "#2575fc", color: "white",
-                          border: "none", borderRadius: "6px", cursor: "pointer",
-                          fontSize: "0.82em", fontWeight: "600", whiteSpace: "nowrap",
-                        }}
-                      >📄 Raport PDF</button>
+                      <button onClick={() => generateParcelPDF(p)} style={{
+                        padding: "8px 20px", background: "#1a2035", color: "white",
+                        border: "none", borderRadius: "8px", cursor: "pointer",
+                        fontSize: "0.82em", fontWeight: "700", whiteSpace: "nowrap",
+                        letterSpacing: "0.4px", boxShadow: "0 2px 8px rgba(26,32,53,0.3)",
+                      }}>📄 Raport PDF</button>
                     </div>
 
-                    {/* — siatka danych — */}
-                    <div style={{
-                      padding: "12px 16px",
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(115px, 1fr))",
-                      gap: "8px",
-                    }}>
-                      {[
-                        { label: "Pow. działki", value: `${Math.round(area).toLocaleString()} m²`, icon: "📐" },
-                        { label: "Cena gruntu", value: `${price.toFixed(2)} zł/m²`, icon: "💰" },
-                        { label: "Wartość nier.", value: `${Math.round(value).toLocaleString()} PLN`, icon: "🏠" },
-                        { label: "Napięcie", value: voltage && voltage !== "—" ? ({"WN":"WN >110 kV","SN":"SN 1-110 kV","nN":"nN <1 kV"}[voltage] || voltage) : "—", icon: "⚡" },
-                        { label: "Dł. linii", value: lineLength > 0 ? `${Math.round(lineLength)} m` : "—", icon: "📏", hint: msrc },
-                        { label: "Szer. pasa", value: bandWidth > 0 ? `${bandWidth} m` : "—", icon: "↔️" },
-                        { label: "Pow. pasa", value: bandArea > 0 ? `${Math.round(bandArea).toLocaleString()} m²` : "—", icon: "🔲" },
-                      ].map((item, j) => (
-                        <div key={j} title={item.hint || ""} style={{
-                          background: "#f8f9fa", borderRadius: "7px", padding: "8px 10px",
-                          borderBottom: item.hint ? "2px dashed #f39c12" : undefined,
-                        }}>
-                          <div style={{ fontSize: "0.67em", color: "#999", marginBottom: "2px" }}>{item.icon} {item.label}</div>
-                          <div style={{ fontSize: "0.88em", fontWeight: "700", color: "#1a1a2e" }}>{item.value}</div>
-                          {item.hint && <div style={{ fontSize: "0.62em", color: "#f39c12", marginTop: "2px" }}>⚠ {item.hint}</div>}
+                    {/* ── BODY: dane (lewo) + mini mapa (prawo) ── */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 300px" }}>
+
+                      {/* Lewa kolumna: dane + Track A/B */}
+                      <div style={{ display: "flex", flexDirection: "column" }}>
+                        {/* Data grid — 7 boxów */}
+                        <div style={{ padding: "16px 20px 12px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: "10px", flex: 1 }}>
+                          {[
+                            { label: "Pow. działki",  value: `${Math.round(area).toLocaleString()} m²`, icon: "📐", color: "#3498db" },
+                            { label: "Cena gruntu",   value: `${price.toFixed(2)} zł/m²`,              icon: "💰", color: "#8e44ad" },
+                            { label: "Wartość nier.", value: `${Math.round(value).toLocaleString()} PLN`, icon: "🏠", color: "#2c3e50" },
+                            { label: "Napięcie",      value: VOLT[voltage] || (voltage !== "—" ? voltage : "—"), icon: "⚡", color: "#e74c3c" },
+                            { label: "Dł. linii",     value: lineLength > 0 ? `${Math.round(lineLength)} m` : "—", icon: "📏", color: "#16a085", hint: msrc },
+                            { label: "Szer. pasa",    value: bandWidth > 0 ? `${bandWidth} m` : "—",   icon: "↔️", color: "#27ae60" },
+                            { label: "Pow. pasa",     value: bandArea > 0 ? `${Math.round(bandArea).toLocaleString()} m²` : "—", icon: "🔲", color: "#f39c12" },
+                          ].map((item, j) => (
+                            <div key={j} title={item.hint || ""} style={{
+                              background: "#f8f9fc",
+                              borderRadius: "10px",
+                              padding: "10px 12px",
+                              border: "1px solid #eef0f5",
+                              borderLeft: `3px solid ${item.color}`,
+                              borderBottom: item.hint ? `3px dashed #f39c12` : `1px solid #eef0f5`,
+                            }}>
+                              <div style={{ fontSize: "0.62em", color: "#95a5a6", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.7px", fontWeight: "700" }}>{item.icon} {item.label}</div>
+                              <div style={{ fontSize: "0.92em", fontWeight: "800", color: "#1a2035" }}>{item.value}</div>
+                              {item.hint && <div style={{ fontSize: "0.58em", color: "#e67e22", marginTop: "2px" }}>⚠ {item.hint}</div>}
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
 
-                    {/* — Track A / B / RAZEM — clean dashboard style ── */}
-                    <div style={{ padding: "10px 16px", borderTop: "1px solid #f0f2f5", background: "#fafbfc", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0" }}>
-                      <div style={{ padding: "8px 10px", borderRight: "1px solid #f0f0f0" }}>
-                        <div style={{ fontSize: "0.62em", textTransform: "uppercase", letterSpacing: "0.8px", color: "#95a5a6", fontWeight: "700", marginBottom: "3px" }}>⚖️ Track A</div>
-                        <div style={{ fontSize: "0.96em", fontWeight: "800", color: "#2c3e50" }}>{Math.round(ta).toLocaleString()}<span style={{ fontSize: "0.65em", fontWeight: "400", color: "#95a5a6" }}> PLN</span></div>
+                        {/* Track A / B / RAZEM — full-width footer */}
+                        <div style={{ padding: "4px 20px 18px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
+                          {/* Track A */}
+                          <div style={{ background: "#eef4ff", borderRadius: "10px", padding: "12px 14px", border: "1px solid #dce8ff" }}>
+                            <div style={{ fontSize: "0.58em", textTransform: "uppercase", letterSpacing: "1.2px", color: "#3498db", fontWeight: "700", marginBottom: "4px" }}>⚖️ TRACK A</div>
+                            <div style={{ fontSize: "1.05em", fontWeight: "900", color: "#2c3e50" }}>{Math.round(ta).toLocaleString()}</div>
+                            <div style={{ fontSize: "0.6em", color: "#95a5a6", marginTop: "2px" }}>PLN · ścieżka sądowa</div>
+                          </div>
+                          {/* Track B */}
+                          <div style={{ background: "#fff8ee", borderRadius: "10px", padding: "12px 14px", border: "1px solid #fde8c0" }}>
+                            <div style={{ fontSize: "0.58em", textTransform: "uppercase", letterSpacing: "1.2px", color: "#f39c12", fontWeight: "700", marginBottom: "4px" }}>🤝 TRACK B</div>
+                            <div style={{ fontSize: "1.05em", fontWeight: "900", color: "#e67e22" }}>{Math.round(tb).toLocaleString()}</div>
+                            <div style={{ fontSize: "0.6em", color: "#95a5a6", marginTop: "2px" }}>PLN · negocjacje</div>
+                          </div>
+                          {/* RAZEM */}
+                          <div style={{
+                            background: collision ? "linear-gradient(135deg,#e74c3c,#c0392b)" : "linear-gradient(135deg,#27ae60,#1abc9c)",
+                            borderRadius: "10px", padding: "12px 14px",
+                          }}>
+                            <div style={{ fontSize: "0.58em", textTransform: "uppercase", letterSpacing: "1.2px", color: "rgba(255,255,255,0.75)", fontWeight: "700", marginBottom: "4px" }}>💰 RAZEM</div>
+                            <div style={{ fontSize: "1.2em", fontWeight: "900", color: "white" }}>{Math.round(razem).toLocaleString()}</div>
+                            <div style={{ fontSize: "0.6em", color: "rgba(255,255,255,0.7)", marginTop: "2px" }}>PLN łącznie (A+B)</div>
+                          </div>
+                        </div>
                       </div>
-                      <div style={{ padding: "8px 10px", borderRight: "1px solid #f0f0f0" }}>
-                        <div style={{ fontSize: "0.62em", textTransform: "uppercase", letterSpacing: "0.8px", color: "#95a5a6", fontWeight: "700", marginBottom: "3px" }}>🤝 Track B</div>
-                        <div style={{ fontSize: "0.96em", fontWeight: "800", color: "#e67e22" }}>{Math.round(tb).toLocaleString()}<span style={{ fontSize: "0.65em", fontWeight: "400", color: "#95a5a6" }}> PLN</span></div>
-                      </div>
-                      <div style={{ padding: "8px 10px" }}>
-                        <div style={{ fontSize: "0.62em", textTransform: "uppercase", letterSpacing: "0.8px", color: "#95a5a6", fontWeight: "700", marginBottom: "3px" }}>💰 Razem</div>
-                        <div style={{ fontSize: "1.05em", fontWeight: "900", color: collision ? "#e74c3c" : "#27ae60" }}>{Math.round(razem).toLocaleString()}<span style={{ fontSize: "0.65em", fontWeight: "400", color: "#95a5a6" }}> PLN</span></div>
+
+                      {/* Prawa kolumna: mini mapa */}
+                      <div style={{ borderLeft: "1px solid #eef0f3", minHeight: "270px" }}>
+                        <ParcelMiniMap geojson={geojson} centroid={centroid} collision={collision} />
                       </div>
                     </div>
                   </div>
