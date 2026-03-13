@@ -11,7 +11,7 @@
 
 /* ── HERO HEADER ─────────────────────────────────────────────────────── */
 .batch-header {
-  background: linear-gradient(135deg, rgba(106,76,147,0.9) 0%, rgba(26,26,46,0.95) 100%);
+  background: linear-gradient(135deg, rgba(92,61,143,0.9) 0%, rgba(74,111,165,0.85) 100%);
   border-bottom: 1px solid #e9ecef;
   padding: 32px 40px 28px;
   position: relative;
@@ -63,8 +63,8 @@
   ;
 }
 
-.batch-badge.green { border-color: rgba(138,201,38,0.5); background: rgba(138,201,38,0.15); color: #8ac926; }
-.batch-badge.purple { border-color: rgba(106,76,147,0.5); background: #f0ebff; color: #c9a8ff; }
+.batch-badge.green { border-color: rgba(138,201,38,0.5); background: rgba(138,201,38,0.15); color: #5a8a00; }
+.batch-badge.purple { border-color: rgba(106,76,147,0.5); background: #f0ebff; color: #5c3d8f; }
 
 /* ── MAIN CONTENT AREA ───────────────────────────────────────────────── */
 .batch-content {

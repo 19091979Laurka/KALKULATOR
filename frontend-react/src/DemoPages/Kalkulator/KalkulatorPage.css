@@ -279,7 +279,7 @@
 /* ── PAGE HEADER (Analiza działki hero) ───────────────────────────────────── */
 .ksws-page-hero {
   margin: -24px -32px 24px -32px; /* wychodzi poza padding ksws-main */
-  background: linear-gradient(135deg, #3d2660 0%, #5c3d8f 50%, #4a6fa5 100%);
+  background: linear-gradient(135deg, #5c3d8f 0%, #7b5ea7 50%, #4a6fa5 100%);
   padding: 28px 32px;
   color: white;
   position: relative;
@@ -708,7 +708,7 @@
 
 /* ── RESULT HEADER CARD ───────────────────────────────────────────────────── */
 .ksws-result-header {
-  background: linear-gradient(135deg, #3d2660 0%, #5c3d8f 60%, #4a6fa5 100%);
+  background: linear-gradient(135deg, #5c3d8f 0%, #7b5ea7 50%, #4a6fa5 100%);
   border-radius: var(--ksws-radius-md);
   padding: 20px 26px;
   display: flex;
@@ -1141,7 +1141,7 @@
 }
 
 .ksws-progress-seg-a {
-  background: #2c3e50;
+  background: #5c3d8f;
   height: 100%;
   transition: width 0.4s ease;
 }
@@ -2346,7 +2346,7 @@ body:has(.kalkulator-route) {
 /* ── PAGE HERO ENHANCED ───────────────────────────────────────────────────── */
 .ksws-page-hero {
   margin: -24px -32px 24px;
-  background: linear-gradient(135deg, #1a0a3d 0%, #3d2660 40%, #5c3d8f 70%, #4a6fa5 100%);
+  background: linear-gradient(135deg, #5c3d8f 0%, #7b5ea7 50%, #4a6fa5 100%);
   padding: 32px 36px 28px;
   color: #fff;
   position: relative;
@@ -2579,7 +2579,7 @@ body:has(.kalkulator-route) {
 
 /* ── HERO BANNER ──────────────────────────────────────────────────────────── */
 .ksws-analiza-hero {
-  background: linear-gradient(135deg, #1e0a3c 0%, #3d2660 40%, #1a5276 100%);
+  background: linear-gradient(135deg, #6a4c93 0%, #8b6db5 50%, #5a7fc5 100%);
   padding: 28px 32px 24px;
   margin: -24px -32px 28px;
   position: relative;
@@ -3518,7 +3518,7 @@ body:has(.kalkulator-route) {
 
 /* ── HISTORIA PAGE HERO ─────────────────────────────────────────────────── */
 .ksws-historia-hero {
-  background: linear-gradient(135deg, #1a1a2e 0%, #2c3e7a 50%, #6a4c93 100%);
+  background: linear-gradient(135deg, #5c3d8f 0%, #7b5ea7 50%, #4a6fa5 100%);
   margin: -24px -32px 28px;
   padding: 32px 36px 28px;
   position: relative;
@@ -4024,7 +4024,7 @@ body:has(.kalkulator-route) {
 .kalkulator-route .app-main,
 .kalkulator-route .app-main__outer,
 .kalkulator-route .app-main__inner {
-  background: transparent !important;
+  background: #f4f6fb !important;
   padding: 0 !important;
   margin: 0 !important;
 }
@@ -4060,4 +4060,374 @@ body:has(.kalkulator-route) {
 @keyframes pulse-yellow {
   0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0.5); }
   50%       { box-shadow: 0 0 0 5px rgba(251,191,36,0); }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — Hamburger Menu & Drawer
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Mobile top bar (hidden on desktop) ─────────────────────────── */
+.ksws-mobile-topbar {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  height: 56px;
+  background: linear-gradient(135deg, #5c3d8f 0%, #3d2b6e 100%);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1100;
+  box-shadow: 0 2px 12px rgba(92,61,143,0.4);
+}
+
+.ksws-mobile-topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.ksws-mobile-topbar-symbol {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #b8963e, #d4af5a);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 900;
+  color: #1a0a3e;
+  flex-shrink: 0;
+}
+
+.ksws-mobile-topbar-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+}
+
+.ksws-mobile-topbar-active {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+/* ── Hamburger button ────────────────────────────────────────────── */
+.ksws-hamburger {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  width: 40px;
+  height: 40px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 8px;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.ksws-hamburger:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+.ksws-hamburger-line {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: #ffffff;
+  border-radius: 2px;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  transform-origin: center;
+}
+
+/* Animate hamburger to X when open */
+.ksws-hamburger-line.open:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.ksws-hamburger-line.open:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0);
+}
+.ksws-hamburger-line.open:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* ── Mobile overlay (backdrop) ───────────────────────────────────── */
+.ksws-mobile-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1150;
+  backdrop-filter: blur(2px);
+  animation: fadeInOverlay 0.25s ease;
+}
+
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Sidebar close button (mobile only) ──────────────────────────── */
+.ksws-sidebar-close {
+  display: none;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 0.9rem;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  z-index: 10;
+}
+
+.ksws-sidebar-close:hover {
+  background: rgba(255,255,255,0.25);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   BREAKPOINTS
+   ══════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+
+  /* Show mobile topbar */
+  .ksws-mobile-topbar {
+    display: flex;
+  }
+
+  /* Show overlay when sidebar is open */
+  .ksws-mobile-overlay {
+    display: block;
+  }
+
+  /* Show close button inside sidebar */
+  .ksws-sidebar-close {
+    display: flex;
+  }
+
+  /* Layout: stack vertically, add top padding for topbar */
+  .ksws-layout {
+    flex-direction: column;
+    padding-top: 56px;
+    min-height: 100vh;
+  }
+
+  /* Sidebar becomes a fixed drawer */
+  .ksws-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    max-width: 85vw;
+    z-index: 1200;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+
+  /* Sidebar open state */
+  .ksws-sidebar--open {
+    transform: translateX(0);
+  }
+
+  /* Content takes full width */
+  .ksws-content {
+    width: 100%;
+    min-height: calc(100vh - 56px);
+    padding: 12px;
+    overflow-x: hidden;
+  }
+
+  /* Fix cp-root and wz-root on mobile */
+  .cp-root,
+  .wz-root {
+    flex-direction: column;
+    height: auto;
+    min-height: calc(100vh - 56px);
+  }
+
+  .cp-sidebar,
+  .wz-sidebar {
+    width: 100%;
+    max-width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #e9ecef;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .cp-main,
+  .wz-main {
+    flex: 1;
+    width: 100%;
+    padding: 16px;
+    overflow-x: hidden;
+  }
+
+  /* Fix batch and historia pages */
+  .batch-content,
+  .batch-page {
+    flex-direction: column;
+    padding: 12px;
+  }
+
+  .batch-left,
+  .batch-right {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Fix ksws-form-cols on mobile */
+  .ksws-form-cols {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .ksws-form-col {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Fix glass boxes padding on mobile */
+  .ksws-glass-box {
+    padding: 16px;
+  }
+
+  /* Fix inputs grid on mobile */
+  .ksws-inputs-grid-2,
+  .ksws-inputs-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  /* Fix hero section on mobile */
+  .batch-hero,
+  .hist-hero {
+    margin: -12px -12px 16px;
+    padding: 20px 16px;
+    border-radius: 0;
+  }
+
+  /* Fix result cards on mobile */
+  .ksws-results-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Fix map on mobile */
+  .ksws-map-wrap {
+    height: 250px;
+  }
+
+  /* Fix manual correction grid on mobile */
+  .ksws-manual-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .ksws-mobile-topbar-active {
+    display: none;
+  }
+
+  .cp-sidebar,
+  .wz-sidebar {
+    max-height: 220px;
+  }
+
+  .ksws-glass-box {
+    padding: 12px;
+  }
+
+  .ksws-box-header {
+    flex-direction: row;
+    gap: 10px;
+  }
+}
+
+/* ══ KOREKTA RĘCZNA — żółta gwiazdka ══════════════════════════════════════ */
+.ksws-btn-manual-star {
+  display: inline-block;
+  font-size: 1.1rem;
+  margin-right: 6px;
+  filter: drop-shadow(0 0 4px rgba(255,193,7,0.8));
+  animation: starPulse 2s ease-in-out infinite;
+}
+@keyframes starPulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 4px rgba(255,193,7,0.6)); }
+  50% { transform: scale(1.2); filter: drop-shadow(0 0 8px rgba(255,193,7,1)); }
+}
+.ksws-manual-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, #ffc107, #ff9800);
+  color: #1a1a1a;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.05em;
+  box-shadow: 0 2px 8px rgba(255,193,7,0.5);
+  animation: badgePulse 2s ease-in-out infinite;
+}
+@keyframes badgePulse {
+  0%, 100% { box-shadow: 0 2px 8px rgba(255,193,7,0.5); }
+  50% { box-shadow: 0 4px 16px rgba(255,193,7,0.9); }
+}
+.ksws-btn-manual-active {
+  background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%) !important;
+  color: #1a1a1a !important;
+  border-color: #ffc107 !important;
+  box-shadow: 0 4px 16px rgba(255,193,7,0.4) !important;
+  font-weight: 700 !important;
+}
+.ksws-btn-manual-active:hover {
+  background: linear-gradient(135deg, #ffca28 0%, #ffa726 100%) !important;
+  box-shadow: 0 6px 24px rgba(255,193,7,0.6) !important;
+}
+/* ══ KOREKTA RĘCZNA — sekcja accordion ════════════════════════════════════ */
+.ksws-manual-section {
+  background: linear-gradient(135deg, #fffbea 0%, #fff8e1 100%);
+  border: 2px solid #ffc107;
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin: 16px 0;
+  box-shadow: 0 4px 20px rgba(255,193,7,0.15);
+  position: relative;
+}
+.ksws-manual-section::before {
+  content: '⭐';
+  position: absolute;
+  top: -12px;
+  left: 20px;
+  background: #ffc107;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(255,193,7,0.5);
 }

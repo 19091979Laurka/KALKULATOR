@@ -1877,10 +1877,24 @@ export default function KalkulatorPage() {
   const [activeTab, setActiveTab] = useState("map2d");
   const [activeNav, setActiveNav] = useState("analiza");
   const [showManual, setShowManual] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
+
+  // ── Mobile menu: ESC key + body scroll lock ──────────────────────────────────
+  React.useEffect(() => {
+    const handleKey = (e) => { if (e.key === "Escape") setMobileMenuOpen(false); };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, []);
+
+  React.useEffect(() => {
+    document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [mobileMenuOpen]);
 
   // ── Nawigacja sidebaru — wewnętrzne zakładki lub router ──────────────────────
   const handleSidebarNav = (id) => {
+    setMobileMenuOpen(false);
     if (id === "klienci") { navigate("/kalkulator/klienci"); return; }
     if (id === "wzory")   { navigate("/kalkulator/wzory");   return; }
     if (id === "home")    { navigate("/kalkulator/home");    return; }
@@ -2138,11 +2152,56 @@ export default function KalkulatorPage() {
     manualPrice || manualLandType || manualInfraDetect || manualVoltage || manualLineLength;
 
   // ── RENDER ───────────────────────────────────────────────────────────────────
+  const navLabels = {
+    analiza: "Analiza działki",
+    historia: "Historia działek",
+    batch: "Oferty hurtowe",
+    klienci: "Klienci",
+    wzory: "Wzory dokumentów",
+    home: "Strona główna",
+  };
+  const navIcons = { analiza: "⚡", historia: "📋", batch: "📊", klienci: "👥", wzory: "📝", home: "🏠" };
+
   return (
     <div className="ksws-layout">
 
+      {/* ════════════ MOBILE TOP BAR ════════════ */}
+      <div className="ksws-mobile-topbar">
+        <button
+          className="ksws-hamburger"
+          onClick={() => setMobileMenuOpen((v) => !v)}
+          aria-label="Otwórz menu"
+          aria-expanded={mobileMenuOpen}
+        >
+          <span className={`ksws-hamburger-line${mobileMenuOpen ? " open" : ""}`} />
+          <span className={`ksws-hamburger-line${mobileMenuOpen ? " open" : ""}`} />
+          <span className={`ksws-hamburger-line${mobileMenuOpen ? " open" : ""}`} />
+        </button>
+        <div className="ksws-mobile-topbar-logo">
+          <span className="ksws-mobile-topbar-symbol">§</span>
+          <span className="ksws-mobile-topbar-title">SZUWARA KSWS</span>
+        </div>
+        <div className="ksws-mobile-topbar-active">
+          {navIcons[activeNav] || "⚡"} {navLabels[activeNav] || "Analiza"}
+        </div>
+      </div>
+
+      {/* ════════════ MOBILE OVERLAY ════════════ */}
+      {mobileMenuOpen && (
+        <div
+          className="ksws-mobile-overlay"
+          onClick={() => setMobileMenuOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* ════════════ SIDEBAR ════════════ */}
-      <aside className="ksws-sidebar">
+      <aside className={`ksws-sidebar${mobileMenuOpen ? " ksws-sidebar--open" : ""}`}>
+        <button
+          className="ksws-sidebar-close"
+          onClick={() => setMobileMenuOpen(false)}
+          aria-label="Zamknij menu"
+        >✕</button>
         <div className="ksws-sidebar-logo">
           {/* Szuwara § symbol */}
           <div className="ksws-sidebar-logo-symbol">§</div>

@@ -11,7 +11,7 @@
 
 /* ── HERO HEADER ─────────────────────────────────────────────────────── */
 .history-header {
-  background: linear-gradient(135deg, rgba(106,76,147,0.9) 0%, rgba(26,26,46,0.95) 100%);
+  background: linear-gradient(135deg, rgba(92,61,143,0.9) 0%, rgba(74,111,165,0.85) 100%);
   border-bottom: 1px solid #e9ecef;
   padding: 32px 40px 28px;
   position: relative;
@@ -134,7 +134,7 @@
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: linear-gradient(135deg, rgba(106,76,147,0.8), rgba(169,16,121,0.6));
+  background: linear-gradient(135deg, #5c3d8f, #a9107a);
   color: #212529;
   font-weight: 800;
   font-size: 1em;
@@ -183,7 +183,7 @@
 }
 
 .view-button {
-  background: linear-gradient(135deg, rgba(106,76,147,0.8), rgba(169,16,121,0.7)) !important;
+  background: linear-gradient(135deg, #5c3d8f, #a9107a) !important;
   border: 1px solid rgba(106,76,147,0.5) !important;
   padding: 10px 22px !important;
   font-size: 0.85em !important;
