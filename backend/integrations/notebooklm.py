@@ -2,195 +2,207 @@
 NotebookLM Enterprise API Integration
 ======================================
 Endpoint base: https://discoveryengine.googleapis.com/v1alpha/
-Auth: Google Service Account (JSON key) with scope:
-  - https://www.googleapis.com/auth/cloud-platform
-  - https://www.googleapis.com/auth/discoveryengine.readwrite
+Auth: Google OAuth2 User Token (refresh_token flow)
 
 Required env vars:
-  NOTEBOOKLM_PROJECT_ID   — Google Cloud project ID (e.g. "kalkulator-488708")
-  NOTEBOOKLM_LOCATION     — location (e.g. "global" or "us-central1")
-  GOOGLE_SA_KEY_PATH      — path to service account JSON key file
-                            OR
-  GOOGLE_SA_KEY_JSON      — service account JSON key as string (for env-based secrets)
+  GOOGLE_OAUTH_REFRESH_TOKEN  — OAuth2 refresh token for the user account
+  GOOGLE_OAUTH_CLIENT_ID      — OAuth2 Desktop App client ID
+  GOOGLE_OAUTH_CLIENT_SECRET  — OAuth2 Desktop App client secret
+  GOOGLE_PROJECT_NUMBER       — Google Cloud project number (e.g. "384217730250")
+  GOOGLE_PROJECT_ID           — Google Cloud project ID (e.g. "kalkulator-488708")
 
-IAM roles required on the project:
-  - roles/discoveryengine.notebookUser  (Cloud Notebook User)
+Optional:
+  NOTEBOOKLM_LOCATION         — location (default: "global")
 """
 
 import os
 import json
+import time
 import logging
+import urllib.request
+import urllib.parse
+import urllib.error
 from typing import Optional, List
-
-import requests
 
 logger = logging.getLogger(__name__)
 
 DISCOVERY_ENGINE_BASE = "https://discoveryengine.googleapis.com/v1alpha"
 
-# ─── Auth ───────────────────────────────────────────────────────────────────
+# ─── Token cache ─────────────────────────────────────────────────────────────
+_token_cache: dict = {"access_token": None, "expires_at": 0.0}
+
+
+def _load_credentials() -> dict:
+    """Load OAuth2 credentials from env vars or fallback file."""
+    refresh_token = os.environ.get("GOOGLE_OAUTH_REFRESH_TOKEN")
+    client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
+
+    if refresh_token and client_id and client_secret:
+        return {
+            "refresh_token": refresh_token,
+            "client_id": client_id,
+            "client_secret": client_secret,
+        }
+
+    # Fallback: load from secrets file
+    secrets_file = os.path.join(os.path.dirname(__file__), "../secrets/oauth_tokens.json")
+    if os.path.exists(secrets_file):
+        with open(secrets_file) as f:
+            data = json.load(f)
+        return {
+            "refresh_token": data.get("refresh_token"),
+            "client_id": data.get("client_id"),
+            "client_secret": data.get("client_secret"),
+        }
+
+    raise RuntimeError(
+        "Google OAuth2 credentials not configured. "
+        "Set GOOGLE_OAUTH_REFRESH_TOKEN, GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET "
+        "or place oauth_tokens.json in backend/secrets/."
+    )
+
 
 def _get_access_token() -> str:
-    """Obtain a short-lived OAuth2 access token from the service account credentials."""
-    try:
-        from google.oauth2 import service_account
-        import google.auth.transport.requests as google_requests
+    """Get a valid access token, refreshing if necessary."""
+    now = time.time()
+    if _token_cache["access_token"] and _token_cache["expires_at"] > now + 60:
+        return _token_cache["access_token"]
 
-        scopes = [
-            "https://www.googleapis.com/auth/cloud-platform",
-            "https://www.googleapis.com/auth/discoveryengine.readwrite",
-        ]
+    creds = _load_credentials()
+    data = urllib.parse.urlencode({
+        "refresh_token": creds["refresh_token"],
+        "client_id": creds["client_id"],
+        "client_secret": creds["client_secret"],
+        "grant_type": "refresh_token",
+    }).encode()
 
-        sa_key_path = os.environ.get("GOOGLE_SA_KEY_PATH")
-        sa_key_json = os.environ.get("GOOGLE_SA_KEY_JSON")
+    req = urllib.request.Request(
+        "https://oauth2.googleapis.com/token",
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    with urllib.request.urlopen(req) as resp:
+        token_data = json.loads(resp.read())
 
-        if sa_key_json:
-            info = json.loads(sa_key_json)
-            creds = service_account.Credentials.from_service_account_info(info, scopes=scopes)
-        elif sa_key_path and os.path.exists(sa_key_path):
-            creds = service_account.Credentials.from_service_account_file(sa_key_path, scopes=scopes)
-        else:
-            raise RuntimeError(
-                "Service account credentials not configured. "
-                "Set GOOGLE_SA_KEY_PATH or GOOGLE_SA_KEY_JSON environment variable."
-            )
-
-        request = google_requests.Request()
-        creds.refresh(request)
-        return creds.token
-
-    except ImportError:
-        raise RuntimeError("google-auth library not installed. Run: pip install google-auth")
+    _token_cache["access_token"] = token_data["access_token"]
+    _token_cache["expires_at"] = now + token_data.get("expires_in", 3600)
+    return _token_cache["access_token"]
 
 
 def _headers() -> dict:
-    token = _get_access_token()
+    project_id = os.environ.get("GOOGLE_PROJECT_ID", "kalkulator-488708")
     return {
-        "Authorization": f"Bearer {token}",
+        "Authorization": f"Bearer {_get_access_token()}",
         "Content-Type": "application/json",
+        "x-goog-user-project": project_id,
     }
 
 
 def _parent() -> str:
-    project = os.environ.get("NOTEBOOKLM_PROJECT_ID", "")
+    project_number = os.environ.get("GOOGLE_PROJECT_NUMBER", "384217730250")
     location = os.environ.get("NOTEBOOKLM_LOCATION", "global")
-    if not project:
-        raise RuntimeError("NOTEBOOKLM_PROJECT_ID environment variable not set.")
-    return f"projects/{project}/locations/{location}"
+    return f"projects/{project_number}/locations/{location}"
+
+
+def _api(method: str, path: str, body: dict = None) -> dict:
+    """Make an authenticated API request."""
+    url = f"{DISCOVERY_ENGINE_BASE}/{_parent()}/{path}"
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(url, data=data, method=method, headers=_headers())
+    try:
+        with urllib.request.urlopen(req) as resp:
+            content = resp.read()
+            return json.loads(content) if content else {}
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode()
+        try:
+            msg = json.loads(err_body).get("error", {}).get("message", err_body)
+        except Exception:
+            msg = err_body
+        raise Exception(f"NotebookLM API {e.code}: {msg}")
 
 
 # ─── Notebooks ──────────────────────────────────────────────────────────────
 
 def create_notebook(title: str) -> dict:
-    """
-    Create a new notebook.
-    POST /v1alpha/{parent}/notebooks
-    Returns the created Notebook resource.
-    """
-    url = f"{DISCOVERY_ENGINE_BASE}/{_parent()}/notebooks"
-    payload = {"title": title}
-    resp = requests.post(url, headers=_headers(), json=payload, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
+    """Create a new notebook. Returns notebook resource with URL."""
+    result = _api("POST", "notebooks", {"title": title})
+    nb_id = result.get("notebookId")
+    project_number = os.environ.get("GOOGLE_PROJECT_NUMBER", "384217730250")
+    return {
+        "notebookId": nb_id,
+        "title": result.get("title"),
+        "name": result.get("name"),
+        "url": f"https://notebooklm.cloud.google.com/global/notebook/{nb_id}?project={project_number}",
+    }
 
 
 def get_notebook(notebook_id: str) -> dict:
-    """
-    Retrieve a notebook by its ID.
-    GET /v1alpha/{parent}/notebooks/{notebookId}
-    """
-    url = f"{DISCOVERY_ENGINE_BASE}/{_parent()}/notebooks/{notebook_id}"
-    resp = requests.get(url, headers=_headers(), timeout=30)
-    resp.raise_for_status()
-    return resp.json()
+    """Retrieve a notebook by its ID."""
+    result = _api("GET", f"notebooks/{notebook_id}")
+    nb_id = result.get("notebookId")
+    project_number = os.environ.get("GOOGLE_PROJECT_NUMBER", "384217730250")
+    return {
+        "notebookId": nb_id,
+        "title": result.get("title"),
+        "name": result.get("name"),
+        "url": f"https://notebooklm.cloud.google.com/global/notebook/{nb_id}?project={project_number}",
+    }
 
 
 def list_notebooks(page_size: int = 50) -> dict:
-    """
-    List recently viewed notebooks.
-    GET /v1alpha/{parent}/notebooks:listRecentlyViewed
-    """
-    url = f"{DISCOVERY_ENGINE_BASE}/{_parent()}/notebooks:listRecentlyViewed"
-    resp = requests.get(url, headers=_headers(), params={"pageSize": page_size}, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
+    """List recently viewed notebooks."""
+    result = _api("GET", f"notebooks:listRecentlyViewed?pageSize={page_size}")
+    project_number = os.environ.get("GOOGLE_PROJECT_NUMBER", "384217730250")
+    notebooks = result.get("notebooks", [])
+    return {
+        "notebooks": [
+            {
+                "notebookId": nb.get("notebookId"),
+                "title": nb.get("title"),
+                "url": f"https://notebooklm.cloud.google.com/global/notebook/{nb.get('notebookId')}?project={project_number}",
+            }
+            for nb in notebooks
+        ]
+    }
 
 
 def delete_notebook(notebook_id: str) -> dict:
-    """
-    Delete a notebook.
-    POST /v1alpha/{parent}/notebooks:batchDelete
-    """
-    url = f"{DISCOVERY_ENGINE_BASE}/{_parent()}/notebooks:batchDelete"
-    payload = {"names": [f"{_parent()}/notebooks/{notebook_id}"]}
-    resp = requests.post(url, headers=_headers(), json=payload, timeout=30)
-    resp.raise_for_status()
-    return resp.json() if resp.content else {}
+    """Delete a notebook."""
+    parent = _parent()
+    result = _api("POST", "notebooks:batchDelete", {"names": [f"{parent}/notebooks/{notebook_id}"]})
+    return result if result else {"deleted": True}
 
 
 # ─── Sources ────────────────────────────────────────────────────────────────
 
 def add_text_source(notebook_id: str, title: str, content: str) -> dict:
-    """
-    Add a plain-text source to a notebook.
-    POST /v1alpha/{parent}/notebooks/{notebookId}/sources:batchCreate
-    """
-    url = f"{DISCOVERY_ENGINE_BASE}/{_parent()}/notebooks/{notebook_id}/sources:batchCreate"
+    """Add a plain-text source to a notebook."""
     payload = {
-        "userContents": [
+        "requests": [
             {
-                "textContent": {
-                    "sourceName": title,
-                    "content": content,
+                "source": {
+                    "displayName": title,
+                    "inlineSource": {
+                        "content": content,
+                        "mimeType": "text/plain",
+                    },
                 }
             }
         ]
     }
-    resp = requests.post(url, headers=_headers(), json=payload, timeout=60)
-    resp.raise_for_status()
-    return resp.json()
+    return _api("POST", f"notebooks/{notebook_id}/sources:batchCreate", payload)
 
 
 def add_url_source(notebook_id: str, url_to_add: str, source_name: str = "") -> dict:
-    """
-    Add a web URL source to a notebook.
-    """
-    url = f"{DISCOVERY_ENGINE_BASE}/{_parent()}/notebooks/{notebook_id}/sources:batchCreate"
-    payload = {
-        "userContents": [
-            {
-                "webContent": {
-                    "url": url_to_add,
-                    "sourceName": source_name or url_to_add,
-                }
-            }
-        ]
-    }
-    resp = requests.post(url, headers=_headers(), json=payload, timeout=60)
-    resp.raise_for_status()
-    return resp.json()
-
-
-def add_google_drive_source(notebook_id: str, document_id: str, mime_type: str, source_name: str = "") -> dict:
-    """
-    Add a Google Drive document as a source.
-    mime_type: e.g. "application/vnd.google-apps.document" for Docs
-    """
-    url = f"{DISCOVERY_ENGINE_BASE}/{_parent()}/notebooks/{notebook_id}/sources:batchCreate"
-    payload = {
-        "userContents": [
-            {
-                "googleDriveContent": {
-                    "documentId": document_id,
-                    "mimeType": mime_type,
-                    "sourceName": source_name,
-                }
-            }
-        ]
-    }
-    resp = requests.post(url, headers=_headers(), json=payload, timeout=60)
-    resp.raise_for_status()
-    return resp.json()
+    """Add a web URL source to a notebook."""
+    source = {"urlSource": {"uri": url_to_add}}
+    if source_name:
+        source["displayName"] = source_name
+    payload = {"requests": [{"source": source}]}
+    return _api("POST", f"notebooks/{notebook_id}/sources:batchCreate", payload)
 
 
 # ─── Audio Overview (Podcast) ───────────────────────────────────────────────
@@ -203,12 +215,9 @@ def generate_audio_overview(
 ) -> dict:
     """
     Trigger generation of an audio overview (podcast) for a notebook.
-    POST /v1alpha/{parent}/notebooks/{notebookId}/audioOverviews
-    Returns an AudioOverview resource with status AUDIO_OVERVIEW_STATUS_IN_PROGRESS.
-    Poll get_audio_overview() until status == AUDIO_OVERVIEW_STATUS_COMPLETE.
+    Returns an AudioOverview resource. Poll get_audio_overview() for status.
     """
-    url = f"{DISCOVERY_ENGINE_BASE}/{_parent()}/notebooks/{notebook_id}/audioOverviews"
-    generation_options = {
+    generation_options: dict = {
         "episodeFocus": episode_focus or "Podsumuj kluczowe fakty prawne i finansowe tej sprawy.",
         "languageCode": language_code,
     }
@@ -219,26 +228,47 @@ def generate_audio_overview(
         "generationOptions": generation_options,
         "languageCode": language_code,
     }
-    resp = requests.post(url, headers=_headers(), json=payload, timeout=60)
-    resp.raise_for_status()
-    return resp.json()
+    return _api("POST", f"notebooks/{notebook_id}/audioOverviews", payload)
 
 
 def get_audio_overview(notebook_id: str, audio_overview_id: str) -> dict:
-    """
-    Get the status and download URL of an audio overview.
-    GET /v1alpha/{parent}/notebooks/{notebookId}/audioOverviews/{audioOverviewId}
-    """
-    url = f"{DISCOVERY_ENGINE_BASE}/{_parent()}/notebooks/{notebook_id}/audioOverviews/{audio_overview_id}"
-    resp = requests.get(url, headers=_headers(), timeout=30)
-    resp.raise_for_status()
-    return resp.json()
+    """Get the status and download URL of an audio overview."""
+    return _api("GET", f"notebooks/{notebook_id}/audioOverviews/{audio_overview_id}")
 
 
-# ─── Notebook URL builder ────────────────────────────────────────────────────
+# ─── Utility ─────────────────────────────────────────────────────────────────
 
 def notebook_url(notebook_id: str) -> str:
     """Build the browser URL for a notebook."""
-    project = os.environ.get("NOTEBOOKLM_PROJECT_ID", "")
+    project_number = os.environ.get("GOOGLE_PROJECT_NUMBER", "384217730250")
     location = os.environ.get("NOTEBOOKLM_LOCATION", "global")
-    return f"https://notebooklm.cloud.google.com/{location}/notebook/{notebook_id}?project={project}"
+    return f"https://notebooklm.cloud.google.com/{location}/notebook/{notebook_id}?project={project_number}"
+
+
+def is_configured() -> bool:
+    """Check if the NotebookLM integration is properly configured."""
+    try:
+        _get_access_token()
+        return True
+    except Exception:
+        return False
+
+
+def get_status() -> dict:
+    """Get the configuration status of the integration."""
+    has_env = bool(
+        os.environ.get("GOOGLE_OAUTH_REFRESH_TOKEN")
+        and os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
+        and os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
+    )
+    secrets_file = os.path.join(os.path.dirname(__file__), "../secrets/oauth_tokens.json")
+    has_file = os.path.exists(secrets_file)
+    configured = has_env or has_file
+
+    return {
+        "configured": configured,
+        "auth_method": "oauth2_user_token",
+        "project_id": os.environ.get("GOOGLE_PROJECT_ID", "kalkulator-488708"),
+        "project_number": os.environ.get("GOOGLE_PROJECT_NUMBER", "384217730250"),
+        "credentials_source": "env_vars" if has_env else ("file" if has_file else "none"),
+    }

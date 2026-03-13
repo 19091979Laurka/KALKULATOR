@@ -756,7 +756,20 @@ class NbGetAudioRequest(BaseModel):
 
 
 def _nb_available() -> bool:
-    """Check if NotebookLM credentials are configured."""
+    """Check if NotebookLM credentials are configured (OAuth2 or Service Account)."""
+    # New: OAuth2 user token method
+    has_oauth = bool(
+        os.environ.get("GOOGLE_OAUTH_REFRESH_TOKEN")
+        and os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
+        and os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
+    )
+    if has_oauth:
+        return True
+    # Fallback: check for oauth_tokens.json file
+    secrets_file = Path(__file__).parent / "secrets" / "oauth_tokens.json"
+    if secrets_file.exists():
+        return True
+    # Legacy: Service Account method
     has_project = bool(os.environ.get("NOTEBOOKLM_PROJECT_ID"))
     has_key = bool(os.environ.get("GOOGLE_SA_KEY_PATH") or os.environ.get("GOOGLE_SA_KEY_JSON"))
     return has_project and has_key
@@ -766,13 +779,15 @@ def _nb_available() -> bool:
 async def notebooklm_status():
     """Check if NotebookLM API is configured and available."""
     configured = _nb_available()
-    project = os.environ.get("NOTEBOOKLM_PROJECT_ID", "")
+    project = os.environ.get("GOOGLE_PROJECT_ID", os.environ.get("NOTEBOOKLM_PROJECT_ID", ""))
     location = os.environ.get("NOTEBOOKLM_LOCATION", "global")
+    auth_method = "oauth2" if (os.environ.get("GOOGLE_OAUTH_REFRESH_TOKEN") or (Path(__file__).parent / "secrets" / "oauth_tokens.json").exists()) else "service_account"
     return {
         "configured": configured,
         "project_id": project if configured else None,
         "location": location if configured else None,
-        "message": "NotebookLM API gotowe" if configured else "Brak konfiguracji — ustaw NOTEBOOKLM_PROJECT_ID i GOOGLE_SA_KEY_PATH/GOOGLE_SA_KEY_JSON",
+        "auth_method": auth_method if configured else None,
+        "message": "NotebookLM API gotowe" if configured else "Brak konfiguracji — ustaw GOOGLE_OAUTH_REFRESH_TOKEN lub NOTEBOOKLM_PROJECT_ID + GOOGLE_SA_KEY_PATH",
     }
 
 

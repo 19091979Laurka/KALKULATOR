@@ -17,6 +17,11 @@ frontend-react/dist
 .env.*
 !.env.example
 
+# Google OAuth & Service Account secrets — NIGDY nie commituj!
+backend/secrets/
+backend/*_service_account.json
+backend/*.json
+
 # Dane lokalne (batch history, snapshoty)
 data/history/
 data/cache/
