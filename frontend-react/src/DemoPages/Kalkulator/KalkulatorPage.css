@@ -26,7 +26,7 @@
   /* Layout */
   --ksws-sidebar-bg:    var(--purple);
   --ksws-sidebar-width: 260px;
-  --ksws-bg:            #1a1a2e;
+  --ksws-bg:            #f4f6fb;
   --ksws-white:         #ffffff;
   --ksws-card-bg:       #ffffff;
   --ksws-border:        #e9ecef;
@@ -66,10 +66,10 @@
 .ksws-layout {
   display: flex;
   min-height: 100vh;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
+  background: #f4f6fb;
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
-  color: rgba(255,255,255,0.85);
+  color: #212529;
 }
 
 /* ── SIDEBAR ──────────────────────────────────────────────────────────────── */
@@ -94,7 +94,7 @@
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
+  background: #f4f6fb;
 }
 
 /* ── SIDEBAR INNER ────────────────────────────────────────────────────────── */
@@ -339,7 +339,7 @@
   border-radius: 12px;
   font-size: 0.72rem;
   font-weight: 600;
-  color: rgba(255,255,255,0.85);
+  color: #212529;
 }
 
 /* ── MAIN SCROLL AREA ─────────────────────────────────────────────────────── */
@@ -779,7 +779,7 @@
 
 .ksws-badge-outline {
   background: rgba(255,255,255,0.12);
-  color: rgba(255,255,255,0.85);
+  color: #212529;
   border: 1px solid rgba(255,255,255,0.25);
 }
 
@@ -1560,12 +1560,12 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%) !important;
+  background: #f4f6fb !important;
 }
 
 /* Force dark background on body when in kalkulator route */
 body:has(.kalkulator-route) {
-  background: #1a1a2e !important;
+  background: #f4f6fb !important;
 }
 
 .kalkulator-route,
@@ -2652,7 +2652,7 @@ body:has(.kalkulator-route) {
   border-radius: 20px;
   font-size: 0.72rem;
   font-weight: 600;
-  color: rgba(255,255,255,0.85);
+  color: #212529;
   backdrop-filter: blur(4px);
 }
 
@@ -3739,7 +3739,7 @@ body:has(.kalkulator-route) {
 
 /* ── KLIENCI — DARK THEME OVERRIDES ────────────────────────────────────── */
 .cp-root {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%) !important;
+  background: #f4f6fb !important;
 }
 .cp-sidebar {
   background: rgba(255,255,255,0.04) !important;
@@ -3811,10 +3811,10 @@ body:has(.kalkulator-route) {
 
 /* ── KLIENCI — MAIN PANEL ─────────────────────────────────────────────── */
 .cp-main {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%) !important;
+  background: #f4f6fb !important;
 }
 .cp-detail-header {
-  background: linear-gradient(135deg, #1a1a2e 0%, #2c3e7a 60%, #6a4c93 100%) !important;
+  background: linear-gradient(135deg, #5c3d8f 0%, #7b52b8 60%, #4a6fa5 100%) !important;
   border-radius: 20px !important;
   padding: 28px 32px !important;
   margin-bottom: 24px !important;
@@ -3831,12 +3831,12 @@ body:has(.kalkulator-route) {
   font-size: 0.85rem !important;
 }
 .cp-detail-section {
-  background: rgba(255,255,255,0.05) !important;
+  background: #ffffff !important;
   border-radius: 16px !important;
   padding: 20px 24px !important;
   margin-bottom: 16px !important;
-  border: 1px solid rgba(255,255,255,0.1) !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
+  border: 1px solid #e9ecef !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
 }
 .cp-detail-section-title {
   font-size: 0.78rem !important;
@@ -4018,7 +4018,7 @@ body:has(.kalkulator-route) {
 .kalkulator-route.app-container,
 .kalkulator-route.app-theme-white.app-container,
 .kalkulator-route.app-theme-gray.app-container {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%) !important;
+  background: #f4f6fb !important;
 }
 
 .kalkulator-route .app-main,
@@ -4027,4 +4027,37 @@ body:has(.kalkulator-route) {
   background: transparent !important;
   padding: 0 !important;
   margin: 0 !important;
+}
+
+/* ── KOREKTA RĘCZNA — YELLOW STAR INDICATOR ─────────────────────────────── */
+.ksws-btn-manual-active {
+  background: linear-gradient(135deg, #fef08a, #fde047) !important;
+  color: #713f12 !important;
+  border-color: #fbbf24 !important;
+  box-shadow: 0 2px 10px rgba(251,191,36,0.4) !important;
+  font-weight: 700 !important;
+}
+.ksws-btn-manual-active:hover {
+  background: linear-gradient(135deg, #fde047, #facc15) !important;
+  box-shadow: 0 4px 16px rgba(251,191,36,0.5) !important;
+}
+
+.ksws-manual-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: #fbbf24;
+  color: #713f12;
+  border-radius: 10px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: 6px;
+  animation: pulse-yellow 2s infinite;
+}
+
+@keyframes pulse-yellow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0.5); }
+  50%       { box-shadow: 0 0 0 5px rgba(251,191,36,0); }
 }

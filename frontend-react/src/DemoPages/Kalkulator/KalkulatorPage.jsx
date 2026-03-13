@@ -2641,10 +2641,12 @@ export default function KalkulatorPage() {
                     <div className="ksws-btn-secondary-row">
                       <button
                         type="button"
-                        className="ksws-btn-outline"
+                        className={`ksws-btn-outline${hasManualActive ? " ksws-btn-manual-active" : ""}`}
                         onClick={() => setShowManual((v) => !v)}
+                        title={hasManualActive ? "Korekta ręczna jest aktywna — nadpisuje dane API" : "Korekta ręczna"}
                       >
-                        ⚙️ {showManual ? "Ukryj korektę ręczną" : "Korekta ręczna"}
+                        {hasManualActive ? "⭐" : "⚙️"} {showManual ? "Ukryj korektę ręczną" : "Korekta ręczna"}
+                        {hasManualActive && <span className="ksws-manual-badge">★ AKTYWNA</span>}
                       </button>
                       <button
                         type="button"
@@ -2798,9 +2800,12 @@ export default function KalkulatorPage() {
                   {showManual && (
                     <div className="ksws-glass-box">
                       <div className="ksws-box-header">
-                        <div className="ksws-box-icon purple">⚙️</div>
+                        <div className="ksws-box-icon" style={{background:'#fef9c3',fontSize:'1.3rem'}}>⭐</div>
                         <div>
-                          <div className="ksws-box-title">Korekta ręczna</div>
+                          <div className="ksws-box-title" style={{display:'flex',alignItems:'center',gap:8}}>
+                            Korekta ręczna
+                            {hasManualActive && <span className="ksws-manual-badge">★ AKTYWNA</span>}
+                          </div>
                           <div className="ksws-box-subtitle">Nadpisz dane API gdy są błędne</div>
                         </div>
                       </div>
