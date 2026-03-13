@@ -629,6 +629,8 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
                 size="sm"
                 onClick={() => loadBatchDetails(item.batch_id)}
                 className="view-button"
+                aria-label={`Otwórz raport: ${item.total} działek, ${item.file_name || item.batch_id}, ${new Date(item.timestamp).toLocaleDateString("pl-PL")}`}
+                title={`Otwórz raport z mapami (${item.total} działek)`}
               >
                 📊 Otwórz raport
               </Button>

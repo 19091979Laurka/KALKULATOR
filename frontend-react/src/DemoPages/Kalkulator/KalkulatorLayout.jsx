@@ -25,11 +25,12 @@ const KalkulatorLayout = ({ children }) => {
 
   const activeNav = getActiveNav();
 
-  // Główne zakładki kalkulatora
+  // Główne zakładki (Layout = strona główna, batch, historia z backendu)
+  // Batch CSV = wgranie pliku + wyniki | Historia zbiorcza = raporty batch z mapami (backend)
   const mainNavItems = [
-    { id: "analiza",  label: "Analiza działki",   icon: "⚡",  path: "/kalkulator/analiza" },
-    { id: "historia", label: "Historia analiz",   icon: "📋", path: "/kalkulator/historia" },
-    { id: "batch",    label: "Batch CSV",          icon: "📊", path: "/kalkulator/batch" },
+    { id: "analiza",  label: "Analiza działki",   icon: "⚡",  path: "/kalkulator/analiza", title: "Pojedyncza działka · formularz i mapa" },
+    { id: "batch",    label: "Batch CSV",         icon: "📊", path: "/kalkulator/batch",   title: "Analiza zbiorcza · wgraj CSV" },
+    { id: "historia", label: "Historia zbiorcza",  icon: "📋", path: "/kalkulator/historia", title: "Raporty batch · otwórz raport z mapami" },
   ];
 
   // Zakładki zarządzania
@@ -60,6 +61,7 @@ const KalkulatorLayout = ({ children }) => {
               className={`ksws-sidebar-nav-item${activeNav === item.id ? " active" : ""}`}
               onClick={() => navigate(item.path)}
               style={{ cursor: "pointer" }}
+              title={item.title}
             >
               <span className="ksws-sidebar-nav-icon">{item.icon}</span>
               {item.label}

@@ -8,14 +8,19 @@ import ClientsPage from "./ClientsPage.jsx";
 import WzoryPage from "./WzoryPage.jsx";
 import KalkulatorLayout from "./KalkulatorLayout.jsx";
 
+/**
+ * Logika zakładek:
+ * - Ze strony głównej (Layout): Batch CSV = wgranie pliku (BatchAnalysisPage), Historia zbiorcza = raporty batch z mapami (BatchHistoryPage).
+ * - Z Analiza działki (KalkulatorPage): Historia działek = pojedyncze analizy (localStorage), Oferty hurtowe · CSV = wgranie CSV + karty batch (BatchCSVSection).
+ */
 const Kalkulator = () => {
   return (
     <Fragment>
       <Routes>
-        {/* KalkulatorPage ma własny sidebar wbudowany — nie owijamy */}
+        {/* KalkulatorPage ma własny sidebar — zakładki: Analiza | Historia działek | Oferty hurtowe · CSV */}
         <Route path="analiza"  element={<KalkulatorPage />} />
 
-        {/* Pozostałe strony owijamy w KalkulatorLayout (fioletowy sidebar) */}
+        {/* Layout (strona główna, batch, historia): Analiza działki | Batch CSV | Historia zbiorcza */}
         <Route path="home"     element={<KalkulatorLayout><LandingPage /></KalkulatorLayout>} />
         <Route path="batch"    element={<KalkulatorLayout><BatchAnalysisPage /></KalkulatorLayout>} />
         <Route path="historia" element={<KalkulatorLayout><BatchHistoryPage /></KalkulatorLayout>} />

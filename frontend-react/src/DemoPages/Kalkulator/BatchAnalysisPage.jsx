@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import "./BatchAnalysisPage.css";
 
 // ─── KSWS coefficients (muszą być zsynchronizowane z backend/modules/property.py) ───
@@ -238,6 +239,7 @@ function downloadCSV(parcels, editedLengths) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 const BatchAnalysisPage = () => {
+  const navigate = useNavigate();
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -374,6 +376,11 @@ const BatchAnalysisPage = () => {
                 URL.revokeObjectURL(a.href);
               }}>
               ⬇ Pobierz szablon CSV
+            </button>
+          </p>
+          <p className="file-info" style={{ marginTop: 12 }}>
+            <button type="button" className="tab-download" style={{ fontSize: "0.85em" }} onClick={() => navigate("/kalkulator/historia")}>
+              📋 Historia analiz zbiorczych — otwórz raport z mapami
             </button>
           </p>
         </div>
