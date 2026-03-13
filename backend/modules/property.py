@@ -381,14 +381,11 @@ class PropertyAggregator:
                 line_length = 0.0
                 measurement_source = "brak — nie wykryto"
 
-        # FIX: Obsługa NEARBY linii (detected=True ale length_m=0)
-        # Jeśli linia jest detect ale length_m=0, użyj band_width * 2 jako oszacowanie
+                # Efektywna długość do wyliczenia pasa — TYLKO gdy mamy rzeczywisty pomiar
+        # Brak żadnych heurystyk typu „NEARBY = 2 × szerokość pasa”.
         effective_line_length = line_length if line_length and line_length > 0 else 0.0
-        if pl.get("detected") and effective_line_length == 0.0:
-            # NEARBY case: oszacuj długość linii jako 2 × szerokość pasa
-            effective_line_length = (band_width * 2) if band_width and band_width > 0 else 50.0
-
         band_area = effective_line_length * band_width if effective_line_length and effective_line_length > 0 else 0.0
+
 
         property_value = (avg_price or 6.50) * area_m2
         # Compensation: zawsze oblicz (0 gdy brak infrastruktury)
