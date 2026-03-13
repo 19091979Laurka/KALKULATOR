@@ -12,31 +12,35 @@ const KalkulatorLayout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Determine active nav based on current route
+  // Kolejność: 1 Strona główna, 2 CRM, 3 Wzory, 4 Analiza działki, 5 Historia analiz, 6 Analiza hurtowa, 7 Historia raportów
   const getActiveNav = () => {
-    if (location.pathname.includes("analiza"))  return "analiza";
-    if (location.pathname.includes("batch"))    return "batch";
-    if (location.pathname.includes("historia")) return "historia";
-    if (location.pathname.includes("klienci"))  return "klienci";
-    if (location.pathname.includes("wzory"))    return "wzory";
-    if (location.pathname.includes("home"))     return "home";
-    return "analiza";
+    // We are using HashRouter. The actual path is in location.pathname.
+    // e.g. /kalkulator/historia-analiz
+    
+    const path = location.pathname;
+    
+    if (path === "/kalkulator/home")          return "home";
+    if (path === "/kalkulator/klienci")       return "crm";
+    if (path === "/kalkulator/wzory")          return "wzory";
+    if (path === "/kalkulator/analiza") return "analiza";
+    if (path === "/kalkulator/historia-analiz") return "historia-analiz";
+    if (path === "/kalkulator/batch")         return "batch";
+    if (path === "/kalkulator/historia")       return "historia"; // Historia raportów (batch)
+    
+    // Default fallback
+    return "home";
   };
 
   const activeNav = getActiveNav();
 
-  // Główne zakładki (Layout = strona główna, batch, historia z backendu)
-  // Batch CSV = wgranie pliku + wyniki | Historia zbiorcza = raporty batch z mapami (backend)
-  const mainNavItems = [
-    { id: "analiza",  label: "Analiza działki",   icon: "⚡",  path: "/kalkulator/analiza", title: "Pojedyncza działka · formularz i mapa" },
-    { id: "batch",    label: "Batch CSV",         icon: "📊", path: "/kalkulator/batch",   title: "Analiza zbiorcza · wgraj CSV" },
-    { id: "historia", label: "Historia zbiorcza",  icon: "📋", path: "/kalkulator/historia", title: "Raporty batch · otwórz raport z mapami" },
-  ];
-
-  // Zakładki zarządzania
-  const mgmtNavItems = [
-    { id: "klienci", label: "Klienci",            icon: "👥", path: "/kalkulator/klienci" },
-    { id: "wzory",   label: "Wzory dokumentów",   icon: "📝", path: "/kalkulator/wzory" },
+  const navItems = [
+    { id: "home",            label: "Strona główna",     icon: "🏠",  path: "/kalkulator/home" },
+    { id: "crm",             label: "CRM",               icon: "👥",  path: "/kalkulator/klienci", title: "Client Case Dashboard" },
+    { id: "wzory",           label: "Wzory dokumentów", icon: "📝",  path: "/kalkulator/wzory" },
+    { id: "analiza",         label: "Analiza działki",   icon: "⚡",  path: "/kalkulator/analiza", title: "Formularz → raport + mapa (podgląd); PDF lub Archiwum; po wyjściu zeruje się" },
+    { id: "historia-analiz", label: "Historia analiz",   icon: "📋",  path: "/kalkulator/historia-analiz", title: "Lista analiz pojedynczych (oznaczona)" },
+    { id: "batch",           label: "Analiza hurtowa",   icon: "📊",  path: "/kalkulator/batch", title: "CSV → raporty zbiorcze (podgląd), potem trafiają do Historii raportów" },
+    { id: "historia",        label: "Historia raportów", icon: "🗂️",  path: "/kalkulator/historia", title: "Oferty Hurtowe — Historia CSV" },
   ];
 
   return (
@@ -54,48 +58,18 @@ const KalkulatorLayout = ({ children }) => {
         </div>
 
         <nav className="ksws-sidebar-nav">
-          {/* ── Kalkulator ── */}
-          {mainNavItems.map((item) => (
+          {navItems.map((item) => (
             <div
               key={item.id}
               className={`ksws-sidebar-nav-item${activeNav === item.id ? " active" : ""}`}
               onClick={() => navigate(item.path)}
               style={{ cursor: "pointer" }}
-              title={item.title}
+              title={item.title || item.label}
             >
               <span className="ksws-sidebar-nav-icon">{item.icon}</span>
               {item.label}
             </div>
           ))}
-
-          {/* ── Separator ── */}
-          <div style={{ margin: "8px 16px", borderTop: "1px solid rgba(255,255,255,0.1)" }} />
-
-          {/* ── Zarządzanie ── */}
-          {mgmtNavItems.map((item) => (
-            <div
-              key={item.id}
-              className={`ksws-sidebar-nav-item${activeNav === item.id ? " active" : ""}`}
-              onClick={() => navigate(item.path)}
-              style={{ cursor: "pointer" }}
-            >
-              <span className="ksws-sidebar-nav-icon">{item.icon}</span>
-              {item.label}
-            </div>
-          ))}
-
-          {/* ── Separator ── */}
-          <div style={{ margin: "8px 16px", borderTop: "1px solid rgba(255,255,255,0.1)" }} />
-
-          {/* ── Strona główna ── */}
-          <div
-            className={`ksws-sidebar-nav-item${activeNav === "home" ? " active" : ""}`}
-            onClick={() => navigate("/kalkulator/home")}
-            style={{ cursor: "pointer", opacity: 0.7 }}
-          >
-            <span className="ksws-sidebar-nav-icon">🏠</span>
-            Strona główna
-          </div>
         </nav>
 
         <div className="ksws-sidebar-footer">

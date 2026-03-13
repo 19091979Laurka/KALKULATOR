@@ -40,36 +40,21 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
       return Number(value).toLocaleString('pl-PL');
     };
 
-    const colors = isDark ? {
-      bg: '#1a1a2e',
-      bgCard: '#16213e',
-      text: '#e0e0e0',
-      textSecondary: '#a0a0a0',
-      border: '#2d3561',
-      headerGradient: 'linear-gradient(135deg, #0f3460 0%, #533483 100%)',
-      headerText: '#e0e0e0',
-      accent: '#00d4ff',
-      accentAlt: '#ff6b6b',
-      success: '#26d07c',
-      warning: '#ffa500',
-      warningBg: '#3d2817',
-      successBg: '#1a3d2a',
-      successText: '#26d07c'
-    } : {
-      bg: '#f5f7fa',
+    const colors = {
+      bg: '#edeff3',
       bgCard: 'white',
       text: '#2c3e50',
       textSecondary: '#7f8c8d',
-      border: '#ecf0f1',
-      headerGradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      border: '#e1e4f0',
+      headerGradient: 'linear-gradient(135deg, #1a1a2e, #2c3e50)',
       headerText: 'white',
-      accent: '#667eea',
+      accent: '#b8963e',
       accentAlt: '#e74c3c',
       success: '#27ae60',
       warning: '#f39c12',
-      warningBg: '#fff3cd',
-      successBg: '#d5f4e6',
-      successText: '#27ae60'
+      warningBg: '#fff8ee',
+      successBg: '#e8f5e9',
+      successText: '#2e7d32'
     };
 
     const parcelId = data.parcel_id || '—';
@@ -289,11 +274,11 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
             page-break-inside: avoid;
         }
         .track-box.track-a {
-            background: ${isDark ? 'rgba(102, 126, 234, 0.08)' : '#f0f4ff'};
+            background: ${isDark ? 'rgba(102, 126, 234, 0.08)' : '#eef4ff'};
             border-left-color: ${colors.accent};
         }
         .track-box.track-b {
-            background: ${isDark ? 'rgba(255, 165, 0, 0.08)' : '#fffbf0'};
+            background: ${isDark ? 'rgba(255, 165, 0, 0.08)' : '#fff8ee'};
             border-left-color: ${colors.warning};
         }
         .track-title {
@@ -367,30 +352,37 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
         .kpi-box {
             padding: 24px;
             border-radius: 10px;
-            text-align: center;
+            text-align: left;
             border: none;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
             page-break-inside: avoid;
+            position: relative;
+            overflow: hidden;
+        }
+        .kpi-box::after {
+            content: '§';
+            position: absolute;
+            right: 10px;
+            bottom: -10px;
+            font-size: 60px;
+            font-weight: 900;
+            opacity: 0.1;
         }
         .kpi-box.blue {
-            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-            color: #0d47a1;
-            border: 2px solid #2196f3;
+            background: linear-gradient(135deg, #1e88e5, #42a5f5);
+            color: white;
         }
         .kpi-box.green {
-            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
-            color: #1b5e20;
-            border: 2px solid #4caf50;
+            background: linear-gradient(135deg, #43a047, #66bb6a);
+            color: white;
         }
         .kpi-box.orange {
-            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
-            color: #e65100;
-            border: 2px solid #ff9800;
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
         }
         .kpi-box.purple {
-            background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
-            color: #4a148c;
-            border: 2px solid #9c27b0;
+            background: linear-gradient(135deg, #3d2319, #5d3b27);
+            color: white;
         }
         .kpi-label {
             font-size: 0.8rem;
@@ -398,12 +390,17 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
             text-transform: uppercase;
             letter-spacing: 1px;
             margin-bottom: 10px;
-            opacity: 0.95;
+            opacity: 0.85;
         }
         .kpi-value {
             font-size: 1.8rem;
-            font-weight: 700;
+            font-weight: 900;
             line-height: 1.2;
+        }
+        .kpi-sub {
+            font-size: 0.75rem;
+            opacity: 0.8;
+            margin-top: 4px;
         }
         .methodology-box {
             background: #f8f9fa;
@@ -437,145 +434,54 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
 <body>
     <div class="report-container">
         <div class="report-header">
-            <h1>🏗️ RAPORT KSWS - KALKULATOR ROSZCZEŃ</h1>
-            <p style="margin-top: 16px; font-size: 1.1rem;">Profesjonalna Analiza Odszkodowań dla Infrastruktury Przesyłowej</p>
-            <div class="report-meta">
-                <div class="meta-item">
-                    <span class="meta-label">Działka TERYT:</span>
-                    <span style="font-size: 1.1rem; font-weight: 700;">${parcelId}</span>
+            <div class="report-header-main">
+                <h1>Raport KSWS — Analiza Działki</h1>
+                <p class="sub">Szacunkowa wartość odszkodowania z tytułu infrastruktury przesyłowej</p>
+                <div class="report-meta">
+                    <div class="meta-item"><span class="meta-label">Identyfikator działki</span><span class="meta-value">${parcelId}</span></div>
+                    <div class="meta-item"><span class="meta-label">Lokalizacja</span><span class="meta-value">${commune}, ${county}, ${region}</span></div>
+                    <div class="meta-item"><span class="meta-label">Data analizy</span><span class="meta-value">${new Date().toLocaleDateString('pl-PL')}</span></div>
                 </div>
-                <div class="meta-item">
-                    <span class="meta-label">Lokalizacja:</span>
-                    <span style="font-size: 1rem;">${commune}, ${county}, ${region}</span>
-                </div>
-                <div class="meta-item">
-                    <span class="meta-label">Data Analizy:</span>
-                    <span style="font-size: 1rem;">${new Date().toLocaleDateString('pl-PL')}</span>
-                </div>
+            </div>
+            <div class="logo-col">
+                <div style="font-weight: 800; font-size: 24px; letter-spacing: -0.5px; color: #b8963e;">KSWS</div>
+                <div style="opacity: 0.9; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Kalkulator Roszczeń</div>
+                <div class="logo-badge" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);">✓ Dane zweryfikowane</div>
             </div>
         </div>
 
-        <!-- KPI BOXES - Główne wskaźniki -->
-        <div class="kpi-grid">
-            <div class="kpi-box blue">
-                <div class="kpi-label">📏 Powierzchnia</div>
-                <div class="kpi-value">${formatNumber(area.toFixed(0))} m²</div>
-            </div>
-            <div class="kpi-box green">
-                <div class="kpi-label">💵 Wartość Gruntu</div>
-                <div class="kpi-value">${formatCurrency(propertyValue)}</div>
-            </div>
-            <div class="kpi-box orange">
-                <div class="kpi-label">⚖️ Track A (Sądowe)</div>
-                <div class="kpi-value">${formatCurrency(trackA_total)} zł</div>
-            </div>
-            <div class="kpi-box purple">
-                <div class="kpi-label">💼 Track B (Negocjacyjny)</div>
-                <div class="kpi-value">${formatCurrency(trackB_total)} zł</div>
-            </div>
-        </div>
 
         <div class="content-grid">
             <div class="card">
-                <h2>📋 Dane Działki</h2>
-                <h3>Lokalizacja i Identyfikacja</h3>
+                <h2>📋 Dane Nieruchomości</h2>
                 <table class="data-table">
                     <tr><td><span class="label">ID Działki (TERYT):</span><span class="value">${parcelId}</span></td></tr>
-                    <tr><td><span class="label">Gmina:</span><span class="value">${commune}</span></td></tr>
-                    <tr><td><span class="label">Powiat:</span><span class="value">${county}</span></td></tr>
-                    <tr><td><span class="label">Województwo:</span><span class="value">${region}</span></td></tr>
-                </table>
-                <h3>Parametry Geometryczne</h3>
-                <table class="data-table">
                     <tr><td><span class="label">Powierzchnia:</span><span class="value highlight">${formatNumber(area.toFixed(2))} m²</span></td></tr>
-                    <tr><td><span class="label">Obwód:</span><span class="value">${formatNumber(perimeter.toFixed(1))} m</span></td></tr>
-                    <tr><td><span class="label">Klasa kształtu:</span><span class="value">${shapeClass}</span></td></tr>
+                    <tr><td><span class="label">Cena za m²:</span><span class="value">${unitPrice} PLN/m²</span></td></tr>
+                    <tr><td><span class="label">Wartość nieruchomości:</span><span class="value highlight">${formatCurrency(propertyValue)} PLN</span></td></tr>
+                    <tr><td><span class="label">Źródło ceny:</span><span class="value">${priceSource}</span></td></tr>
                 </table>
             </div>
 
             <div class="card">
-                <h2>💰 Wycena Nieruchomości</h2>
-                <h3>Cena Gruntu</h3>
+                <h2>⚡ Infrastruktura Przesyłowa</h2>
                 <table class="data-table">
-                    <tr><td><span class="label">Cena jednostkowa:</span><span class="value highlight">${unitPrice} zł/m²</span></td></tr>
-                    <tr><td><span class="label">Źródło ceny:</span><span class="value">${priceSource}</span></td></tr>
-                    <tr><td><span class="label">Transakcje lokalne:</span><span class="value">${transactions}</span></td></tr>
+                    <tr><td><span class="label">Wykryta infrastruktura:</span><span class="value">${hasInfrastructure ? 'TAK' : 'NIE'}</span></td></tr>
+                    <tr><td><span class="label">Napięcie linii:</span><span class="value highlight">${voltage}</span></td></tr>
+                    <tr><td><span class="label">Długość linii na działce:</span><span class="value highlight">${formatNumber(lineLength)} m</span></td></tr>
+                    <tr><td><span class="label">Szerokość pasa ochronnego:</span><span class="value">${formatNumber(protectionZone)} m</span></td></tr>
+                    <tr><td><span class="label">Powierzchnia zajęta:</span><span class="value highlight">${formatNumber(occupiedArea)} m²</span></td></tr>
                 </table>
-                <h3>Podsumowanie Wartości</h3>
-                <div class="stats-grid">
-                    <div class="stat-box success">
-                        <div class="stat-label">Wartość Gruntu</div>
-                        <div class="stat-value success">${formatCurrency(propertyValue)} zł</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-label">Powierzchnia Działki</div>
-                        <div class="stat-value">${formatNumber((area / 1000).toFixed(2))} tys. m²</div>
-                    </div>
-                </div>
             </div>
         </div>
 
-        <div class="card full-width">
-            <h2>📊 Analiza KSWS - Współczynniki</h2>
-            ${infraDetected ? '' : '<div class="warning-box"><h4>⚠️ Uwaga</h4><p>Dane linii energetycznej nie zostały automatycznie pobrane. Wartości bazują na teoretycznych założeniach dla tego typu infrastruktury.</p></div>'}
-            <div class="stats-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
-                <div class="stat-box">
-                    <div class="stat-label">S — Wpływ społeczny</div>
-                    <div class="stat-value">${coeffS}</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">k — Strata pożyteczności</div>
-                    <div class="stat-value">${coeffK}</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">R — Strata wartości</div>
-                    <div class="stat-value">${coeffR}</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">u — Faktor użytkowania</div>
-                    <div class="stat-value">${coeffU}</div>
-                </div>
-            </div>
-            <h3>Parametry Infrastruktury</h3>
-            <table class="data-table">
-                <tr><td><span class="label">Napięcie linii:</span><span class="value">${voltage}</span></td></tr>
-                <tr><td><span class="label">Długość linii:</span><span class="value highlight">${formatNumber(lineLength)} m</span></td></tr>
-                <tr><td><span class="label">Zajęta powierzchnia:</span><span class="value highlight">${formatNumber(occupiedArea.toFixed(2))} m²</span></td></tr>
-            </table>
-        </div>
 
-        <div class="card full-width">
-            <h2>💸 Odszkodowanie - Track A vs Track B</h2>
-            <div class="track-comparison">
-                <div class="track-box track-a">
-                    <div class="track-title">⚖️ TRACK A - Sądowe</div>
-                    <table class="data-table" style="margin-bottom: 20px;">
-                        <tr><td style="border: none; padding: 8px 0;"><span class="label">WSP:</span><span class="value">${formatCurrency(trackA_wsp)} zł</span></td></tr>
-                        <tr><td style="border: none; padding: 8px 0;"><span class="label">WBK:</span><span class="value">${formatCurrency(trackA_wbk)} zł</span></td></tr>
-                        <tr><td style="border: none; padding: 8px 0;"><span class="label">OBN:</span><span class="value">${formatCurrency(trackA_obn)} zł</span></td></tr>
-                    </table>
-                    <div style="text-align: center;">
-                        <div style="font-size: 0.85rem; color: ${colors.textSecondary}; margin-bottom: 12px; font-weight: 600;">RAZEM ZA ${trackA_years} LAT</div>
-                        <div class="track-value">${formatCurrency(trackA_total)} zł</div>
-                    </div>
-                </div>
-                <div class="track-box track-b">
-                    <div class="track-title">💼 TRACK B - Negocjacyjny</div>
-                    <div style="text-align: center;">
-                        <div style="font-size: 0.85rem; color: ${colors.textSecondary}; margin-bottom: 12px; font-weight: 600;">Mnożnik: <span style="font-size: 1.1rem; font-weight: 700; color: ${colors.warning};">${multiplier}×</span></div>
-                        <div class="track-value">${formatCurrency(trackB_total)} zł</div>
-                        <div class="track-compare-value">+${((multiplier - 1) * 100).toFixed(0)}% wyższe niż Track A</div>
-                        <div style="font-size: 0.85rem; color: ${colors.textSecondary}; margin-top: 12px; font-weight: 600;">za ${trackB_years} lat</div>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <div class="footer">
-            <p style="font-weight: 700;">© 2026 KALKULATOR KSWS v3.0</p>
-            <p style="font-size: 0.9rem; opacity: 0.9;">Metodologia zgodna z polskim prawem odszkodowań dla obiektów liniowych</p>
-            <p style="margin-top: 24px; color: ${colors.textSecondary}; font-size: 0.85rem; line-height: 1.6;">
-                <strong style="font-weight: 700;">⚠️ Ważne:</strong> Ten raport jest szacunkiem profesjonalnym. Ostateczne odszkodowanie musi być uzgodnione między stronami zgodnie z obowiązującymi przepisami.
+        <div class="footer" style="text-align: center; padding: 20px 0; color: #7f8c8d; font-size: 11px; border-top: 1px solid #e1e4f0; margin-top: 40px;">
+            <p style="font-weight: 700; margin-bottom: 4px;">© ${new Date().getFullYear()} KSWS · Kalkulator Roszczeń</p>
+            <p style="margin-bottom: 10px;">Wygenerowano automatycznie w systemie KSWS</p>
+            <p style="color: #95a5a6; font-size: 10px; max-width: 600px; margin: 0 auto; line-height: 1.4;">
+                Dokument ma charakter informacyjny i szacunkowy. Wartości zostały wyliczone na podstawie wprowadzonych parametrów i algorytmów systemu KSWS. Nie stanowi on operatu szacunkowego w rozumieniu przepisów prawa.
             </p>
         </div>
     </div>
@@ -609,6 +515,15 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
         const blobUrl = URL.createObjectURL(blob);
         const pdfWindow = window.open(blobUrl, '_blank');
         if (pdfWindow) {
+          pdfWindow.onload = function() {
+            // Add a print button to the generated HTML
+            const printBtn = pdfWindow.document.createElement('button');
+            printBtn.innerHTML = '🖨️ Drukuj / Zapisz PDF';
+            printBtn.style.cssText = 'position: fixed; top: 20px; right: 20px; background: linear-gradient(135deg, #b8963e, #d4af62); color: white; border: none; padding: 10px 28px; border-radius: 50px; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 14px rgba(184,150,62,0.4); z-index: 9999;';
+            printBtn.className = 'no-print';
+            printBtn.onclick = function() { pdfWindow.print(); };
+            pdfWindow.document.body.appendChild(printBtn);
+          };
           pdfWindow.focus();
           // Wyczyść URL po krótkim opóźnieniu
           setTimeout(() => URL.revokeObjectURL(blobUrl), 100);

@@ -81,7 +81,7 @@ export default function BatchHistoryPage() {
 
       if (isError) {
         return `
-      <div class="parcel-card" style="page-break-inside:avoid;break-inside:avoid;">
+      <div class="parcel-card page-break" style="page-break-inside:avoid;break-inside:avoid;">
         <div class="parcel-header" style="background:#fff5f5;border-top:4px solid #c62828;border-bottom:1px solid #ffcdd2;">
           <div class="parcel-header-left">
             <div class="parcel-num-badge" style="background:#ffebee;border:2px solid #c62828;color:#c62828;font-size:12px;">#${i + 1}</div>
@@ -107,109 +107,111 @@ export default function BatchHistoryPage() {
       const ksws = d.ksws || {};
       const geom = d.geometry || {};
       const md = d.market_data || {};
+      const meta = d.parcel_metadata || {};
       const collision = !!pl.detected;
       const volt = VOLT_LABEL[pl.voltage] || pl.voltage || "—";
       const accentColor = collision ? "#e74c3c" : "#27ae60";
-      const bgLight = collision ? "#fff5f5" : "#f5fff8";
+      
+      const area = geom.area_m2 || 0;
+      const price = md.average_price_m2 || 0;
+      const trackA = ta.total || 0;
+      const trackB = tb.total || 0;
 
       return `
-      <div class="parcel-card" style="page-break-inside:avoid;break-inside:avoid;">
-        <!-- LIGHT HEADER — colored top border + white bg -->
-        <div class="parcel-header" style="background:#f8f9fc;border-top:4px solid ${collision ? '#e53935' : '#43a047'};border-bottom:1px solid #eef0f7;">
-          <div class="parcel-header-left">
-            <div class="parcel-num-badge" style="background:${collision ? '#fde8e8' : '#e8f5e9'};border:2px solid ${collision ? '#e53935' : '#43a047'};color:${collision ? '#c62828' : '#2e7d32'};font-size:12px;">#${i + 1}</div>
-            <div>
-              <div class="parcel-id" style="color:#3d2319;">${p.parcel_id || "—"}</div>
-              <a href="https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${encodeURIComponent(p.parcel_id || "")}"
-                 target="_blank" class="geo-link" style="color:#3498db;">🔗 geoportal</a>
-            </div>
-            <span class="collision-badge" style="background:${collision ? '#fde8e8' : '#e8f5e9'};color:${collision ? '#c62828' : '#2e7d32'};border:1px solid ${collision ? '#ef9a9a' : '#a5d6a7'};">
-              ${collision ? "⚡ KOLIZJA" : "✓ BEZ KOLIZJI"}
-            </span>
+      <div class="parcel-card page-break" style="page-break-inside:avoid;break-inside:avoid; background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #eee; margin-bottom: 30px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 12px; margin-bottom: 20px;">
+          <div>
+            <span style="background: #1a2a3a; color: white; padding: 4px 10px; border-radius: 6px; font-weight: 700; margin-right: 10px;">#${i + 1}</span>
+            <span style="font-size: 18px; font-weight: 800; color: #2c3e50;">${p.parcel_id || "—"}</span>
           </div>
-          <div style="font-size:2em;color:${collision ? '#e53935' : '#43a047'};font-weight:900;line-height:1;opacity:0.18;user-select:none;">§</div>
-        </div>
-
-        <!-- BODY: 2-column grid (data left | map right) -->
-        <div class="parcel-body-grid">
-
-          <!-- LEFT: data grid + Track A/B/RAZEM -->
-          <div style="display:flex;flex-direction:column;">
-            <!-- Data grid 8 boxes -->
-            <div style="padding:16px 20px 12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;flex:1;">
-              <div class="data-box-v2" style="border-left:3px solid #3498db;">
-                <div class="db-label">📐 Pow. działki</div>
-                <div class="db-value">${fmtI(geom.area_m2)} m²</div>
-              </div>
-              <div class="data-box-v2" style="border-left:3px solid #8e44ad;">
-                <div class="db-label">💰 Cena gruntu</div>
-                <div class="db-value">${fmtN(md.average_price_m2)} zł/m²</div>
-              </div>
-              <div class="data-box-v2" style="border-left:3px solid #2c3e50;">
-                <div class="db-label">🏠 Wartość nier.</div>
-                <div class="db-value">${fmtI(ksws.property_value_total)} PLN</div>
-              </div>
-              <div class="data-box-v2" style="border-left:3px solid ${accentColor};background:${collision?'#fff5f5':'#f5fff8'};">
-                <div class="db-label">⚡ Napięcie</div>
-                <div class="db-value">${volt}</div>
-              </div>
-              <div class="data-box-v2" style="border-left:3px solid #16a085;">
-                <div class="db-label">📏 Dł. linii</div>
-                <div class="db-value">${(ksws.line_length_m || pl.length_m || 0) > 0 ? fmtI(ksws.line_length_m || pl.length_m) + " m" : "—"}</div>
-                ${ksws.measurement_source && ksws.measurement_source !== "geodezyjne" ? `<span class="db-hint">⚠ ${ksws.measurement_source}</span>` : ""}
-              </div>
-              <div class="data-box-v2" style="border-left:3px solid #27ae60;">
-                <div class="db-label">↔️ Szer. pasa</div>
-                <div class="db-value">${ksws.band_width_m || "—"} m</div>
-              </div>
-              <div class="data-box-v2" style="border-left:3px solid #f39c12;">
-                <div class="db-label">🔲 Pow. pasa</div>
-                <div class="db-value">${(ksws.band_area_m2 || 0) > 0 ? fmtI(ksws.band_area_m2) + " m²" : "—"}</div>
-              </div>
-              <div class="data-box-v2" style="border-left:3px solid #e67e22;">
-                <div class="db-label">📊 % w pasie</div>
-                <div class="db-value">${geom.area_m2 > 0 && ksws.band_area_m2 > 0 ? Math.min(100, Math.round(ksws.band_area_m2 / geom.area_m2 * 100)) + "%" : "—"}</div>
-              </div>
-            </div>
-
-            <!-- Track A / B / RAZEM -->
-            <div style="padding:4px 20px 18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
-              <!-- Track A -->
-              <div class="track-box-a">
-                <div class="track-label" style="color:#5c7aaa;">⚖️ TRACK A · SĄD</div>
-                <div class="track-amount-lg" style="color:#1565c0;font-size:20px;">${fmtN(ta.total)}</div>
-                <div class="track-sub" style="color:#7f9bbf;font-weight:700;">PLN · ścieżka sądowa</div>
-                <div style="margin-top:10px;padding-top:10px;border-top:1px solid #dce8ff;">
-                  <div class="track-detail-row"><span class="tl">WSP służebność</span><span class="tv">${fmtN(ta.wsp)}</span></div>
-                  <div class="track-detail-row"><span class="tl">WBK bezumowne</span><span class="tv">${fmtN(ta.wbk)}</span></div>
-                  <div class="track-detail-row"><span class="tl">OBN obniżenie</span><span class="tv">${fmtN(ta.obn)}</span></div>
-                </div>
-              </div>
-              <!-- Track B -->
-              <div class="track-box-b">
-                <div class="track-label" style="color:#b08050;">🤝 TRACK B · NEG.</div>
-                <div class="track-amount-lg" style="color:#e65100;font-size:20px;">${fmtN(tb.total)}</div>
-                <div class="track-sub" style="color:#c19060;font-weight:700;">PLN · negocjacje</div>
-                <div style="margin-top:10px;padding-top:10px;border-top:1px solid #fde8c0;">
-                  <div class="track-detail-row"><span class="tl">Podstawa (A)</span><span class="tv">${fmtN(ta.total)}</span></div>
-                  <div class="track-detail-row"><span class="tl">Mnożnik</span><span class="tv">×${tb.multiplier || 1.80}</span></div>
-                  <div class="track-detail-row"><span class="tl">Próg neg.</span><span class="tv" style="color:#e65100;">${fmtN(tb.total)}</span></div>
-                </div>
-              </div>
-              <!-- RAZEM -->
-              <div style="background:#3d2319;border-radius:10px;padding:14px;">
-                <div class="track-label" style="color:rgba(255,193,7,0.85);">💰 RAZEM A+B</div>
-                <div style="font-size:22px;font-weight:900;color:white;margin-top:4px;">${fmtN((ta.total || 0) + (tb.total || 0))}</div>
-                <div style="font-size:10px;color:rgba(255,255,255,0.5);margin-top:2px;font-weight:700;">PLN · Track A + B łącznie</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- RIGHT: mini Leaflet map (Topo + OIM power lines) -->
-          <div class="map-col">
-            <div id="parcel-map-${i}" style="height:100%;min-height:290px;"></div>
+          <div style="background: ${collision ? '#ffebee' : '#e8f5e9'}; color: ${collision ? '#c0392b' : '#27ae60'}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; border: 1px solid ${collision ? '#ffcdd2' : '#c8e6c9'};">
+            ${collision ? "⚡ KOLIZJA" : "✓ BEZ KOLIZJI"}
           </div>
         </div>
+
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px;">
+          <div style="background: white; border-radius: 8px; padding: 12px; border: 1px solid #eee; border-top: 3px solid #3498db;">
+            <div style="font-size: 9px; text-transform: uppercase; color: #7f8c8d; font-weight: 600; margin-bottom: 4px;">Powierzchnia</div>
+            <div style="font-size: 18px; font-weight: 800; color: #2c3e50;">${fmtI(area)} m²</div>
+          </div>
+          <div style="background: white; border-radius: 8px; padding: 12px; border: 1px solid #eee; border-top: 3px solid #2ecc71;">
+            <div style="font-size: 9px; text-transform: uppercase; color: #7f8c8d; font-weight: 600; margin-bottom: 4px;">Klasa Gruntu</div>
+            <div style="font-size: 18px; font-weight: 800; color: #2c3e50;">${meta.land_use || "R"}</div>
+          </div>
+          <div style="background: white; border-radius: 8px; padding: 12px; border: 1px solid #eee; border-top: 3px solid #e74c3c;">
+            <div style="font-size: 9px; text-transform: uppercase; color: #7f8c8d; font-weight: 600; margin-bottom: 4px;">Sieci Przesyłowe</div>
+            <div style="font-size: 18px; font-weight: 800; color: #2c3e50;">${pl.voltage || "Brak"}</div>
+          </div>
+          <div style="background: white; border-radius: 8px; padding: 12px; border: 1px solid #eee; border-top: 3px solid #f1c40f;">
+            <div style="font-size: 9px; text-transform: uppercase; color: #7f8c8d; font-weight: 600; margin-bottom: 4px;">Cena Rynkowa</div>
+            <div style="font-size: 18px; font-weight: 800; color: #2c3e50;">${fmtN(price)} zł/m²</div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 300px; gap: 20px; margin-bottom: 20px;">
+          <div style="background: #f9f9f9; border-radius: 8px; border: 1px solid #eee; display: flex; flex-direction: column;">
+            <div style="padding: 10px 14px; font-weight: 700; font-size: 12px; border-bottom: 1px solid #eee;">🗺️ Mapa działki</div>
+            <div id="parcel-map-${i}" style="width: 100%; flex: 1; min-height: 250px; border-radius: 0 0 8px 8px;"></div>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="background: white; border: 1px solid #eee; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 10px;">
+              <div style="width: 28px; height: 28px; background: #3498db; color: white; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px;">🗺️</div>
+              <div style="flex: 1;">
+                <div style="font-size: 9px; color: #7f8c8d; text-transform: uppercase; font-weight: 600;">Geometria</div>
+                <div style="font-size: 12px; font-weight: 700;">${fmtI(area)} m²</div>
+              </div>
+            </div>
+            <div style="background: white; border: 1px solid #eee; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 10px;">
+              <div style="width: 28px; height: 28px; background: #e74c3c; color: white; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px;">⚡</div>
+              <div style="flex: 1;">
+                <div style="font-size: 9px; color: #7f8c8d; text-transform: uppercase; font-weight: 600;">Infrastruktura</div>
+                <div style="font-size: 12px; font-weight: 700;">${collision ? 'Wykryto' : 'Brak'} — ${pl.voltage || ""}</div>
+              </div>
+            </div>
+            <div style="background: white; border: 1px solid #eee; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 10px;">
+              <div style="width: 28px; height: 28px; background: #9b59b6; color: white; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px;">📏</div>
+              <div style="flex: 1;">
+                <div style="font-size: 9px; color: #7f8c8d; text-transform: uppercase; font-weight: 600;">Długość linii na działce</div>
+                <div style="font-size: 12px; font-weight: 700;">${fmtI(ksws.line_length_m || pl.length_m || 0)} m</div>
+              </div>
+            </div>
+            <div style="background: white; border: 1px solid #eee; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 10px;">
+              <div style="width: 28px; height: 28px; background: #e67e22; color: white; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px;">🔲</div>
+              <div style="flex: 1;">
+                <div style="font-size: 9px; color: #7f8c8d; text-transform: uppercase; font-weight: 600;">Powierzchnia pasa</div>
+                <div style="font-size: 12px; font-weight: 700;">${fmtI(ksws.band_area_m2 || 0)} m²</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+          <div style="border: 1px solid #eee; border-radius: 8px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <div style="font-size: 13px; font-weight: 700; color: #2c3e50;">Track A — Ścieżka sądowa</div>
+              <div style="background: #eef4ff; color: #3498db; padding: 3px 8px; border-radius: 12px; font-size: 9px; font-weight: 700;">SĄD</div>
+            </div>
+            <div style="font-size: 22px; font-weight: 800; color: #2c3e50; margin-bottom: 12px;">${fmtN(trackA)} PLN</div>
+            <div style="border-top: 1px solid #eee; padding-top: 8px; font-size: 11px;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span style="color: #7f8c8d;">WSP</span><span style="font-weight: 600;">${fmtN(ta.wsp || 0)} PLN</span></div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span style="color: #7f8c8d;">WBK</span><span style="font-weight: 600;">${fmtN(ta.wbk || 0)} PLN</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: #7f8c8d;">OBN</span><span style="font-weight: 600;">${fmtN(ta.obn || 0)} PLN</span></div>
+            </div>
+          </div>
+          
+          <div style="border: 1px solid #fde4c3; border-radius: 8px; padding: 16px; background: #fffaf0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <div style="font-size: 13px; font-weight: 700; color: #8d6e3f;">Track B — Ścieżka negocjacyjna</div>
+              <div style="background: #fde4c3; color: #d35400; padding: 3px 8px; border-radius: 12px; font-size: 9px; font-weight: 700;">NEGOCJACJE</div>
+            </div>
+            <div style="font-size: 22px; font-weight: 800; color: #d35400; margin-bottom: 12px;">${fmtN(trackB)} PLN</div>
+            <div style="font-size: 11px; color: #7f8c8d;">
+              Mnożnik Track B: <strong>${tb.multiplier || 1.56}</strong>
+            </div>
+          </div>
+        </div>
+
       </div>`;
     }).join("\n");
 
@@ -569,11 +571,9 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
 </body>
 </html>`;
 
-    // Use Blob URL for reliable external script loading
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const blobUrl = URL.createObjectURL(blob);
-    const win = window.open(blobUrl, '_blank');
-    if (!win) {
+    localStorage.setItem("ksws_print_html", html);
+    const newWindow = window.open('#/kalkulator/raport-druk', '_blank');
+    if (!newWindow) {
       toast.error("Zablokowano popup — zezwól na okienka dla tej strony");
       return;
     }

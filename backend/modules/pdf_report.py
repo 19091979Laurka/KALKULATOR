@@ -401,6 +401,199 @@ def chart_bar_breakdown(parcels):
     return fig_to_bytes(fig)
 
 
+def chart_parcel_minimap(p):
+    """Rysuje mini-mapę: obrys działki + linie energetyczne. Zwraca bytes PNG."""
+    geom = p.get("geometry") or {}
+    geojson = geom.get("geojson_ll") or geom.get("geojson")
+    pl = (p.get("infrastructure") or {}).get("power_lines") or {}
+    pl_geojson = pl.get("geojson") or {}
+    collision = pl.get("detected", False)
+
+    fig, ax = plt.subplots(figsize=(4, 4), facecolor="#F8F9FC")
+    ax.set_facecolor("#EEF2F7")
+    ax.set_aspect("equal")
+
+    # Działka
+    if geojson and geojson.get("coordinates"):
+        try:
+            coords_raw = geojson.get("coordinates", [])
+            if geojson.get("type") == "Polygon" and coords_raw:
+                ring = coords_raw[0]
+                lons = [c[0] for c in ring]
+                lats = [c[1] for c in ring]
+                ax.fill(lons, lats, facecolor="#E74C3C" if collision else "#27AE60",
+                        alpha=0.35, edgecolor="#C0392B" if collision else "#1E8449", linewidth=2)
+            elif geojson.get("type") == "MultiPolygon" and coords_raw:
+                ring = coords_raw[0][0] if coords_raw[0] else []
+                if ring:
+                    lons = [c[0] for c in ring]
+                    lats = [c[1] for c in ring]
+                    ax.fill(lons, lats, facecolor="#E74C3C" if collision else "#27AE60",
+                            alpha=0.35, edgecolor="#C0392B" if collision else "#1E8449", linewidth=2)
+        except Exception:
+            pass
+
+    # Linie energetyczne
+    for feat in (pl_geojson.get("features") or []):
+        g = feat.get("geometry")
+        if not g or g.get("type") != "LineString":
+            continue
+        coords = g.get("coordinates", [])
+        if len(coords) < 2:
+            continue
+        lons = [c[0] for c in coords]
+        lats = [c[1] for c in coords]
+        v = feat.get("properties", {}).get("voltage", "SN")
+        col = "#E60000" if v == "WN" else "#0066FF" if v == "nN" else "#FF9800"
+        ax.plot(lons, lats, color=col, linewidth=2.5, alpha=0.9)
+
+    ax.tick_params(labelsize=7)
+    ax.set_title("Działka + infrastruktura", fontsize=9, fontweight="bold", color="#2C3E7A")
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout(pad=0.8)
+    return fig_to_bytes(fig)
+
+
+def generate_pdf_cards(parcels_data: list, parcel_ids: list) -> bytes:
+    """
+    PDF z jedną stroną na działkę — karta jak pojedyncza analiza.
+    Cover + dla każdej działki: header, metryki, Track A/B/Razem, mini-mapa.
+    """
+    buf = io.BytesIO()
+    W, H = A4
+    S = make_styles()
+
+    pairs = [(pid, p) for pid, p in zip(parcel_ids, parcels_data) if p]
+    if not pairs:
+        raise ValueError("Brak danych do wygenerowania PDF")
+    MAX_PARCELS = 50
+    if len(pairs) > MAX_PARCELS:
+        pairs = pairs[:MAX_PARCELS]
+    parcel_ids = [x[0] for x in pairs]
+    parcels_data = [x[1] for x in pairs]
+
+    for i, p in enumerate(parcels_data):
+        p["_parcel_id"] = parcel_ids[i] if i < len(parcel_ids) else f"Dz.{i+1}"
+
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=1.5*cm, rightMargin=1.5*cm,
+        topMargin=1.5*cm, bottomMargin=1.5*cm,
+    )
+
+    story = []
+    W_txt = W - 3*cm
+
+    # Cover
+    total_a = sum((((p.get("compensation") or {}).get("track_a") or {}).get("total") or 0) for p in parcels_data)
+    total_b = sum((((p.get("compensation") or {}).get("track_b") or {}).get("total") or 0) for p in parcels_data)
+    story.append(Spacer(1, 50*mm))
+    story.append(Paragraph("ANALIZA ODSZKODOWAWCZA", S["cover_title"]))
+    story.append(Paragraph("Oferty hurtowe · karty działek", S["cover_sub"]))
+    story.append(Spacer(1, 10*mm))
+    story.append(Paragraph(f"{len(parcels_data)} działek · Razem: <b>{total_a + total_b:,.2f} PLN</b>".replace(",", " "), S["cover_det"]))
+    story.append(Spacer(1, 6*mm))
+    story.append(Paragraph(f"Data: <b>{datetime.now().strftime('%d.%m.%Y')}</b>", S["cover_det"]))
+    story.append(PageBreak())
+
+    VOLT_LABEL = {"WN": "WN >110 kV", "SN": "SN 1–110 kV", "nN": "nN <1 kV"}
+
+    for idx, p in enumerate(parcels_data):
+        pid = p["_parcel_id"]
+        geom = p.get("geometry") or {}
+        ksws = p.get("ksws") or {}
+        pl = (p.get("infrastructure") or {}).get("power_lines") or {}
+        md = p.get("market_data") or {}
+        comp = p.get("compensation") or {}
+        ta = comp.get("track_a") or {}
+        tb = comp.get("track_b") or {}
+        collision = pl.get("detected", False)
+        volt = VOLT_LABEL.get(pl.get("voltage"), pl.get("voltage") or "—")
+
+        # Header
+        acc = C_ACCENT if collision else C_GREEN
+        hdr_cells = [
+            [Paragraph(f"<b>#{idx+1}</b>", S["body"]), Paragraph(f"<b>{pid}</b>", S["body"]),
+             Paragraph(f"<font color={'#c62828' if collision else '#2e7d32'}>{'KOLIZJA' if collision else 'BEZ KOLIZJI'}</font>", S["body"])]
+        ]
+        hdr_t = Table(hdr_cells, colWidths=[15*mm, W_txt*0.5, 35*mm])
+        hdr_t.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,-1), HexColor("#F8F9FC")),
+            ("BOX", (0,0), (-1,-1), 1, acc),
+            ("TOPPADDING", (0,0), (-1,-1), 6),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+        ]))
+        story.append(hdr_t)
+        story.append(Spacer(1, 3*mm))
+
+        # Metryki 2x4
+        area = geom.get("area_m2") or 0
+        price = md.get("average_price_m2") or 0
+        value = ksws.get("property_value_total") or (area * price)
+        line_len = ksws.get("line_length_m") or 0
+        band_w = ksws.get("band_width_m") or 0
+        band_a = ksws.get("band_area_m2") or 0
+        pct = min(100, round(band_a / area * 100)) if area > 0 and band_a > 0 else 0
+
+        metric_rows = [
+            [Paragraph("Pow. działki", S["small"]), f"{area:,.0f} m²".replace(",", " "),
+             Paragraph("Cena gruntu", S["small"]), f"{price:.2f} zł/m²",
+             Paragraph("Wartość nier.", S["small"]), f"{value:,.0f} PLN".replace(",", " "),
+             Paragraph("Napięcie", S["small"]), volt],
+            [Paragraph("Dł. linii", S["small"]), f"{line_len:.1f} m" if line_len else "—",
+             Paragraph("Szer. pasa", S["small"]), f"{band_w} m" if band_w else "—",
+             Paragraph("Pow. pasa", S["small"]), f"{band_a:,.0f} m²".replace(",", " ") if band_a else "—",
+             Paragraph("% w pasie", S["small"]), f"{pct}%" if pct else "—"],
+        ]
+        mtab = Table(metric_rows, colWidths=[35*mm, 40*mm]*4)
+        mtab.setStyle(TableStyle([
+            ("FONTNAME", (0,0), (-1,-1), "Helvetica"),
+            ("FONTSIZE", (0,0), (-1,-1), 9),
+            ("GRID", (0,0), (-1,-1), 0.3, C_BORDER),
+            ("BACKGROUND", (0,0), (0,-1), C_LIGHT_BG),
+            ("BACKGROUND", (2,0), (2,-1), C_LIGHT_BG),
+            ("TOPPADDING", (0,0), (-1,-1), 4),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+        ]))
+        story.append(mtab)
+        story.append(Spacer(1, 4*mm))
+
+        # Track A / B / RAZEM + mapa (2 kolumny)
+        ta_total = ta.get("total") or 0
+        tb_total = tb.get("total") or 0
+        razem = ta_total + tb_total
+
+        track_cells = [
+            [Paragraph("Track A — Sąd", S["small"]), Paragraph(fmt_pln(ta_total), S["body"])],
+            [Paragraph("Track B — Neg.", S["small"]), Paragraph(fmt_pln(tb_total), S["body"])],
+            [Paragraph("<b>RAZEM A+B</b>", S["body"]), Paragraph(f"<b>{fmt_pln(razem)}</b>", S["body"])],
+        ]
+        track_t = Table(track_cells, colWidths=[55*mm, 45*mm])
+        track_t.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (0,1), HexColor("#EEF4FF")),
+            ("BACKGROUND", (0,2), (-1,2), HexColor("#3D2319")),
+            ("TEXTCOLOR", (0,2), (-1,2), white),
+            ("BOX", (0,0), (-1,-1), 0.5, C_BORDER),
+            ("TOPPADDING", (0,0), (-1,-1), 6),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+        ]))
+        story.append(track_t)
+
+        # Mini-mapa (obok lub pod)
+        try:
+            map_bytes = chart_parcel_minimap(p)
+            story.append(Spacer(1, 3*mm))
+            story.append(RLImage(map_bytes, width=10*cm, height=10*cm))
+        except Exception:
+            story.append(Paragraph("<i>Mapa niedostępna</i>", S["small"]))
+
+        story.append(PageBreak())
+
+    doc.build(story)
+    buf.seek(0)
+    return buf.read()
+
+
 # ── STRONA TYTUŁOWA ─────────────────────────────────────────────────────────────
 
 def draw_cover(canvas_obj, doc):

@@ -38,3 +38,4 @@ raporty/
 
 # OS
 Thumbs.db
+backend/secrets/

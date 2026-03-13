@@ -1,0 +1,20 @@
+# Działki z różnych województw do testów API
+# Jeden identyfikator na linię. Linie zaczynające się od # są ignorowane.
+# TERYT: 2 pierwsze cyfry = województwo (14=mazow., 02=dolnośl., 12=małop., 22=pom., 24=śląskie, 30=wielkop. itd.)
+#
+# --- MAZOWIECKIE (14) — powiat płoński ---
+142003_2.0006.74/4
+142003_2.0009.13
+142010_2.0044.105
+#
+# --- Dodaj poniżej działki z innych województw ---
+# Dolnośląskie (02):
+# 0201_2.XXXX.XX
+# Małopolskie (12):
+# 1201_2.XXXX.XX
+# Pomorskie (22):
+# 2201_2.XXXX.XX
+# Śląskie (24):
+# 2401_2.XXXX.XX
+# Wielkopolskie (30):
+# 3001_2.XXXX.XX

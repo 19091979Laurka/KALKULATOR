@@ -21,7 +21,7 @@ from backend.modules.property import PropertyAggregator
 from backend.modules.infrastructure import prefetch_regional_osm, clear_regional_cache
 from backend.core.valuation import calculate_compensation
 from backend.core.reports import create_summary_dict
-from backend.modules.pdf_report import generate_pdf
+from backend.modules.pdf_report import generate_pdf, generate_pdf_cards
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -37,7 +37,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+# frontend-react/build (po npm run build) lub frontend-react dla index.html
+_root = Path(__file__).parent.parent
+FRONTEND_DIR = (_root / "frontend-react" / "build") if (_root / "frontend-react" / "build").exists() else (_root / "frontend-react")
 HISTORY_DIR = Path(__file__).parent / ".." / "data" / "history"
 HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -450,6 +452,27 @@ async def report_pdf(req: PdfReportRequest):
         )
     except Exception as e:
         logger.error(f"Błąd generowania PDF: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/report/pdf-cards")
+async def report_pdf_cards(req: PdfReportRequest):
+    """
+    PDF z jedną stroną na działkę — karta jak pojedyncza analiza (metryki, Track A/B, mini-mapa).
+    Do Ofert hurtowych — każda działka ma własną stronę.
+    """
+    try:
+        masters = [p.get("master_record") or p.get("data", {}) for p in req.parcels]
+        ids = [p.get("parcel_id", f"Dz.{i+1}") for i, p in enumerate(req.parcels)]
+        pdf_bytes = generate_pdf_cards(parcels_data=masters, parcel_ids=ids)
+        filename = f"Oferty_hurtowe_{len(ids)}_dzialek_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as e:
+        logger.error(f"Błąd generowania PDF cards: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

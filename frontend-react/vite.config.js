@@ -57,7 +57,7 @@ export default defineConfig({
     sourcemap: true,
     target: 'es2020',
   },
-  base: './',
+  base: '/',  // './' łamało ładowanie przy odświeżeniu na /kalkulator itp.
   css: {
     preprocessorOptions: {
       scss: {

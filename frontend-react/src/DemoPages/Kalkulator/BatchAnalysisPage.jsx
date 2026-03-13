@@ -37,6 +37,10 @@ function fmtM2(v) {
   return Math.round(v).toLocaleString("pl-PL") + " m²";
 }
 
+function nowPL() {
+  return new Date().toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" });
+}
+
 // ─── Generuj standalone HTML raport dla jednej działki ───────────────────────
 function buildParcelHtml(parcel, editedLen) {
   const mr = parcel.data || {};
@@ -270,6 +274,8 @@ function downloadCSV(parcels, editedLengths) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
+const BATCH_HISTORY_KEY = "batch_history";
+
 const BatchAnalysisPage = () => {
   const navigate = useNavigate();
   const [file, setFile] = useState(null);
@@ -278,11 +284,64 @@ const BatchAnalysisPage = () => {
   const [results, setResults] = useState(null);
   const [editedLengths, setEditedLengths] = useState({});
   const [activeTab, setActiveTab] = useState("table");
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const [editingBatchId, setEditingBatchId] = useState(null);
+  const [pastedList, setPastedList] = useState("");
   const fileInputRef = useRef(null);
+
+  const saveBatchToHistory = useCallback((json) => {
+    try {
+      const batchHistory = JSON.parse(localStorage.getItem(BATCH_HISTORY_KEY) || "[]");
+      const parcels = json.parcels || [];
+      const trackA = parcels.reduce((s, p) => s + (p.data?.compensation?.track_a?.total ?? 0), 0);
+      const trackB = parcels.reduce((s, p) => s + (p.data?.compensation?.track_b?.total ?? 0), 0);
+      const collision = parcels.filter(p => !!p.data?.infrastructure?.power_lines?.detected).length;
+      const newBatch = {
+        id: `batch_${Date.now()}`,
+        date: nowPL(),
+        title: "",
+        parcel_count: json.summary?.total ?? parcels.length,
+        successful: json.summary?.successful ?? 0,
+        full_data: parcels,
+        summary: { trackA, trackB, total: trackA + trackB, collision },
+      };
+      const updated = [newBatch, ...batchHistory].slice(0, 10);
+      localStorage.setItem(BATCH_HISTORY_KEY, JSON.stringify(updated));
+    } catch (e) {
+      console.error("Batch history save:", e);
+    }
+  }, []);
 
   const handleFileChange = (e) => {
     const f = e.target.files?.[0];
     if (f) setFile(f);
+  };
+
+  const runPasteAnalysis = async () => {
+    const lines = pastedList.trim().split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
+    if (!lines.length) return;
+    const csv = "parcel_id,obreb,county,municipality\n" + lines.map((id) => `${id},,,`).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const f = new File([blob], "lista_dzialek.csv", { type: "text/csv" });
+    setLoading(true);
+    setError(null);
+    setResults(null);
+    setEditedLengths({});
+    try {
+      const formData = new FormData();
+      formData.append("file", f);
+      const res = await fetch("/api/analyze/batch", { method: "POST", body: formData });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.detail || `HTTP ${res.status}`);
+      if (!json.ok) throw new Error(json.error || "Błąd analizy");
+      setResults(json);
+      saveBatchToHistory(json);
+      setPastedList("");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDrop = useCallback((e) => {
@@ -305,6 +364,7 @@ const BatchAnalysisPage = () => {
       if (!res.ok) throw new Error(json.detail || `HTTP ${res.status}`);
       if (!json.ok) throw new Error(json.error || "Błąd analizy");
       setResults(json);
+      saveBatchToHistory(json);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -317,7 +377,8 @@ const BatchAnalysisPage = () => {
     setEditedLengths(prev => ({ ...prev, [parcel_id]: isNaN(n) ? null : n }));
   };
 
-  // Compute totals using edited lengths
+  // Totals: bez korekt długości = kwoty z API (jak Oferty hurtowe i PDF). Z korektami = recalc.
+  const hasEditedLengths = results?.parcels && Object.keys(editedLengths).some(id => editedLengths[id] != null);
   const totals = results?.parcels
     ? results.parcels.reduce((acc, p) => {
         const mr = p.data || {};
@@ -326,26 +387,32 @@ const BatchAnalysisPage = () => {
         const infra = mr.infrastructure || {};
         const pwr = infra.power || {};
         const ksws = mr.ksws || {};
+        const comp = mr.compensation || {};
         const area = geom.area_m2 || 0;
         const price = mkt.average_price_m2 || 0;
         const infra_type = ksws.infra_type || "elektro_SN";
         const editedLen = editedLengths[p.parcel_id];
         const lineLen = editedLen !== undefined && editedLen !== null ? editedLen : (pwr.line_length_m || 0);
         const calc = recalcKSWS(area, price, lineLen, infra_type);
-        acc.track_a += calc.track_a;
-        acc.track_b += calc.track_b;
+        acc.track_a_api += (comp.track_a?.total ?? 0);
+        acc.track_b_api += (comp.track_b?.total ?? 0);
+        acc.track_a_recalc += calc.track_a;
+        acc.track_b_recalc += calc.track_b;
         if (infra.power_lines?.detected || lineLen > 0) acc.collision++;
         acc.total++;
         return acc;
-      }, { track_a: 0, track_b: 0, collision: 0, total: 0 })
+      }, { track_a_api: 0, track_b_api: 0, track_a_recalc: 0, track_b_recalc: 0, collision: 0, total: 0 })
     : null;
+
+  const displayTrackA = totals && (hasEditedLengths ? totals.track_a_recalc : totals.track_a_api);
+  const displayTrackB = totals && (hasEditedLengths ? totals.track_b_recalc : totals.track_b_api);
 
   return (
     <div className="batch-wrapper">
       {/* ── HEADER ── */}
       <div className="batch-header">
-        <h1>📊 Analiza Zbiorcza KSWS</h1>
-        <p>Wgraj CSV z listą działek — kalkulator pobierze dane, wykryje linie i obliczy roszczenia</p>
+        <h1>📊 Analiza hurtowa</h1>
+        <p>Wgraj plik CSV lub wklej listę działek — wygeneruje raport Oferty hurtowe · Batch CSV i zapisze w Historii raportów poniżej</p>
       </div>
 
       {/* ── UPLOAD SECTION ── */}
@@ -390,6 +457,27 @@ const BatchAnalysisPage = () => {
             </p>
           )}
 
+          <p className="file-info" style={{ marginTop: 16 }}>
+            <strong>Albo wklej listę działek</strong> (jeden numer w linii lub po przecinku / średniku):
+          </p>
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+            <textarea
+              value={pastedList}
+              onChange={(e) => setPastedList(e.target.value)}
+              placeholder={"np. 142003_2.0002.81/5\n81/6\n303/4"}
+              rows={3}
+              style={{ flex: "1 1 280px", minWidth: 200, padding: 12, borderRadius: 8, border: "1px solid #D6CCC2", fontFamily: "inherit", fontSize: "0.9em" }}
+            />
+            <button
+              type="button"
+              className="submit-btn"
+              disabled={!pastedList.trim() || loading}
+              onClick={runPasteAnalysis}
+              style={{ alignSelf: "flex-end" }}
+            >
+              {loading ? "⏳ Analizuję..." : "🚀 Analizuj z listy"}
+            </button>
+          </div>
           <p className="file-info">
             Przykład: pełny TERYT <code>142003_2.0002.81/5</code> lub numer + obręb <code>81/5,Baboszewo</code>.{" "}
             <button
@@ -436,23 +524,26 @@ const BatchAnalysisPage = () => {
               <div className="stat-label">Kolizja z linią</div>
             </div>
             <div className="stat-card money">
-              <div className="stat-value" style={{ fontSize: "1.4em" }}>{Math.round(totals.track_a).toLocaleString("pl-PL")}</div>
+              <div className="stat-value" style={{ fontSize: "1.4em" }}>{Math.round(displayTrackA).toLocaleString("pl-PL")}</div>
               <div className="stat-label">Track A [PLN]</div>
             </div>
             <div className="stat-card money2">
-              <div className="stat-value" style={{ fontSize: "1.4em" }}>{Math.round(totals.track_b).toLocaleString("pl-PL")}</div>
+              <div className="stat-value" style={{ fontSize: "1.4em" }}>{Math.round(displayTrackB).toLocaleString("pl-PL")}</div>
               <div className="stat-label">Track B [PLN]</div>
             </div>
           </div>
 
-          {/* Total box */}
+          {/* Total box — ta sama kwota co w Oferty hurtowe i PDF (API), chyba że są korekty długości */}
           <div className="summary-box">
-            <div className="summary-title">💰 ŁĄCZNE ROSZCZENIA (Track A + Track B)</div>
-            <div className="summary-value">{Math.round(totals.track_a + totals.track_b).toLocaleString("pl-PL")} PLN</div>
+            <div className="summary-title">💰 ŁĄCZNE ROSZCZENIA (Track A + Track B){hasEditedLengths ? " (po korekcie długości)" : ""}</div>
+            <div className="summary-value">{Math.round(displayTrackA + displayTrackB).toLocaleString("pl-PL")} PLN</div>
           </div>
 
-          {/* Tabs */}
+          {/* Tabs — Raport = szablon jak Oferty hurtowe (mapa, KPI, Odszkodowanie wg działki, Łączne roszczenie) */}
           <div className="tabs">
+            <button className={`tab${activeTab === "raport" ? " active" : ""}`} onClick={() => setActiveTab("raport")}>
+              📊 Raport
+            </button>
             <button className={`tab${activeTab === "table" ? " active" : ""}`} onClick={() => setActiveTab("table")}>
               📋 Tabela działek
             </button>
@@ -466,6 +557,88 @@ const BatchAnalysisPage = () => {
               🔄 Nowa analiza
             </button>
           </div>
+
+          {/* RAPORT TAB — szablon jak Oferty hurtowe (zob. RAPORTY_MIEJSCA_WZORY.md sekcja 4) */}
+          {activeTab === "raport" && (
+            <div style={{ background: "#f0f3f8", borderRadius: 16, padding: 20, marginTop: 16 }}>
+              {/* KPI cards — jak Oferty hurtowe */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 18 }}>
+                {[
+                  { label: "Działek", value: totals.total, sub: "załadowanych z CSV", icon: "📦", grad: "linear-gradient(135deg,#f7971e,#ffd200)" },
+                  { label: "Kolizji", value: totals.collision, sub: "wykryta infrastr.", icon: "⚡", grad: "linear-gradient(135deg,#e53935,#ef5350)" },
+                  { label: "Bez kol.", value: totals.total - totals.collision, sub: "brak infrastruktury", icon: "✅", grad: "linear-gradient(135deg,#43a047,#66bb6a)" },
+                  { label: "Track A", value: fmtPLN(displayTrackA), sub: "ścieżka sądowa", icon: "⚖️", grad: "linear-gradient(135deg,#1e88e5,#42a5f5)" },
+                  { label: "Track B", value: fmtPLN(displayTrackB), sub: "negocjacje", icon: "🤝", grad: "linear-gradient(135deg,#8e24aa,#ab47bc)" },
+                ].map((k, i) => (
+                  <div key={i} style={{ background: k.grad, borderRadius: 14, padding: "20px 18px", boxShadow: "0 6px 20px rgba(0,0,0,0.14)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontSize: "0.6em", textTransform: "uppercase", letterSpacing: "1.2px", color: "rgba(255,255,255,0.75)", fontWeight: 700, marginBottom: 6 }}>{k.label}</div>
+                      <div style={{ fontSize: typeof k.value === "number" ? "2.2em" : "1.15em", fontWeight: 900, color: "white", lineHeight: 1.1 }}>{k.value}</div>
+                      <div style={{ fontSize: "0.62em", color: "rgba(255,255,255,0.65)" }}>{k.sub}</div>
+                    </div>
+                    <div style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(0,0,0,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3em" }}>{k.icon}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Odszkodowanie wg działki + Łączne roszczenie */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 14 }}>
+                <div style={{ background: "white", borderRadius: 12, padding: 20, boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
+                  <div style={{ fontSize: "0.75em", fontWeight: 700, color: "#3d2319", marginBottom: 14 }}>📊 Odszkodowanie wg działki</div>
+                  {results.parcels.filter(p => p.status !== "ERROR").slice(0, 12).map((p, i) => {
+                    const mr = p.data || {};
+                    const geom = mr.geometry || {};
+                    const mkt = mr.market_data || {};
+                    const ksws = mr.ksws || {};
+                    const pwr = mr.infrastructure?.power || {};
+                    const editedLen = editedLengths[p.parcel_id];
+                    const lineLen = editedLen !== undefined && editedLen !== null ? editedLen : (pwr.line_length_m || 0);
+                    const calc = recalcKSWS(geom.area_m2 || 0, mkt.average_price_m2 || 0, lineLen, ksws.infra_type || "elektro_SN");
+                    const razem = calc.track_a + calc.track_b;
+                    const collision = !!mr.infrastructure?.power_lines?.detected;
+                    const shortId = (p.parcel_id || "").split(".").pop() || p.parcel_id;
+                    return (
+                      <div key={i} style={{ display: "grid", gridTemplateColumns: "90px 1fr 90px", gap: 8, alignItems: "center", marginBottom: 7 }}>
+                        <div style={{ fontSize: "0.72em", color: "#636e72", fontWeight: 600 }} title={p.parcel_id}>
+                          <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: collision ? "#e74c3c" : "#27ae60", marginRight: 5, verticalAlign: "middle" }} />
+                          {shortId}
+                        </div>
+                        <div style={{ background: "#f4f6f8", borderRadius: 4, height: 20, position: "relative", overflow: "hidden" }}>
+                          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${razem > 0 ? (calc.track_a / razem * 100) : 0}%`, background: "#3498db", borderRadius: "4px 0 0 4px" }} />
+                          <div style={{ position: "absolute", left: `${calc.track_a / (razem || 1) * 100}%`, top: 0, bottom: 0, width: `${razem > 0 ? (calc.track_b / razem * 100) : 0}%`, background: "#f39c12" }} />
+                        </div>
+                        <div style={{ fontSize: "0.73em", fontWeight: 700, color: "#3d2319", textAlign: "right" }}>{Math.round(razem / 1000).toLocaleString()}k PLN</div>
+                      </div>
+                    );
+                  })}
+                  {results.parcels.filter(p => p.status !== "ERROR").length > 12 && (
+                    <div style={{ fontSize: "0.68em", color: "#95a5a6", textAlign: "center", paddingTop: 6 }}>+ {results.parcels.filter(p => p.status !== "ERROR").length - 12} kolejnych działek</div>
+                  )}
+                  <div style={{ display: "flex", gap: 16, marginTop: 8, paddingTop: 8, borderTop: "1px solid #f0f0f0", fontSize: "0.68em", color: "#636e72" }}>
+                    <span><span style={{ display: "inline-block", width: 12, height: 8, background: "#3498db", borderRadius: 2, marginRight: 4 }} />Track A</span>
+                    <span><span style={{ display: "inline-block", width: 12, height: 8, background: "#f39c12", borderRadius: 2, marginRight: 4 }} />Track B</span>
+                    <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#e74c3c", marginRight: 4 }} />Kolizja</span>
+                    <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#27ae60", marginRight: 4 }} />Bez kol.</span>
+                  </div>
+                </div>
+                <div style={{ background: "white", borderRadius: 12, padding: 20, boxShadow: "0 1px 6px rgba(0,0,0,0.06)", minWidth: 220 }}>
+                  <div style={{ fontSize: "0.75em", fontWeight: 700, color: "#3d2319", marginBottom: 16 }}>💰 Łączne roszczenie</div>
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: "0.62em", textTransform: "uppercase", letterSpacing: 1, color: "#95a5a6", fontWeight: 700 }}>Razem (A+B)</div>
+                    <div style={{ fontSize: "1.65em", fontWeight: 900, color: "#3d2319" }}>{fmtPLN(displayTrackA + displayTrackB)}</div>
+                  </div>
+                  <div style={{ borderTop: "1px solid #f0f2f5", paddingTop: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                      <div><div style={{ fontSize: "0.62em", color: "#95a5a6", fontWeight: 600 }}>⚖️ Track A</div><div style={{ fontWeight: 800, color: "#2c3e50" }}>{fmtPLN(displayTrackA)}</div></div>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <div><div style={{ fontSize: "0.62em", color: "#95a5a6", fontWeight: 600 }}>🤝 Track B</div><div style={{ fontWeight: 800, color: "#e67e22" }}>{fmtPLN(displayTrackB)}</div></div>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: "0.8em", color: "#7f8c8d", marginTop: 16 }}>Raport PDF zbiorczy i mapa — z poziomu Oferty hurtowe (szablon w docelowej wersji).</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* TABLE TAB */}
           {activeTab === "table" && (
@@ -576,24 +749,8 @@ const BatchAnalysisPage = () => {
                         </td>
                         <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                           <button
-                            onClick={() => downloadParcelPdf(p)}
-                            title="Pełny raport PDF (backend KSWS)"
-                            style={{
-                              background: "linear-gradient(135deg,#2c3e50,#4b6584)",
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: 6,
-                              padding: "5px 8px",
-                              cursor: "pointer",
-                              fontSize: "0.8em",
-                              fontWeight: 600,
-                              marginRight: 6,
-                            }}>
-                            📄 PDF
-                          </button>
-                          <button
                             onClick={() => downloadParcelHtml(p, lineLen > 0 ? lineLen : null)}
-                            title="Pobierz raport HTML (z bieżącą długością)"
+                            title="Pobierz raport HTML do podglądu / PDF z przeglądarki"
                             style={{
                               background: "linear-gradient(135deg,#5c3d2e,#b8963e)",
                               color: "#fff",
@@ -648,6 +805,8 @@ const BatchAnalysisPage = () => {
           )}
         </div>
       )}
+
+      {/* Historia raportów dla hurtowych dostępna jest w osobnej zakładce „Historia raportów” w sidebarze. */}
     </div>
   );
 };
