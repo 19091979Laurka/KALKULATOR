@@ -4,7 +4,7 @@ requests==2.32.5
 httpx==0.28.1
 pydantic==2.12.5
 shapely==2.0.6
-mapbox-vector-tile==2.0.2
+mapbox-vector-tile==2.2.0
 python-dotenv==1.2.1
 aiofiles==24.1.0
 # pdf_report.py
