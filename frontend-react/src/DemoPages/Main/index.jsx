@@ -46,14 +46,14 @@ const Main = (props) => {
             { "body-tabs-shadow-btn": enablePageTabsAlt },
             { "kalkulator-route": isKalkulatorRoute }
           )}>
-          <AppHeader />
+          {!isKalkulatorRoute && <AppHeader />}
           <div className="app-main">
             {!isKalkulatorRoute && <AppSidebar />}
             <div className="app-main__outer">
-              <div className="app-main__inner">
+              <div className={isKalkulatorRoute ? "" : "app-main__inner"}>
                 <AppMain />
               </div>
-              <AppFooter />
+              {!isKalkulatorRoute && <AppFooter />}
             </div>
           </div>
         </div>

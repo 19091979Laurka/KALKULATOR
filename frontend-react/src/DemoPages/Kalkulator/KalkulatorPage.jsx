@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { MapContainer, TileLayer, WMSTileLayer, useMap, GeoJSON } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -1872,6 +1873,15 @@ export default function KalkulatorPage() {
   const [activeTab, setActiveTab] = useState("map2d");
   const [activeNav, setActiveNav] = useState("analiza");
   const [showManual, setShowManual] = useState(false);
+  const navigate = useNavigate();
+
+  // ── Nawigacja sidebaru — wewnętrzne zakładki lub router ──────────────────────
+  const handleSidebarNav = (id) => {
+    if (id === "klienci") { navigate("/kalkulator/klienci"); return; }
+    if (id === "wzory")   { navigate("/kalkulator/wzory");   return; }
+    if (id === "home")    { navigate("/kalkulator/home");    return; }
+    setActiveNav(id);
+  };
 
   // ── Typ klienta ──────────────────────────────────────────────────────────────
   const [isFarmer, setIsFarmer] = useState(false);
@@ -2125,24 +2135,55 @@ export default function KalkulatorPage() {
         <nav className="ksws-sidebar-nav">
           <div
             className={`ksws-sidebar-nav-item${activeNav === "analiza" ? " active" : ""}`}
-            onClick={() => setActiveNav("analiza")}
+            onClick={() => handleSidebarNav("analiza")}
+            style={{ cursor: "pointer" }}
           >
-            <span className="ksws-sidebar-nav-icon">🏠</span>
+            <span className="ksws-sidebar-nav-icon">⚡</span>
             Analiza działki
           </div>
           <div
             className={`ksws-sidebar-nav-item${activeNav === "historia" ? " active" : ""}`}
-            onClick={() => setActiveNav("historia")}
+            onClick={() => handleSidebarNav("historia")}
+            style={{ cursor: "pointer" }}
           >
             <span className="ksws-sidebar-nav-icon">📋</span>
             Historia analiz
           </div>
           <div
             className={`ksws-sidebar-nav-item${activeNav === "batch" ? " active" : ""}`}
-            onClick={() => setActiveNav("batch")}
+            onClick={() => handleSidebarNav("batch")}
+            style={{ cursor: "pointer" }}
           >
-            <span className="ksws-sidebar-nav-icon">📄</span>
+            <span className="ksws-sidebar-nav-icon">📊</span>
             Batch CSV
+          </div>
+          {/* ── Separator ── */}
+          <div style={{ margin: "8px 16px", borderTop: "1px solid rgba(255,255,255,0.1)" }} />
+          <div
+            className="ksws-sidebar-nav-item"
+            onClick={() => handleSidebarNav("klienci")}
+            style={{ cursor: "pointer" }}
+          >
+            <span className="ksws-sidebar-nav-icon">👥</span>
+            Klienci
+          </div>
+          <div
+            className="ksws-sidebar-nav-item"
+            onClick={() => handleSidebarNav("wzory")}
+            style={{ cursor: "pointer" }}
+          >
+            <span className="ksws-sidebar-nav-icon">📝</span>
+            Wzory dokumentów
+          </div>
+          {/* ── Separator ── */}
+          <div style={{ margin: "8px 16px", borderTop: "1px solid rgba(255,255,255,0.1)" }} />
+          <div
+            className="ksws-sidebar-nav-item"
+            onClick={() => handleSidebarNav("home")}
+            style={{ cursor: "pointer", opacity: 0.7 }}
+          >
+            <span className="ksws-sidebar-nav-icon">🏠</span>
+            Strona główna
           </div>
         </nav>
 
