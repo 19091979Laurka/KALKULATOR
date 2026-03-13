@@ -22,7 +22,7 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ ./backend/
-COPY --from=frontend-builder /app/frontend-react/build/ ./frontend/
+COPY --from=frontend-builder /app/frontend-react/build/ ./frontend-react/build/
 
 ENV PORT=8080
 EXPOSE 8080
