@@ -1306,9 +1306,9 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
     <div className="ksws-card">
       <div className="ksws-card-header">
         <span className="ksws-card-header-icon">📄</span>
-        <div>
-          <div className="ksws-card-header-title">Batch CSV Analysis</div>
-          <div className="ksws-card-header-sub">Analiza wielu działek · załaduj CSV</div>
+          <div>
+          <div className="ksws-card-header-title">Oferty hurtowe · Batch CSV</div>
+          <div className="ksws-card-header-sub">Załaduj CSV · wyniki i karty z poprzednich batchy poniżej</div>
         </div>
       </div>
       <div className="ksws-card-body">
@@ -2166,17 +2166,19 @@ export default function KalkulatorPage() {
             className={`ksws-sidebar-nav-item${activeNav === "historia" ? " active" : ""}`}
             onClick={() => handleSidebarNav("historia")}
             style={{ cursor: "pointer" }}
+            title="Pojedyncze analizy · lista działek z tej sesji"
           >
             <span className="ksws-sidebar-nav-icon">📋</span>
-            Historia analiz
+            Historia działek
           </div>
           <div
             className={`ksws-sidebar-nav-item${activeNav === "batch" ? " active" : ""}`}
             onClick={() => handleSidebarNav("batch")}
             style={{ cursor: "pointer" }}
+            title="Wgraj CSV · wyniki i karty ofert hurtowych (batch)"
           >
             <span className="ksws-sidebar-nav-icon">📊</span>
-            Batch CSV
+            Oferty hurtowe · CSV
           </div>
           {/* ── Separator ── */}
           <div style={{ margin: "8px 16px", borderTop: "1px solid rgba(255,255,255,0.1)" }} />
@@ -2266,8 +2268,8 @@ export default function KalkulatorPage() {
               <div className="ksws-card-header">
                 <span className="ksws-card-header-icon">📋</span>
                 <div>
-                  <div className="ksws-card-header-title">Historia analiz</div>
-                  <div className="ksws-card-header-sub">Pełne dane wyliczeń · kliknij aby załadować</div>
+                  <div className="ksws-card-header-title">Historia działek</div>
+                  <div className="ksws-card-header-sub">Pojedyncze analizy · pełne dane wyliczeń · kliknij aby załadować</div>
                 </div>
               </div>
               <div className="ksws-card-body">

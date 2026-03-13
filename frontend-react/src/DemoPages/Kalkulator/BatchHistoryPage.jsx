@@ -589,56 +589,53 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
 
       {loading ? (
         <div className="loading-container">
-          <Spinner color="light" />
+          <Spinner color="primary" />
           <p>Ładowanie historii...</p>
         </div>
       ) : history.length === 0 ? (
         <div className="empty-state">
           <p>📭 Brak historii analiz</p>
-          <p>Wykonaj nową analizę CSV w sekcji „Batch CSV”</p>
-          <p className="hint">Wyniki analiz zbiorczych będą zapisywane automatycznie</p>
+          <p className="hint">Wykonaj nową analizę CSV w sekcji „Batch CSV"</p>
         </div>
       ) : (
-        <div className="history-content">
-          <div className="history-table">
-            {history.map((item, idx) => (
-              <div key={item.batch_id} className="history-row">
-                <div className="row-number">{idx + 1}</div>
-                <div className="row-content">
-                  <div className="row-header">
-                    <div className="timestamp">
-                      📅 {new Date(item.timestamp).toLocaleDateString("pl-PL", {
-                        year: "numeric",
-                        month: "2-digit",
-                        day: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </div>
-                    <div className="file-name">📄 {item.file_name}</div>
+        <div className="history-table">
+          {history.map((item, idx) => (
+            <div key={item.batch_id} className="history-row">
+              <div className="row-number">{idx + 1}</div>
+              <div className="row-content">
+                <div className="row-header">
+                  <div className="timestamp">
+                    📅 {new Date(item.timestamp).toLocaleDateString("pl-PL", {
+                      year: "numeric",
+                      month: "2-digit",
+                      day: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </div>
-                  <div className="row-stats">
-                    <Badge color="info" pill>
-                      📦 {item.total} działek
-                    </Badge>
-                    <Badge color="success" pill>
-                      ✓ {item.successful} analizowanych
-                    </Badge>
-                  </div>
+                  <div className="file-name">📄 {item.file_name}</div>
                 </div>
-                <Button
-                  color="primary"
-                  size="sm"
-                  onClick={() => loadBatchDetails(item.batch_id)}
-                  className="view-button"
-                  aria-label={`Otwórz raport: ${item.total} działek, ${item.file_name || item.batch_id}, ${new Date(item.timestamp).toLocaleDateString("pl-PL")}`}
-                  title={`Otwórz raport z mapami (${item.total} działek)`}
-                >
-                  📊 Otwórz raport
-                </Button>
+                <div className="row-stats">
+                  <Badge color="info" pill>
+                    📦 {item.total} działek
+                  </Badge>
+                  <Badge color="success" pill>
+                    ✓ {item.successful} analizowanych
+                  </Badge>
+                </div>
               </div>
-            ))}
-          </div>
+              <Button
+                color="primary"
+                size="sm"
+                onClick={() => loadBatchDetails(item.batch_id)}
+                className="view-button"
+                aria-label={`Otwórz raport: ${item.total} działek, ${item.file_name || item.batch_id}, ${new Date(item.timestamp).toLocaleDateString("pl-PL")}`}
+                title={`Otwórz raport z mapami (${item.total} działek)`}
+              >
+                📊 Otwórz raport
+              </Button>
+            </div>
+          ))}
         </div>
       )}
     </div>
