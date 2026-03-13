@@ -9,7 +9,7 @@ import AppMain from "../../Layout/AppMain";
 import AppHeader from "../../Layout/AppHeader";
 import AppSidebar from "../../Layout/AppSidebar";
 import AppFooter from "../../Layout/AppFooter";
-import ThemeOptions from "../../Layout/ThemeOptions";
+// ThemeOptions (yellow config button) hidden - settings hardcoded
 
 const Main = (props) => {
   // Note: closedSmallerSidebar state removed as it was unused
@@ -30,14 +30,14 @@ const Main = (props) => {
 
   return (
     <Fragment>
-      <ThemeOptions />
+      {/* ThemeOptions hidden - layout settings are hardcoded */}
       <div ref={ref}>
         <div
           className={cx(
             "app-container app-theme-" + colorScheme,
-            { "fixed-header": enableFixedHeader },
-            { "fixed-sidebar": enableFixedSidebar || width < 992 },
-            { "fixed-footer": enableFixedFooter },
+            { "fixed-header": true },
+            { "fixed-sidebar": true },
+            { "fixed-footer": true },
             { "closed-sidebar": enableClosedSidebar || width < 992 || isKalkulatorRoute },
             {
               "closed-sidebar-mobile": width < 992,
