@@ -19,7 +19,7 @@ const Header = ({
     <Fragment>
       <TransitionGroup>
         <CSSTransition component="div"
-          className={cx("app-header", headerBackgroundColor, {
+          className={cx("app-header", "header-text-light", headerBackgroundColor, {
             "header-shadow": enableHeaderShadow,
           })}
           appear={true} timeout={1500} enter={false} exit={false}>

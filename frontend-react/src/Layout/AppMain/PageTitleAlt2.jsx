@@ -23,7 +23,7 @@ class PageTitleAlt2 extends React.Component {
   }
 
   notify22 = () =>
-    (this.toastId = toast("Możesz dodać dowolny element w tej sekcji.", {
+    (this.toastId = toast("You can add whatever element in this section.", {
       transition: Slide,
       closeButton: true,
       autoClose: 5000,
@@ -63,7 +63,7 @@ class PageTitleAlt2 extends React.Component {
               <FontAwesomeIcon icon={faBatteryThreeQuarters} />
             </Button>
             <UncontrolledTooltip placement="left" target={"Tooltip-123"}>
-              Przykładowe powiadomienie
+              A notification example!
             </UncontrolledTooltip>
           </div>
         </div>

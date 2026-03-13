@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import { toast } from "react-toastify";
 import CountUp from "react-countup";
 import { Spinner, Badge, Table, Progress } from "reactstrap";
+import ReportGenerator from "../../components/ReportGenerator";
 import "./KalkulatorPage.css";
 
 // ── Leaflet default icon fix ──────────────────────────────────────────────────
@@ -648,33 +649,7 @@ function BatchMapLayerControl() {
   return null;
 }
 
-// ── PDF Report Generator — otwiera raport-template-3d.html z danymi działki ─
-function generateParcelPDF(parcel) {
-  const mr = parcel.data || {};
-  // Przekaż dane przez sessionStorage — odczyt w szablonie lub przez polling
-  const key = `ksws_rpt_${Date.now()}`;
-  try { sessionStorage.setItem(key, JSON.stringify(mr)); } catch (_) {}
-  const win = window.open(`/raport-template-3d.html?key=${key}`, "_blank");
-  if (!win) {
-    toast.error("Przeglądarka zablokowała popup — zezwól na wyskakujące okna");
-    return;
-  }
-  // Polling co 200ms aż fillReport będzie gotowe (max 5s)
-  let n = 0;
-  const iv = setInterval(() => {
-    n++;
-    try {
-      if (typeof win.fillReport === "function") {
-        clearInterval(iv);
-        win.fillReport(mr);
-        toast.success(`Raport dla ${parcel.parcel_id} — użyj Ctrl+P by zapisać jako PDF`);
-      } else if (win.closed || n > 25) {
-        clearInterval(iv);
-        if (n > 25) toast.error("Timeout ładowania szablonu");
-      }
-    } catch (_) { clearInterval(iv); }
-  }, 200);
-}
+// ── Stara funkcja usunięta — teraz używamy ReportGenerator component ──
 
 // ── Batch CSV Component ─────────────────────────────────────────────────────
 function BatchCSVSection() {
@@ -689,8 +664,14 @@ function BatchCSVSection() {
   const saveBatchToHistory = (batchData) => {
     try {
       const batchHistory = JSON.parse(localStorage.getItem("batch_history") || "[]");
-      const trackA = batchData.results.reduce((s, p) => s + (p.data?.compensation?.track_a?.total || 0), 0);
-      const trackB = batchData.results.reduce((s, p) => s + (p.data?.compensation?.track_b?.total || 0), 0);
+      const trackA = batchData.results.reduce((s, p) => {
+        const d = p.master_record || p.data || {};
+        return s + (d.compensation?.track_a?.total || 0);
+      }, 0);
+      const trackB = batchData.results.reduce((s, p) => {
+        const d = p.master_record || p.data || {};
+        return s + (d.compensation?.track_b?.total || 0);
+      }, 0);
       const newBatch = {
         id: `batch_${new Date().getTime()}`,
         date: nowPL(),
@@ -701,7 +682,10 @@ function BatchCSVSection() {
           trackA: trackA,
           trackB: trackB,
           total: trackA + trackB,
-          collision: batchData.results.filter(p => p.data?.infrastructure?.power_lines?.detected).length,
+          collision: batchData.results.filter(p => {
+            const d = p.master_record || p.data || {};
+            return !!d.infrastructure?.power_lines?.detected;
+          }).length,
         }
       };
       const updated = [newBatch, ...batchHistory].slice(0, 10);
@@ -752,20 +736,23 @@ function BatchCSVSection() {
 
   const downloadCSV = () => {
     if (!batchResults?.results) return;
-    const rows = batchResults.results.map(p => [
-      p.parcel_id,
-      p.data?.infrastructure?.power_lines?.detected ? "TAK" : "NIE",
-      p.data?.infrastructure?.power_lines?.voltage || "—",
-      Math.round(p.data?.geometry?.area_m2 || 0),
-      Math.round(p.data?.market_data?.average_price_m2 || 0),
-      Math.round(p.data?.ksws?.property_value_total || 0),
-      Math.round(p.data?.ksws?.line_length_m || p.data?.infrastructure?.power_lines?.length_m || 0),  // Dł_Linii_m
-      Math.round(p.data?.ksws?.band_width_m || 0),
-      Math.round(p.data?.ksws?.band_area_m2 || 0),
-      Math.round(p.data?.compensation?.track_a?.total || 0),
-      Math.round(p.data?.compensation?.track_b?.total || 0),
-      Math.round((p.data?.compensation?.track_a?.total || 0) + (p.data?.compensation?.track_b?.total || 0)),
-    ]);
+    const rows = batchResults.results.map(p => {
+      const d = p.master_record || p.data || {};
+      return [
+        p.parcel_id,
+        d.infrastructure?.power_lines?.detected ? "TAK" : "NIE",
+        d.infrastructure?.power_lines?.voltage || "—",
+        Math.round(d.geometry?.area_m2 || 0),
+        Math.round(d.market_data?.average_price_m2 || 0),
+        Math.round(d.ksws?.property_value_total || 0),
+        Math.round(d.ksws?.line_length_m || d.infrastructure?.power_lines?.length_m || 0),  // Dł_Linii_m
+        Math.round(d.ksws?.band_width_m || 0),
+        Math.round(d.ksws?.band_area_m2 || 0),
+        Math.round(d.compensation?.track_a?.total || 0),
+        Math.round(d.compensation?.track_b?.total || 0),
+        Math.round((d.compensation?.track_a?.total || 0) + (d.compensation?.track_b?.total || 0)),
+      ];
+    });
     const headers = ["Parcel_ID", "Kolizja", "Napięcie", "Pow_m2", "Cena_PLN_m2", "Wartość_PLN", "Dł_Linii_m", "Szer_Pasa_m", "Pow_Pasa_m2", "Track_A", "Track_B", "Razem"];
     const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
     const a = document.createElement("a");
@@ -783,12 +770,22 @@ function BatchCSVSection() {
     const fmtI = (v) => Math.round(v || 0).toLocaleString("pl-PL");
     const VOLT_LABEL = { WN: "WN >110 kV", SN: "SN 1–110 kV", nN: "nN <1 kV" };
 
-    const totalA = results.reduce((s, p) => s + (p.data?.compensation?.track_a?.total || 0), 0);
-    const totalB = results.reduce((s, p) => s + (p.data?.compensation?.track_b?.total || 0), 0);
-    const collisionCount = results.filter(p => p.data?.infrastructure?.power_lines?.detected).length;
+    const totalA = results.reduce((s, p) => {
+      const d = p.master_record || p.data || {};
+      return s + (d.compensation?.track_a?.total || 0);
+    }, 0);
+    const totalB = results.reduce((s, p) => {
+      const d = p.master_record || p.data || {};
+      return s + (d.compensation?.track_b?.total || 0);
+    }, 0);
+    const collisionCount = results.filter(p => {
+      const d = p.master_record || p.data || {};
+      return !!d.infrastructure?.power_lines?.detected;
+    }).length;
 
     const parcelCards = results.map((p, i) => {
-      const d = p.data || {};
+      // Handle both master_record and data structures
+      const d = p.master_record || p.data || {};
       const ta = (d.compensation?.track_a) || {};
       const tb = (d.compensation?.track_b) || {};
       const pl = d.infrastructure?.power_lines || {};
@@ -896,18 +893,17 @@ function BatchCSVSection() {
           <!-- RIGHT: mini Leaflet map (Topo + OIM power lines) -->
           <div class="map-col">
             <div id="parcel-map-${i}" style="height:100%;min-height:290px;"></div>
-            <div class="map-badge" style="background:${collision ? 'rgba(231,76,60,0.9)' : 'rgba(39,174,96,0.9)'};">
-              ${collision ? "⚡ kolizja" : "✓ ok"}
-            </div>
           </div>
         </div>
       </div>`;
     }).join("\n");
 
     const summaryRows = results.map((p, i) => {
-      const ta = p.data?.compensation?.track_a?.total || 0;
-      const tb = p.data?.compensation?.track_b?.total || 0;
-      const collision = !!p.data?.infrastructure?.power_lines?.detected;
+      // Handle both master_record and data structures
+      const d = p.master_record || p.data || {};
+      const ta = d.compensation?.track_a?.total || 0;
+      const tb = d.compensation?.track_b?.total || 0;
+      const collision = !!d.infrastructure?.power_lines?.detected;
       return `<tr style="border-bottom:1px solid #f0f0f0;">
         <td style="padding:8px 12px;font-weight:600;">#${i+1} ${p.parcel_id || ""}</td>
         <td style="padding:8px 12px;text-align:center;">
@@ -1061,6 +1057,10 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
     <div class="razem-banner-amount">${fmtN(totalA + totalB)} PLN</div>
   </div>
 
+  <!-- COLLECTIVE MAP VISUALIZATION -->
+  <div class="section-title">🗺️ Mapa zbiorcza wszystkich działek</div>
+  <div id="collective-map" style="height:500px;width:100%;margin:0 0 30px 0;border-radius:10px;overflow:hidden;box-shadow:0 4px 15px rgba(0,0,0,0.1);"></div>
+
   <!-- PER-PARCEL CARDS -->
   <div class="section-title">📋 Analiza poszczególnych działek</div>
   ${parcelCards}
@@ -1104,16 +1104,21 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
 
 <script>
 (function() {
-  var PARCEL_MAPS = ${JSON.stringify(results.map(p => ({
-    centroid: p.data?.geometry?.centroid_ll,
-    geojson: p.data?.geometry?.geojson_ll || p.data?.geometry?.geojson,
-    collision: !!p.data?.infrastructure?.power_lines?.detected,
-  })))};
+  var PARCEL_MAPS = ${JSON.stringify(results.map(p => {
+    const d = p.master_record || p.data || {};
+    return {
+      centroid: d.geometry?.centroid_ll,
+      geojson: d.geometry?.geojson_ll || d.geometry?.geojson,
+      collision: !!d.infrastructure?.power_lines?.detected,
+    };
+  }))};
 
   function initMaps() {
     if (typeof L === 'undefined') { setTimeout(initMaps, 300); return; }
+    console.log('initMaps called, Leaflet version:', L.version, 'Maps to render:', PARCEL_MAPS.length);
     PARCEL_MAPS.forEach(function(parcel, i) {
       var el = document.getElementById('parcel-map-' + i);
+      console.log('Parcel', i, '- Element found:', !!el, 'Data:', { centroid: parcel.centroid, hasGeoJSON: !!parcel.geojson, collision: parcel.collision });
       if (!el || el._leaflet_id) return;
       var center = [52.069, 19.480];
       if (Array.isArray(parcel.centroid) && parcel.centroid.length >= 2 && parcel.centroid[0] != null) {
@@ -1131,6 +1136,8 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
       var map = L.map(el, { zoomControl: false, attributionControl: false, scrollWheelZoom: false, dragging: false, doubleClickZoom: false });
       L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { subdomains:'abcd', maxZoom:19 }).addTo(map);
       L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.75 }).addTo(map);
+      // Warstwa uzbrojenia terenu - Open Infrastructure Map (stabilne, zawsze dostępne)
+      L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png', { maxZoom:19, opacity:0.8, attribution:'© OpenStreetMap contributors' }).addTo(map);
       if (parcel.geojson && parcel.geojson.coordinates) {
         var color = parcel.collision ? '#e53935' : '#1e88e5';
         var layer = L.geoJSON(parcel.geojson, { style: { color: color, weight: 3, fillColor: color, fillOpacity: 0.12 } }).addTo(map);
@@ -1141,17 +1148,119 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
     });
   }
 
-  if (document.readyState === 'complete') { initMaps(); }
-  else { window.addEventListener('load', initMaps); }
+  function initCollectiveMap() {
+    if (typeof L === 'undefined') { setTimeout(initCollectiveMap, 300); return; }
+    var el = document.getElementById('collective-map');
+    if (!el || el._leaflet_id) return;
+
+    console.log('initCollectiveMap called');
+    var map = L.map(el, {
+      zoomControl: true,
+      attributionControl: true,
+      scrollWheelZoom: true,
+      dragging: true,
+      doubleClickZoom: true
+    });
+
+    // Base layers
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+      { subdomains:'abcd', maxZoom:19, attribution:'© Carto' }).addTo(map);
+    L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow',
+      { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.75 }).addTo(map);
+
+    // Infrastructure layers
+    var powerLayer = L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png',
+      { maxZoom:19, opacity:0.8, attribution:'© OpenInfra' });
+    var gasLayer = L.tileLayer('https://tiles.openinframap.org/gas/{z}/{x}/{y}.png',
+      { maxZoom:19, opacity:0.7, attribution:'© OpenInfra' });
+    var waterLayer = L.tileLayer('https://tiles.openinframap.org/water/{z}/{x}/{y}.png',
+      { maxZoom:19, opacity:0.7, attribution:'© OpenInfra' });
+    var sewerLayer = L.tileLayer('https://tiles.openinframap.org/sewer/{z}/{x}/{y}.png',
+      { maxZoom:19, opacity:0.7, attribution:'© OpenInfra' });
+
+    powerLayer.addTo(map);
+
+    // Add all parcel boundaries to a FeatureGroup
+    var parcelGroup = L.featureGroup();
+    var allBounds = [];
+
+    PARCEL_MAPS.forEach(function(parcel, i) {
+      if (parcel.geojson && parcel.geojson.coordinates) {
+        var color = parcel.collision ? '#e53935' : '#1e88e5';
+        var layer = L.geoJSON(parcel.geojson, {
+          style: {
+            color: color,
+            weight: 2,
+            fillColor: color,
+            fillOpacity: 0.15,
+            dashArray: parcel.collision ? '5,5' : 'none'
+          }
+        });
+        parcelGroup.addLayer(layer);
+        try {
+          var bounds = layer.getBounds();
+          allBounds.push([bounds.getNorthWest(), bounds.getSouthEast()]);
+        } catch(e) {}
+      }
+    });
+
+    parcelGroup.addTo(map);
+
+    // Fit all parcels in view
+    if (allBounds.length > 0) {
+      var group = L.featureGroup(PARCEL_MAPS.filter(p => p.geojson).map(p =>
+        L.geoJSON(p.geojson)
+      ));
+      try { map.fitBounds(group.getBounds(), { padding: [50, 50] }); }
+      catch(e) { map.setView([52.069, 19.480], 8); }
+    } else {
+      map.setView([52.069, 19.480], 8);
+    }
+
+    // Layer controls
+    L.control.layers(
+      { 'Mapa': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+        { subdomains:'abcd', maxZoom:19 }) },
+      {
+        '⚡ Linie energetyczne (Power)': powerLayer,
+        '🔥 Gaz (Gas)': gasLayer,
+        '💧 Woda (Water)': waterLayer,
+        '🚰 Kanalizacja (Sewer)': sewerLayer
+      },
+      { position: 'topright', collapsed: false }
+    ).addTo(map);
+
+    // Legend
+    var legend = L.control({ position: 'bottomleft' });
+    legend.onAdd = function(map) {
+      var div = L.DomUtil.create('div', 'info');
+      div.style.backgroundColor = 'white';
+      div.style.padding = '10px';
+      div.style.borderRadius = '5px';
+      div.style.fontSize = '12px';
+      div.style.boxShadow = '0 0 15px rgba(0,0,0,0.2)';
+      div.innerHTML = '<strong>Legenda</strong><br>' +
+        '<span style="color:#e53935;font-weight:bold;">— — —</span> Z kolizją (collision)<br>' +
+        '<span style="color:#1e88e5;font-weight:bold;">———</span> Bez kolizji (no collision)';
+      return div;
+    };
+    legend.addTo(map);
+
+    console.log('Collective map initialized with', PARCEL_MAPS.length, 'parcels');
+  }
+
+  if (document.readyState === 'complete') { initMaps(); initCollectiveMap(); }
+  else { window.addEventListener('load', function() { initMaps(); initCollectiveMap(); }); }
 })();
 </script>
 </body>
 </html>`;
 
-    const win = window.open("", "_blank");
+    // Use Blob URL instead of document.write() for reliable external script loading
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const blobUrl = URL.createObjectURL(blob);
+    const win = window.open(blobUrl, '_blank');
     if (!win) { toast.error("Zablokowano popup — zezwól na okienka dla tej strony"); return; }
-    win.document.write(html);
-    win.document.close();
     toast.success(`Raport otwarty — ${results.length} działek · użyj Ctrl+P by zapisać PDF`);
   };
 
@@ -1162,7 +1271,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
       const payload = {
         parcels: batchResults.results.map((p) => ({
           parcel_id: p.parcel_id,
-          master_record: p.data || {},
+          master_record: p.master_record || p.data || {},
         })),
         title: `Analiza ${batchResults.results.length} działek — KSWS`,
       };
@@ -1482,13 +1591,6 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
                       }}>
                         {collision ? "⚡ KOLIZJA" : "✓ BEZ KOLIZJI"}
                       </span>
-                      <button onClick={()=>generateParcelPDF(p)} style={{
-                        padding:"6px 14px", background:"#3d2319", color:"white",
-                        border:"none", borderRadius:"8px", cursor:"pointer",
-                        fontSize:"0.7em", fontWeight:"700", flexShrink:0, whiteSpace:"nowrap",
-                      }}>
-                        📄 Raport
-                      </button>
                     </div>
 
                     {/* ── BODY: 2 columns ── */}
@@ -1934,32 +2036,7 @@ export default function KalkulatorPage() {
     }
   };
 
-  // ── openHtmlReport — otwiera template HTML z wstrzykniętymi danymi ───────────
-  const openHtmlReport = () => {
-    if (!result) return;
-    const mr = result.master_record;
-    // sessionStorage + ?key= — niezawodne, nie blokowane przez przeglądarkę
-    const key = `ksws_rpt_${Date.now()}`;
-    try { sessionStorage.setItem(key, JSON.stringify(mr)); } catch (_) {}
-    const win = window.open(`/raport-template-3d.html?key=${key}`, "_blank");
-    if (!win) {
-      alert("Przeglądarka zablokowała okno popup — zezwól na wyskakujące okna dla tego serwisu.");
-      return;
-    }
-    // Polling fallback: jeśli sessionStorage nie zadziałał, wstrzyknij przez fillReport
-    let n = 0;
-    const iv = setInterval(() => {
-      n++;
-      try {
-        if (typeof win.fillReport === "function") {
-          clearInterval(iv);
-          win.fillReport(mr);
-        } else if (win.closed || n > 30) {
-          clearInterval(iv);
-        }
-      } catch (_) { clearInterval(iv); }
-    }, 200);
-  };
+  // ── Stara funkcja openHtmlReport usunięta — teraz używamy ReportGenerator ──
 
   // ── downloadPdf — backend PDF z pełnym raportem R1-R5 ───────────────────────
   const downloadPdf = async () => {
@@ -2791,13 +2868,6 @@ export default function KalkulatorPage() {
                     </span>
                   )}
                   <button
-                    className="ksws-btn ksws-btn-pdf"
-                    onClick={openHtmlReport}
-                    title="Otwórz raport z mapą — drukuj lub zapisz jako PDF (Ctrl+P)"
-                  >
-                    📄 Raport PDF
-                  </button>
-                  <button
                     className="ksws-btn"
                     style={{ background: "#f0eaff", color: "#6a4c93", border: "1.5px solid #c9b8e8", fontSize: "0.82em" }}
                     onClick={() => setShowAssignModal((v) => !v)}
@@ -2876,6 +2946,11 @@ export default function KalkulatorPage() {
                   {assignedMsg}
                 </div>
               )}
+
+              {/* ── PDF REPORT GENERATOR ── */}
+              <div style={{ marginBottom: 24 }}>
+                <ReportGenerator parcelData={result} />
+              </div>
 
               {/* ── ALERT — brak infrastruktury ── */}
               {!power.exists && manualInfraDetect !== "true" && (

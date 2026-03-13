@@ -683,9 +683,9 @@ def generate_pdf(
             ["Pas ochronny",
              f"{ksws.get('band_area_m2',0):,.0f} m²  ({min(100,ksws.get('band_area_m2',0)/max(1,geom.get('area_m2',1))*100):.0f}%)",
              ""],
-            ["WSP (służebność)", "Wart. × S × k × %pasa", fmt_pln(ta.get("wsp"))],
-            ["WBK (bezumowne 10 lat)", "Wart. × R × k × %pasa × 10", fmt_pln(ta.get("wbk"))],
-            ["OBN (obniżenie wartości)", "Wart. × impact", fmt_pln(ta.get("obn"))],
+            ["WSP (służebność przesyłu)", "Wart. × S × k × %pasa", fmt_pln(ta.get("wsp"))],
+            [f"WBK (bezumowne {ta.get('years',6)} lat)", f"Wart. × R × k × %pasa × {ta.get('years',6)}", fmt_pln(ta.get("wbk"))],
+            ["OBN (obniżenie wartości)", "Wart. × impact × (lat/10)", fmt_pln(ta.get("obn"))],
             [Paragraph("<b>TRACK A (sąd)</b>", S["body"]),
              Paragraph("<b>WSP + WBK + OBN</b>", S["body"]),
              Paragraph(f"<b>{fmt_pln(ta.get('total'))}</b>", S["body"])],
@@ -735,9 +735,168 @@ def generate_pdf(
 
     story.append(PageBreak())
 
-    # ═══ V. WYKRESY ═══
+    # ═══ V. KWALIFIKACJA ROSZCZEŃ R1–R5 ═══
     story.append(HRFlowable(width="100%", thickness=3, color=C_PRIMARY, spaceAfter=4))
-    story.append(Paragraph("V. WYKRESY ANALITYCZNE", S["h2"]))
+    story.append(Paragraph("V. KWALIFIKACJA ROSZCZEŃ — METODOLOGIA", S["h2"]))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceAfter=6))
+    story.append(Paragraph(
+        "Roszczenia zakwalifikowane na podstawie infrastruktury, planowania przestrzennego "
+        "i charakteru gruntu. Kwoty wg KSWS-V.5 i art. 361 §1–2 KC.",
+        S["body"]))
+    story.append(Spacer(1, 3*mm))
+
+    for p in detail_parcels:
+        pid = p["_parcel_id"]
+        nr  = pid.split(".")[-1] if "." in pid else pid
+        cq  = p.get("claims_qualification") or {}
+        if not cq:
+            continue
+
+        story.append(Paragraph(f"Działka {nr}:", S["h3"]))
+
+        # Tabela R1–R5 w jednym miejscu
+        cq_rows = [
+            [Paragraph("Roszczenie", S["th"]),
+             Paragraph("Podstawa", S["th"]),
+             Paragraph("Obliczenie", S["th"]),
+             Paragraph("Kwota [PLN]", S["th"])],
+        ]
+
+        r1 = cq.get("R1") or {}
+        r2 = cq.get("R2") or {}
+        r3 = cq.get("R3") or {}
+        r4 = cq.get("R4") or {}
+        r5 = cq.get("R5") or {}
+        comp = p.get("compensation", {})
+        ta   = comp.get("track_a", {})
+
+        cq_rows.append([
+            Paragraph("<b>R1 — Służebność przesyłu (WSP)</b>", S["body"]),
+            Paragraph("art. 305¹–305⁴ KC", S["small"]),
+            Paragraph("Wartość × S × k × %pasa", S["small"]),
+            Paragraph(fmt_pln(r1.get("value")), S["small"]),
+        ])
+        cq_rows.append([
+            Paragraph(f"<b>R2 — Bezumowne korzystanie (WBK)</b><br/>{r2.get('years',6)} lat — art. 118 KC", S["body"]),
+            Paragraph("art. 224–225 KC", S["small"]),
+            Paragraph(f"Wartość × R × k × %pasa × {r2.get('years',6)} lat", S["small"]),
+            Paragraph(fmt_pln(r2.get("value")), S["small"]),
+        ])
+        cq_rows.append([
+            Paragraph("<b>R3 — Obniżenie wartości nieruchomości (OBN)</b>", S["body"]),
+            Paragraph("art. 305² KC", S["small"]),
+            Paragraph("Wartość × impact × (lat/10)", S["small"]),
+            Paragraph(fmt_pln(r3.get("value")), S["small"]),
+        ])
+
+        if r4.get("active"):
+            cq_rows.append([
+                Paragraph("<b>R4 — Blokada zabudowy</b>", S["body"]),
+                Paragraph("art. 140 KC + WZ/MPZP", S["small"]),
+                Paragraph(r4.get("damage_calc") or "—", S["small"]),
+                Paragraph(fmt_pln(r4.get("value")), S["small"]),
+            ])
+
+        if r5.get("active"):
+            r5d = r5.get("detail") or {}
+            r51 = r5d.get("r51") or {}
+            r52 = r5d.get("r52") or {}
+            prod_gus = r5d.get("prod_per_ha_year_gus", 0)
+            cq_rows.append([
+                Paragraph("<b>R5.1 — Fundamenty słupów</b><br/>Damnum emergens", S["body"]),
+                Paragraph("art. 361 §1 KC", S["small"]),
+                Paragraph(r51.get("formula", "—"), S["small"]),
+                Paragraph(fmt_pln(r51.get("value")), S["small"]),
+            ])
+            cq_rows.append([
+                Paragraph("<b>R5.2 — Wyspy/kliny niedostępne sprzętowi</b><br/>Lucrum cessans", S["body"]),
+                Paragraph("art. 361 §2 KC", S["small"]),
+                Paragraph(
+                    f"{r52.get('formula','—')}<br/>"
+                    f"<font size='8'>GUS prod. globalna: {prod_gus:,.0f} zł/ha/rok</font>",
+                    S["small"]),
+                Paragraph(fmt_pln(r52.get("value")), S["small"]),
+            ])
+
+        story.append(std_table(cq_rows, [W_txt*0.27, W_txt*0.18, W_txt*0.34, W_txt*0.21], C_PRIMARY))
+        story.append(Spacer(1, 2*mm))
+
+        # R4 nota jeśli aktywne
+        if r4.get("active"):
+            story.append(Paragraph(
+                f"R4: {r4.get('note','—')}",
+                S["note"]))
+            story.append(Spacer(1, 1*mm))
+
+        # R5 — uzasadnienie szkody rolnej (pełna argumentacja)
+        if r5.get("active"):
+            r5d = r5.get("detail") or {}
+            prod_gus = r5d.get("prod_per_ha_year_gus", 0)
+            r5_total = r5.get("value", 0)
+            story.append(Paragraph("Uzasadnienie szkody rolnej (R5):", S["h3"]))
+            story.append(Paragraph(
+                "Posadowienie słupów kratowych żelbetonowych wzdłuż i w poprzek ciągów uprawnych tworzy "
+                "trwałe przeszkody technologiczne o charakterze nieodwracalnym, skutkujące stałą, wymierną "
+                "szkodą operacyjną:",
+                S["body"]))
+            uzasadnienie_rows = [
+                [Paragraph("Przyczyna szkody", S["th"]),
+                 Paragraph("Opis", S["th"])],
+                [Paragraph("<b>Maszyny rolnicze</b>", S["body"]),
+                 Paragraph(
+                    "Słupy uniemożliwiają uprawę mechaniczną sprzętem o szerokim zasięgu roboczym: "
+                    "opryskiwaczy polowych o belce 24–36 m, kombajnów zbożowych, agregatów uprawowych. "
+                    "Każdy przejazd wymaga omijania słupów, co wyklucza efektywne prowadzenie prac polowych.",
+                    S["small"])],
+                [Paragraph("<b>Wyspy i kliny uprawne</b>", S["body"]),
+                 Paragraph(
+                    "Rozmieszczenie słupów tworzy trwałe kliny i wyspy uprawne — fragmenty gruntu fizycznie "
+                    "niedostępne dla standardowego sprzętu — co oznacza systematyczną, coroczną utratę plonu "
+                    "z tych obszarów. Wartość strat obliczono na podstawie GUS: produkcja globalna rolnicza "
+                    f"{prod_gus:,.0f} zł/ha/rok ({r5d.get('r52',{}).get('note','')}).",
+                    S["small"])],
+                [Paragraph("<b>GPS/RTK</b>", S["body"]),
+                 Paragraph(
+                    "Obecność słupów w pasach przejazdowych wyklucza technologię GPS/RTK stosowaną "
+                    "powszechnie w precyzyjnym rolnictwie. Systemy automatycznego prowadzenia maszyn "
+                    "wymagają niezakłóconych, prostoliniowych pasów przejazdowych.",
+                    S["small"])],
+                [Paragraph("<b>Koszty operacyjne</b>", S["body"]),
+                 Paragraph(
+                    "Każdy sezon rolniczy generuje zwiększone koszty: dodatkowe przebiegi przy omijaniu "
+                    "przeszkód, ręczna uprawa w strefach niedostępnych mechanicznie, straty czasu maszyn "
+                    "i operatorów. Szkoda ciągła — nie ustanie do czasu usunięcia infrastruktury "
+                    "(art. 361 §2 k.c.).",
+                    S["small"])],
+            ]
+            story.append(std_table(uzasadnienie_rows, [W_txt*0.22, W_txt*0.78], C_GREEN))
+            story.append(Spacer(1, 2*mm))
+            story.append(Paragraph(
+                f"Łączna szkoda rolna (R5.1 + R5.2): <b>{fmt_pln(r5_total)}</b> "
+                f"— szkoda ciągła w rozumieniu art. 361 §2 k.c.",
+                S["note"]))
+            story.append(Spacer(1, 2*mm))
+
+        # Suma
+        grand_total = cq.get("total_active_claims", 0)
+        sum_tbl = Table([
+            [Paragraph("ŁĄCZNIE AKTYWNE ROSZCZENIA:", S["bc"])],
+            [Paragraph(fmt_pln(grand_total), S["money_blue"])],
+        ], colWidths=[W_txt])
+        sum_tbl.setStyle(TableStyle([
+            ("BACKGROUND",   (0,0),(-1,-1), HexColor("#EBF5FB")),
+            ("BOX",          (0,0),(-1,-1), 2, C_BLUE),
+            ("TOPPADDING",   (0,0),(-1,-1), 6),
+            ("BOTTOMPADDING",(0,0),(-1,-1), 6),
+        ]))
+        story.append(sum_tbl)
+        story.append(Spacer(1, 5*mm))
+
+    story.append(PageBreak())
+
+    # ═══ VI. WYKRESY ═══
+    story.append(HRFlowable(width="100%", thickness=3, color=C_PRIMARY, spaceAfter=4))
+    story.append(Paragraph("VI. WYKRESY ANALITYCZNE", S["h2"]))
     story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceAfter=6))
 
     story.append(Paragraph("Porównanie 3D Track A / Track B:", S["h3"]))
@@ -750,9 +909,9 @@ def generate_pdf(
 
     story.append(PageBreak())
 
-    # ═══ VI. PODSTAWY PRAWNE ═══
+    # ═══ VII. PODSTAWY PRAWNE ═══
     story.append(HRFlowable(width="100%", thickness=3, color=C_PRIMARY, spaceAfter=4))
-    story.append(Paragraph("VI. PODSTAWY PRAWNE", S["h2"]))
+    story.append(Paragraph("VII. PODSTAWY PRAWNE", S["h2"]))
     story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceAfter=6))
 
     legal = [

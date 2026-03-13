@@ -39,7 +39,7 @@ class UserBox extends React.Component {
 
   notify2 = () =>
     (this.toastId = toast(
-      "Brak nowych pozycji w kalendarzu na dziś.",
+      "You don't have any new items in your calendar for today! Go out and play!",
       {
         transition: Bounce,
         closeButton: true,
@@ -79,15 +79,15 @@ class UserBox extends React.Component {
                               </div>
                               <div className="widget-content-left">
                                 <div className="widget-heading">
-                                  Użytkownik
+                                  Alina Mcloughlin
                                 </div>
                                 <div className="widget-subheading opacity-8">
-                                  Profil
+                                  A short profile description
                                 </div>
                               </div>
                               <div className="widget-content-right me-2">
                                 <Button className="btn-pill btn-shadow btn-shine" color="focus">
-                                  Wyloguj
+                                  Logout
                                 </Button>
                               </div>
                             </div>
@@ -102,40 +102,40 @@ class UserBox extends React.Component {
                       <PerfectScrollbar>
                         <Nav vertical>
                           <NavItem className="nav-item-header">
-                            Aktywność
+                            Activity
                           </NavItem>
                           <NavItem>
                             <NavLink href="#">
-                              Czat
+                              Chat
                               <div className="ms-auto badge rounded-pill bg-info">
                                 8
                               </div>
                             </NavLink>
                           </NavItem>
                           <NavItem>
-                            <NavLink href="#">Odzyskaj hasło</NavLink>
+                            <NavLink href="#">Recover Password</NavLink>
                           </NavItem>
                           <NavItem className="nav-item-header">
-                            Moje konto
+                            My Account
                           </NavItem>
                           <NavItem>
                             <NavLink href="#">
-                              Ustawienia
+                              Settings
                               <div className="ms-auto badge bg-success">
-                                Nowe
+                                New
                               </div>
                             </NavLink>
                           </NavItem>
                           <NavItem>
                             <NavLink href="#">
-                              Wiadomości
+                              Messages
                               <div className="ms-auto badge bg-warning">
                                 512
                               </div>
                             </NavLink>
                           </NavItem>
                           <NavItem>
-                            <NavLink href="#">Logi</NavLink>
+                            <NavLink href="#">Logs</NavLink>
                           </NavItem>
                         </Nav>
                       </PerfectScrollbar>

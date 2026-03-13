@@ -3,6 +3,7 @@ GUSClientFixed — klient GUS BDL z podziałem na typ gruntu.
 Ceny rolne (R, Ł, Ps) vs budowlane (B, Bi, Ba) są drastycznie różne.
 Rolne mazowieckie: ~7-15 zł/m², Budowlane: ~300-500 zł/m².
 """
+import asyncio
 import logging
 import requests
 from typing import Dict, Optional, Any
@@ -68,7 +69,10 @@ _TERYT_AGRI_PRICES: Dict[str, float] = {
 _AGRICULTURAL_CLASSES = {"R", "Ł", "Ps", "S", "Lz", "W", "N"}
 
 _BDL_BASE = "https://bdl.stat.gov.pl/api/v1"
-_VAR_ARABLE = 455437  # ID zmiennej: cena gruntów ornych
+_VAR_ARABLE = 4899    # ID zmiennej: Przeciętne ceny gruntów ornych ogółem [zł/ha] — P1460
+_VAR_ARABLE_GOOD = 4902   # grunty dobre (pszenno-buraczane)
+_VAR_ARABLE_MED  = 4905   # grunty średnie (żytnio-ziemniaczane)
+_VAR_ARABLE_POOR = 4908   # grunty słabe (piaszczyste)
 
 
 def is_agricultural(land_class: str) -> bool:
@@ -139,40 +143,60 @@ class GUSClientFixed:
         }
 
     async def _fetch_agri_from_bdl(self, voi: str) -> Optional[float]:
-        """Pobiera cenę gruntów ornych z GUS BDL API."""
+        """Pobiera cenę gruntów ornych z GUS BDL API (non-blocking — thread executor)."""
+        # Synchroniczne requests.get() uruchamiane w wątku aby nie blokować event loop.
+        return await asyncio.to_thread(self._fetch_agri_sync, voi)
+
+    def _fetch_agri_sync(self, voi: str) -> Optional[float]:
+        """Synchroniczna implementacja pobierania ceny BDL — uruchamiana w thread."""
         teryt_6 = self._resolve_teryt(voi)
         if not teryt_6:
             return None
         unit_id = self._get_bdl_unit_id(teryt_6)
         if not unit_id:
             return None
-        url = f"{_BDL_BASE}/Data/ByUnit/{unit_id}?var-id={_VAR_ARABLE}&last=1"
-        response = requests.get(url, headers=self._headers, timeout=10)
-        if response.status_code != 200:
-            return None
-        data = response.json()
+        # Poprawny endpoint: data/by-unit/{id}?var-Id={var}&last=1
+        url = f"{_BDL_BASE}/data/by-unit/{unit_id}?var-Id={_VAR_ARABLE}&last=1"
         try:
-            val = data["results"][0]["values"][0].get("val")
-            if val is not None:
+            response = requests.get(url, headers=self._headers, timeout=10)
+            if response.status_code != 200:
+                return None
+            data = response.json()
+            # Wyniki: results[0].values — posortowane od najstarszego; bierzemy ostatni
+            values = data["results"][0].get("values", [])
+            if not values:
+                return None
+            last_val = values[-1].get("val")  # najnowszy rok
+            if last_val is not None:
                 # BDL zwraca ceny w zł/ha — przelicz na zł/m²
-                price_ha = float(val)
-                return round(price_ha / 10000.0, 4)
-        except (KeyError, IndexError, TypeError, ValueError):
-            pass
+                return round(float(last_val) / 10000.0, 4)
+        except (KeyError, IndexError, TypeError, ValueError, Exception) as e:
+            logger.warning("BDL fetch_agri_sync error: %s", e)
         return None
 
+    # Stała tabela BDL unit ID dla województw (poziom 2) — pobrana z API
+    _BDL_VOIV_IDS: Dict[str, str] = {
+        "020000": "030200000000",  # dolnośląskie
+        "040000": "040400000000",  # kujawsko-pomorskie
+        "060000": "060600000000",  # lubelskie
+        "080000": "020800000000",  # lubuskie
+        "100000": "051000000000",  # łódzkie
+        "120000": "011200000000",  # małopolskie
+        "140000": "071400000000",  # mazowieckie
+        "160000": "031600000000",  # opolskie
+        "180000": "061800000000",  # podkarpackie
+        "200000": "062000000000",  # podlaskie
+        "220000": "042200000000",  # pomorskie
+        "240000": "012400000000",  # śląskie
+        "260000": "052600000000",  # świętokrzyskie
+        "280000": "042800000000",  # warmińsko-mazurskie
+        "300000": "023000000000",  # wielkopolskie
+        "320000": "023200000000",  # zachodniopomorskie
+    }
+
     def _get_bdl_unit_id(self, teryt: str) -> Optional[str]:
-        """Pobierz ID jednostki BDL po kodzie TERYT."""
-        try:
-            url = f"{_BDL_BASE}/Units?name={teryt}&page-size=1"
-            response = requests.get(url, headers=self._headers, timeout=5)
-            if response.status_code == 200:
-                results = response.json().get("results")
-                if results:
-                    return results[0].get("id")
-        except Exception:
-            pass
-        return None
+        """Zwróć ID jednostki BDL dla kodu TERYT województwa (6 cyfr)."""
+        return self._BDL_VOIV_IDS.get(teryt)
 
     def _resolve_teryt(self, voi: str) -> Optional[str]:
         """Zamień nazwę lub kod na 6-cyfrowy kod TERYT województwa."""
@@ -199,6 +223,32 @@ class GUSClientFixed:
         if voi.isdigit() and len(voi) == 2:
             return voi + "0000"
         return None
+
+    # GUS BDL var 410772: Produkcja globalna rolnicza na 1 ha UR [zł/ha] — dane 2023
+    # Źródło: BDL GUS, Produkcja rolnicza (P2309), nowa definicja gosp. rolnego
+    _AGRI_PRODUCTION_PER_HA: Dict[str, int] = {
+        "dolnośląskie": 9391,
+        "kujawsko-pomorskie": 18778,
+        "lubelskie": 13497,
+        "lubuskie": 9194,
+        "łódzkie": 22090,
+        "małopolskie": 18313,
+        "mazowieckie": 21419,
+        "opolskie": 13313,
+        "podkarpackie": 8611,
+        "podlaskie": 14796,
+        "pomorskie": 13088,
+        "śląskie": 27076,
+        "świętokrzyskie": 19210,
+        "warmińsko-mazurskie": 10983,
+        "wielkopolskie": 21056,
+        "zachodniopomorskie": 10011,
+    }
+
+    def get_agri_production_per_ha(self, voivodeship: str) -> float:
+        """Zwraca globalną produkcję rolniczą na 1 ha UR [zł/ha/rok] wg województwa (GUS 2023)."""
+        voi = (voivodeship or "").lower().strip()
+        return float(self._AGRI_PRODUCTION_PER_HA.get(voi, 12000))  # ~12k PLN/ha fallback
 
     def _fallback_price(self, voi: str, agricultural: bool = True) -> Optional[float]:
         """Zwróć cenę z tabel regionalnych."""

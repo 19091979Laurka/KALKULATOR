@@ -76,7 +76,7 @@ class FooterMegaMenu extends React.Component {
                       <NavItem>
                         <NavLink disabled href="#">
                           <i className="nav-link-icon lnr-file-empty"> </i>
-                          <span>Pulpity</span>
+                          <span>Dashboards</span>
                         </NavLink>
                       </NavItem>
                     </Nav>

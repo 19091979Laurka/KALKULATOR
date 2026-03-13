@@ -3,8 +3,8 @@
 // Variables
 
 $app-container-bg: #f1f4f6;
-$app-sidebar-bg: #ffffff;
-$app-header-bg: #fafbfc;
+$app-sidebar-bg: #2d3e50;
+$app-header-bg: #FF7BA8;
 $app-header-logo-bg: rgba(255, 255, 255, .9);
 
 // Content
@@ -17,6 +17,24 @@ $app-header-logo-bg: rgba(255, 255, 255, .9);
 
   .app-sidebar {
     background: $app-sidebar-bg;
+
+    // Light text for dark sidebar
+    .app-sidebar-menu {
+      .app-sidebar-item {
+        .app-sidebar-link {
+          color: rgba(255, 255, 255, 0.75);
+
+          &:hover {
+            color: #ffffff;
+          }
+        }
+      }
+    }
+
+    // Sidebar titles/labels
+    .sidebar-heading {
+      color: rgba(255, 255, 255, 0.6);
+    }
   }
 
   .app-page-title {
@@ -26,6 +44,13 @@ $app-header-logo-bg: rgba(255, 255, 255, .9);
   .app-footer .app-footer__inner,
   .app-header {
     background: $app-header-bg;
+  }
+
+  // Pink header - use light text
+  .app-header {
+    &.header-text-light {
+      // Inherited from header-light.scss
+    }
   }
 
   &.fixed-header {

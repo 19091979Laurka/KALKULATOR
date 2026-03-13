@@ -2,7 +2,14 @@ import React, { Fragment, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { connect } from "react-redux";
 import { setEnableMobileMenu } from "../../reducers/ThemeOptions";
-import { MainNav } from "./NavItems";
+import {
+  UpgradeNav,
+  MainNav,
+  ComponentsNav,
+  FormsNav,
+  WidgetsNav,
+  ChartsNav,
+} from "./NavItems";
 
 const SubMenu = ({ item, toggleMobileSidebar }) => {
   const [isSubMenuOpen, setIsSubMenuOpen] = useState(false);
@@ -19,11 +26,13 @@ const SubMenu = ({ item, toggleMobileSidebar }) => {
   };
 
   const hasSubmenu = item.content && item.content.length > 0;
-  const isActive = location.pathname === item.to ||
+  
+  // Determine if the parent or any child is active
+  const isActive = location.pathname === item.to || 
     (hasSubmenu && item.content.some(child => child.to === location.pathname));
 
   const LinkComponent = item.external ? 'a' : Link;
-  const linkProps = item.external
+  const linkProps = item.external 
     ? { href: item.to, target: "_blank", rel: "noopener noreferrer" }
     : { to: item.to || "#" };
 
@@ -46,7 +55,9 @@ const SubMenu = ({ item, toggleMobileSidebar }) => {
             <li key={i} className="metismenu-item">
               <Link
                 to={child.to}
-                className={`metismenu-link ${location.pathname === child.to ? "active" : ""}`}
+                className={`metismenu-link ${
+                  location.pathname === child.to ? "active" : ""
+                }`}
                 onClick={toggleMobileSidebar}
               >
                 {child.label}
@@ -60,8 +71,11 @@ const SubMenu = ({ item, toggleMobileSidebar }) => {
 };
 
 const Nav = ({ enableMobileMenu, setEnableMobileMenu }) => {
+  const location = useLocation();
   const toggleMobileSidebar = () => {
-    if (enableMobileMenu) setEnableMobileMenu(false);
+    if (enableMobileMenu) {
+      setEnableMobileMenu(false);
+    }
   };
 
   const renderMenu = (items) =>
@@ -69,11 +83,37 @@ const Nav = ({ enableMobileMenu, setEnableMobileMenu }) => {
       <SubMenu key={i} item={item} toggleMobileSidebar={toggleMobileSidebar} />
     ));
 
+  // Only show main KALKULATOR menu when in kalkulator routes
+  const isKalkulatorRoute = location.pathname.startsWith('/kalkulator');
+
   return (
     <Fragment>
       <div className="vertical-nav-menu">
-        <h5 className="app-sidebar__heading">Menu</h5>
+        {!isKalkulatorRoute && (
+          <>
+            <h5 className="app-sidebar__heading">PRO VERSION</h5>
+            <ul className="metismenu-container">{renderMenu(UpgradeNav)}</ul>
+          </>
+        )}
+
+        <h5 className="app-sidebar__heading">MENU</h5>
         <ul className="metismenu-container">{renderMenu(MainNav)}</ul>
+
+        {!isKalkulatorRoute && (
+          <>
+            <h5 className="app-sidebar__heading">UI Components</h5>
+            <ul className="metismenu-container">{renderMenu(ComponentsNav)}</ul>
+
+            <h5 className="app-sidebar__heading">Dashboard Widgets</h5>
+            <ul className="metismenu-container">{renderMenu(WidgetsNav)}</ul>
+
+            <h5 className="app-sidebar__heading">Forms</h5>
+            <ul className="metismenu-container">{renderMenu(FormsNav)}</ul>
+
+            <h5 className="app-sidebar__heading">Charts</h5>
+            <ul className="metismenu-container">{renderMenu(ChartsNav)}</ul>
+          </>
+        )}
       </div>
     </Fragment>
   );

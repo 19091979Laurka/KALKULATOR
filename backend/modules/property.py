@@ -174,6 +174,9 @@ class PropertyAggregator:
         manual_land_type: Optional[str] = None,
         manual_infra_detected: Optional[bool] = None,
         manual_voltage: Optional[str] = None,
+        manual_line_length_m: Optional[float] = None,  # Ręczny pomiar długości linii [m]
+        years: int = 6,  # Okres WBK: 6 lat (art. 118 KC po noweli 2018)
+        is_farmer: bool = False,  # Rolnik → wymusza agri=True, aktywuje R5
     ) -> Dict[str, Any]:
         # 1. Podstawowa geometria (ULDK)
         terrain = await fetch_terrain(parcel_id, obreb=obreb, county=county, municipality=municipality)
@@ -187,7 +190,8 @@ class PropertyAggregator:
         resolved_pid = terrain.get("parcel_id") or parcel_id
         centroid = terrain.get("centroid") or {}
         lon, lat = centroid.get("lon"), centroid.get("lat")
-        bbox_2180 = self.uldk.get_parcel_bbox(resolved_pid, srid="2180")
+        # get_parcel_bbox jest synchroniczne (requests.get) — thread aby nie blokować event loop
+        bbox_2180 = await asyncio.to_thread(self.uldk.get_parcel_bbox, resolved_pid, "2180")
         parts = resolved_pid.split('.')
         teryt_unit = parts[0] if len(parts) > 1 else ""
         parcel_nr = parts[-1] if len(parts) > 0 else resolved_pid
@@ -216,27 +220,64 @@ class PropertyAggregator:
         primary_class = land_use_list[0]["class"] if land_use_list else "R"
         agri = is_agricultural(primary_class)
 
+        # Flaga rolnik — nadpisuje klasyfikację: wymusza agri=True niezależnie od EGiB
+        if is_farmer:
+            agri = True
+            if not is_agricultural(primary_class):
+                primary_class = "R"
+            logger.info("is_farmer=True → agri=True (R5 aktywne)")
+
         # WAŻNE: jeśli EGiB pokazuje budynki na działce → grunt BUDOWLANY, nie rolny!
+        # Ale is_farmer ma wyższy priorytet (rolnik może mieć siedlisko na działce)
         has_buildings = len(data.get("buildings", [])) > 0
-        if has_buildings and agri:
+        if has_buildings and agri and not is_farmer:
             logger.info("Działka ma budynki w EGiB → zmiana klasyfikacji z rolna na budowlaną")
             agri = False
-            primary_class = "B"  # força do "Building" classification
+            primary_class = "B"
 
         # Cena — priorytet: RCN transakcje → GUS BDL z klasą gruntu → fallback
         rcn_price = self._calculate_avg_price(data["transactions"])
+        rcn_stats = self._calculate_price_stats(data["transactions"])
+
+        voi = terrain.get("voivodeship") or ""
 
         # GUS z klasą gruntu (poprawiona obsługa zabudowanej)
         gus_result = await self.gus.fetch_market_price(
-            terrain.get("voivodeship") or "",
+            voi,
             land_class=primary_class if primary_class == "B" or not agri else primary_class,
         )
         gus_price = gus_result.get("price_m2") if gus_result.get("ok") else None
         land_type = gus_result.get("land_type", "agricultural" if agri else "building")
         price_source = gus_result.get("source", "GUS")
 
-        # Wybór ceny: RCN tylko jeśli mamy transakcje, inaczej GUS z właściwą klasą
-        avg_price = rcn_price if rcn_price else gus_price
+        # Zawsze pobierz też cenę budowlaną (do R4: obliczenie szkody z blokady WZ)
+        gus_building_result = await self.gus.fetch_market_price(voi, use_type="building")
+        gus_building_price = gus_building_result.get("price_m2") if gus_building_result.get("ok") else None
+
+        # === KOREKTA PLANISTYCZNA: działka rolna ale WZ wydane → cena jak budowlana ===
+        mpzp_data = data["planning"].get("mpzp", {})
+        studium_data = data["planning"].get("studium", {})
+        mpzp_usage = (mpzp_data.get("przeznaczenie") or "").lower()
+        studium_usage = (studium_data.get("przeznaczenie") or "").lower()
+        build_keywords = {"zabudow", "mieszkaniow", "mz", "mu", "mn", "ml", "usług", "komercj", "budowl"}
+        planning_indicates_building = any(k in mpzp_usage for k in build_keywords) or \
+                                      any(k in studium_usage for k in build_keywords)
+        has_wz = len(data.get("permits", [])) > 0  # pozwolenie/WZ w GUNB
+
+        if agri and (planning_indicates_building or has_wz):
+            logger.info("KOREKTA: działka rolna w KW, ale WZ/MPZP wskazuje zabudowę → cena budowlana")
+            effective_agri = False  # do kalkulacji używamy ceny budowlanej
+            effective_price = gus_building_price or gus_price
+            effective_price_source = f"GUS budowlana (korekta WZ/MPZP)"
+        else:
+            effective_agri = agri
+            effective_price = gus_price
+            effective_price_source = price_source
+
+        # Wybór ceny: RCN → GUS (z korektą planistyczną) → fallback
+        avg_price = rcn_price if rcn_price else effective_price
+
+        price_source = effective_price_source
 
         # === KOREKTA RĘCZNA — nadpisuje dane API gdy rzeczywistość się nie zgadza ===
         if manual_price_m2 is not None:
@@ -277,41 +318,39 @@ class PropertyAggregator:
             except Exception as e:
                 logger.error(f"Error calculating intersection length: {e}")
 
-        # Priorytet 3: gdy brak pomiaru — NIE tworzymy fałszywego placeholdera
-        measurement_source = "geodezyjne"
-        if not line_length or line_length <= 0:
+        # Priorytet 3: Ręczne nadpisanie długości linii (użytkownik zmierzył z mapy / geodeta)
+        measurement_source = "geodezyjne (OSM)"
+        if manual_line_length_m is not None and manual_line_length_m >= 0:
+            line_length = manual_line_length_m
+            measurement_source = "ręczny pomiar"
+            logger.info("Manual override: line_length_m=%.1f", line_length)
+        elif not line_length or line_length <= 0:
             if pl.get("detected"):
-                # Infrastruktura wykryta ale brak pomiaru — szacunek z przekątnej działki
-                if geom_geojson and geom_geojson.get("coordinates"):
-                    try:
-                        ring = geom_geojson["coordinates"][0]
-                        lats = [c[1] for c in ring]
-                        lons = [c[0] for c in ring]
-                        lat0 = sum(lats) / len(lats)
-                        dx = (max(lons) - min(lons)) * 111319.0 * math.cos(math.radians(lat0))
-                        dy = (max(lats) - min(lats)) * 111132.0
-                        line_length = round(math.hypot(dx, dy) * 0.7, 1)  # 70% przekątnej
-                        measurement_source = "szacunek (przekątna)"
-                        logger.info("Estimated line_length from diagonal: %.1f m", line_length)
-                    except Exception:
-                        line_length = 0.0
-                        measurement_source = "brak pomiaru"
-                else:
-                    line_length = 0.0
-                    measurement_source = "brak pomiaru"
+                # Infrastruktura wykryta ale brak automatycznego pomiaru — NIE szacujemy
+                # Użytkownik musi wpisać długość ręcznie na podstawie mapy
+                line_length = 0.0
+                measurement_source = "BRAK — wpisz ręcznie"
+                logger.info("INFRA [%s]: Detected but length=0 — user must enter manually", parcel_id)
             else:
                 line_length = 0.0
                 measurement_source = "brak — nie wykryto"
 
-        band_area = line_length * band_width if line_length and line_length > 0 else 0.0
+        # FIX: Obsługa NEARBY linii (detected=True ale length_m=0)
+        # Jeśli linia jest detect ale length_m=0, użyj band_width * 2 jako oszacowanie
+        effective_line_length = line_length if line_length and line_length > 0 else 0.0
+        if pl.get("detected") and effective_line_length == 0.0:
+            # NEARBY case: oszacuj długość linii jako 2 × szerokość pasa
+            effective_line_length = (band_width * 2) if band_width and band_width > 0 else 50.0
+
+        band_area = effective_line_length * band_width if effective_line_length and effective_line_length > 0 else 0.0
 
         property_value = (avg_price or 6.50) * area_m2
         # Compensation: zawsze oblicz (0 gdy brak infrastruktury)
         if pl.get("detected") and area_m2 > 0 and band_area > 0:
-            track_a = calculate_track_a(property_value, band_area, area_m2, coeffs)
+            track_a = calculate_track_a(property_value, band_area, area_m2, coeffs, years=years)
             track_b = calculate_track_b(track_a["total"], infra_type)
         else:
-            track_a = {"wsp": 0.0, "wbk": 0.0, "obn": 0.0, "total": 0.0, "years": 10}
+            track_a = {"wsp": 0.0, "wbk": 0.0, "obn": 0.0, "total": 0.0, "years": years}
             track_b = {"total": 0.0, "multiplier": coeffs["track_b_mult"]}
 
         master_record = {
@@ -374,6 +413,10 @@ class PropertyAggregator:
                 "rcn_price_m2": rcn_price,
                 "gus_price_m2": gus_price,
                 "average_price_m2": avg_price,
+                "price_median": rcn_stats.get("price_median"),
+                "price_min": rcn_stats.get("price_min"),
+                "price_max": rcn_stats.get("price_max"),
+                "sample_size": rcn_stats.get("sample_size", len(data["transactions"])),
                 "land_type": land_type,
                 "price_source": price_source,
                 "recent_transactions_count": len(data["transactions"]),
@@ -411,9 +454,262 @@ class PropertyAggregator:
                     "impact_judicial": coeffs["impact_judicial"],
                     "track_b_multiplier": coeffs["track_b_mult"],
                 }
-            }
+            },
+            "claims_qualification": self._qualify_claims(
+                infra_detected=pl.get("detected", False),
+                infra_type=infra_type,
+                voltage=pl.get("voltage"),
+                agri=agri,
+                planning=data["planning"],
+                years=years,
+                band_area=band_area,
+                track_a=track_a,
+                area_m2=area_m2,
+                current_price_m2=avg_price or 0.0,
+                building_price_m2=gus_building_price or 0.0,
+                line_length_m=line_length,
+                voivodeship=voi,
+            ),
         }
         return master_record
+
+    def _calculate_r5_agri_damage(
+        self,
+        infra_type: str,
+        line_length_m: float,
+        band_area_m2: float,
+        area_m2: float,
+        price_per_m2: float,
+        voivodeship: str,
+        years: int,
+    ) -> dict:
+        """
+        Szkoda rolna (R5) — 3 komponenty z metodologią sądową:
+
+        R5.1 DAMNUM EMERGENS — Fundamenty słupów (art. 361 §1 KC)
+             = liczba_słupów × pow_fundamentu[m²] × cena_gruntu[zł/m²]
+             UZASADNIENIE: grunt pod fundamentem trwale wyłączony spod uprawy.
+
+        R5.2 LUCRUM CESSANS — Kliny/wyspy niedostępne sprzętowi (art. 361 §2 KC)
+             Wariant KONSERWATYWNY (sądowy): czynsz dzierżawny = 3% ceny gruntu × pow_wyspy
+             Wariant PEŁNY: produkcja globalna GUS na 1ha × pow_wyspy
+             UZASADNIENIE: czynsz = wartość rynkowa użytkowania (ARiMR, BDL GUS).
+
+        R5.3 LUCRUM CESSANS — Dezorganizacja mechaniczna i GPS/RTK (ewentualne)
+             = 10% rocznego czynszu dzierżawnego z całego pasa × lata
+             UZASADNIENIE: opryskiwacze 24-36m belka, precyzyjne siewniki GPS/RTK
+             wymagają prostoliniowych pasów — niemożliwe przy słupach.
+             UWAGA: wymaga biegłego do sądowego zastosowania.
+        """
+        import math as _math
+
+        # Parametry wg typu infrastruktury
+        is_wn = infra_type == "elektro_WN"
+        foundation_m2 = 4.0 if is_wn else (2.0 if infra_type == "elektro_SN" else 1.0)
+        pole_spacing = 250.0 if is_wn else (70.0 if infra_type == "elektro_SN" else 50.0)
+        # Wyspa niedostępna: belka 24m → omija słup z ~12m buforem po każdej stronie
+        # Konserwatywny (sąd): prostokąt 24m × 6m = 144m² → zaokrąglamy do 100m²
+        # Pełny: uwzględnia efekt "trójkąta" omijania ~ 200m²
+        inaccessible_cons = 100.0   # m² per słup — wariant sądowy konserwatywny
+        inaccessible_full = 200.0   # m² per słup — wariant pełny (biegły)
+
+        pole_count = max(1, _math.ceil(line_length_m / pole_spacing)) if line_length_m > 0 else 0
+        foundations_m2 = round(pole_count * foundation_m2, 1)
+
+        # --- R5.1 Damnum emergens: fundamenty ---
+        r51_szkoda = round(foundations_m2 * price_per_m2, 2)
+
+        # --- Dane GUS: produkcja globalna na 1ha UR [zł/ha/rok, 2023] ---
+        prod_per_ha = self.gus.get_agri_production_per_ha(voivodeship)
+        prod_per_m2_year = prod_per_ha / 10000.0  # zł/m²/rok
+
+        # Czynsz dzierżawny = 3% ceny gruntu (dolna granica, do porównania)
+        dzierzawa_per_m2_year = price_per_m2 * 0.03
+
+        wyspy_cons_m2 = pole_count * inaccessible_cons
+        wyspy_full_m2 = pole_count * inaccessible_full
+
+        # --- R5.2 Lucrum cessans: wartość produkcji z wysp niedostępnych sprzętowi ---
+        # Sąd konserwatywny: GUS prod. globalna × wyspy_cons
+        # Sąd pełny: GUS prod. globalna × wyspy_full
+        # Uzasadnienie: bezpośrednia strata plonu — pole nie jest uprawiane = plon nie powstaje
+        r52_annual_cons = round(wyspy_cons_m2 * prod_per_m2_year, 2)
+        r52_annual_full = round(wyspy_full_m2 * prod_per_m2_year, 2)
+        r52_cons = round(r52_annual_cons * years, 2)
+        r52_full = round(r52_annual_full * years, 2)
+        total_szkoda = round(r51_szkoda + r52_cons, 2)
+        total_full   = round(r51_szkoda + r52_full, 2)
+
+        return {
+            "active": pole_count > 0 and line_length_m > 0,
+            "pole_count": pole_count,
+            "foundations_total_m2": foundations_m2,
+            "prod_per_ha_year_gus": prod_per_ha,
+            "r51": {
+                "label": "R5.1 — Fundamenty słupów (damnum emergens)",
+                "basis": "art. 361 §1 KC",
+                "formula": f"{pole_count} sł. × {foundation_m2} m²/sł. × {price_per_m2:.2f} zł/m²",
+                "value": r51_szkoda,
+            },
+            "r52": {
+                "label": "R5.2 — Wyspy/kliny niedostępne sprzętowi (lucrum cessans)",
+                "basis": "art. 361 §2 KC",
+                "formula": f"{wyspy_cons_m2:.0f} m² × {prod_per_m2_year:.4f} zł/m²/rok × {years} lat",
+                "value": r52_cons,
+                "note": f"Prod. globalna GUS 2023: {prod_per_ha:,.0f} zł/ha/rok ({voivodeship}). Belka 24-36m → {inaccessible_cons:.0f} m²/słup niedostępnych.",
+            },
+            "total": total_szkoda,
+            "years": years,
+            "summary_basis": [
+                f"R5.1 Fundamenty: {pole_count} sł. × {foundation_m2}m²/sł. × {price_per_m2:.2f}zł/m² = {r51_szkoda:.0f} zł (art. 361§1 KC)",
+                f"R5.2 Wyspy: {wyspy_cons_m2:.0f}m² × {prod_per_m2_year:.4f}zł/m²/rok × {years}lat = {r52_cons:.0f} zł (GUS {prod_per_ha:,.0f}zł/ha/rok, art. 361§2 KC)",
+                f"ŁĄCZNIE szkoda rolna: {total_szkoda:.0f} zł",
+            ],
+        }
+
+    def _qualify_claims(
+        self,
+        infra_detected: bool,
+        infra_type: str,
+        voltage: Optional[str],
+        agri: bool,
+        planning: dict,
+        years: int,
+        band_area: float,
+        track_a: dict,
+        area_m2: float = 0.0,
+        current_price_m2: float = 0.0,
+        building_price_m2: float = 0.0,
+        line_length_m: float = 0.0,
+        voivodeship: str = "",
+    ) -> dict:
+        """
+        Spec v2.1 Dual-Track — kwalifikacja 4 roszczeń głównych + 2 ewentualnych.
+        """
+        mpzp = planning.get("mpzp", {})
+        studium = planning.get("studium", {})
+        mpzp_active = mpzp.get("has_mpzp", False)
+        mpzp_usage = (mpzp.get("przeznaczenie") or "").lower()
+        studium_usage = (studium.get("przeznaczenie") or "").lower()
+
+        # R1 — Służebność przesyłu (ZAWSZE aktywna gdy wykryto infra)
+        r1 = {
+            "active": infra_detected,
+            "label": "R1 — Służebność przesyłu",
+            "basis": "art. 305¹–305⁴ KC",
+            "value": track_a.get("wsp", 0.0),
+            "note": "Aktywne" if infra_detected else "Brak infrastruktury",
+        }
+
+        # R2 — Bezumowne korzystanie (ZAWSZE aktywna gdy wykryto infra)
+        r2 = {
+            "active": infra_detected,
+            "label": "R2 — Bezumowne korzystanie",
+            "basis": "art. 224–225 KC",
+            "value": track_a.get("wbk", 0.0),
+            "years": years,
+            "note": f"{years} lat wstecz (art. 118 KC — przedawnienie od 2018)" if infra_detected else "Brak infrastruktury",
+        }
+
+        # R3 — Obniżenie wartości nieruchomości (ZAWSZE aktywna gdy wykryto infra)
+        r3 = {
+            "active": infra_detected,
+            "label": "R3 — Obniżenie wartości nieruchomości",
+            "basis": "art. 305² KC",
+            "value": track_a.get("obn", 0.0),
+            "note": "Linia przez centrum działki" if band_area > 0 else "Brak infrastruktury",
+        }
+
+        # R4 — Blokada zabudowy
+        keywords_block = ("infrastruktura", "linia", "przesył", "strefa ochronna", "elektroenergetyczn", "gazociąg", "telekom")
+        keywords_build = ("zabudow", "mieszkaniow", " mz", " mu", " mn", " ml", "usług", "komercj")
+        keywords_no_build = ("bez zabudow", "zakaz zabudow", "nie dopuszcza zabudow", "wykluczono zabudow")
+
+        mpzp_blocks = any(k in mpzp_usage for k in keywords_block)
+        mpzp_explicitly_blocks = any(k in mpzp_usage for k in keywords_no_build)
+        mpzp_enables_build = (
+            any(k in mpzp_usage for k in keywords_build)
+            and not mpzp_explicitly_blocks
+        )
+        studium_enables_build = any(k in studium_usage for k in keywords_build)
+
+        if infra_detected and mpzp_active and (mpzp_blocks or mpzp_explicitly_blocks) and not mpzp_enables_build:
+            r4_status = "OCZYWISTE"
+            r4_note = f"MPZP wyklucza zabudowę ze względu na infrastrukturę ({mpzp.get('przeznaczenie', '—')})"
+        elif infra_detected and mpzp_active and mpzp_enables_build:
+            r4_status = "OCZEKUJE_NA_WZ"
+            r4_note = f"MPZP dopuszcza zabudowę ({mpzp.get('przeznaczenie', '—')}), ale infrastruktura może blokować WZ"
+        elif infra_detected and not mpzp_active and studium_enables_build:
+            r4_status = "OCZEKUJE_NA_WZ"
+            r4_note = f"Brak MPZP, studium wskazuje zabudowę ({studium.get('przeznaczenie', '—')}) — wymaga decyzji WZ"
+        elif infra_detected and agri:
+            r4_status = "NONE"
+            r4_note = "Grunt rolny bez planów zabudowy"
+        else:
+            r4_status = "NONE"
+            r4_note = "Brak przesłanek dla blokady zabudowy"
+
+        # Wartość szkody R4: różnica ceny budowlanej i rolnej × pow. działki
+        # (szacunek = potencjalna strata właściciela który nie dostał WZ przez linię)
+        r4_damage = 0.0
+        if r4_status in ("OCZYWISTE", "WZ_ODMOWNE") and building_price_m2 > current_price_m2 and area_m2 > 0:
+            r4_damage = round((building_price_m2 - current_price_m2) * area_m2, 2)
+
+        r4 = {
+            "active": r4_status in ("OCZYWISTE", "WZ_ODMOWNE"),
+            "status": r4_status,
+            "label": "R4 — Blokada zabudowy",
+            "basis": "art. 140 KC + decyzja WZ/MPZP",
+            "note": r4_note,
+            "value": r4_damage,
+            "damage_calc": f"({building_price_m2:.2f} - {current_price_m2:.2f}) zł/m² × {area_m2:.0f} m²" if r4_damage > 0 else None,
+        }
+
+        # R5 — Szkoda rolna: dezorganizacja produkcji + fundamenty słupów
+        elektro_infra = infra_type.startswith("elektro") or infra_type.startswith("gaz")
+        r5_applicable = agri and elektro_infra and infra_detected and line_length_m > 0
+        if r5_applicable:
+            r5_calc = self._calculate_r5_agri_damage(
+                infra_type=infra_type,
+                line_length_m=line_length_m,
+                band_area_m2=band_area,
+                area_m2=area_m2,
+                price_per_m2=current_price_m2,
+                voivodeship=voivodeship,
+                years=years,
+            )
+        else:
+            r5_calc = None
+
+        r5 = {
+            "active": r5_applicable,
+            "label": "R5 — Szkoda rolna (fundamenty + wyspy niedostępne sprzętowi)",
+            "basis": "art. 361 §1–2 KC",
+            "note": " | ".join(r5_calc["summary_basis"]) if r5_calc else "Nie dotyczy (brak infrastruktury słupowej na gruncie rolnym)",
+            "value": r5_calc["total"] if r5_calc else 0.0,
+            "detail": r5_calc,
+        }
+
+        # Suma roszczeń z wartością (Track A + R5 jeśli aktywne)
+        total_active = round(
+            (r1["value"] if r1["active"] else 0) +
+            (r2["value"] if r2["active"] else 0) +
+            (r3["value"] if r3["active"] else 0) +
+            (r4.get("value", 0) if r4["active"] else 0) +
+            (r5["value"] if r5["active"] else 0),
+            2
+        )
+
+        return {
+            "R1": r1,
+            "R2": r2,
+            "R3": r3,
+            "R4": r4,
+            "R5": r5,
+            "total_active_claims": total_active,
+            "active_count": sum(1 for r in [r1, r2, r3, r4, r5] if r["active"]),
+            "r4_status": r4_status,
+        }
 
     async def _empty_list(self):
         return []
@@ -435,6 +731,28 @@ class PropertyAggregator:
                         pass
             out.append({"class": str(cls), "area_m2": area if area is not None else 0})
         return out if out else [{"class": "R", "area_m2": fallback_area or 0}]
+
+    def _calculate_price_stats(self, transactions: list) -> dict:
+        """Oblicza statystyki cen (mediana, min, max) z listy transakcji RCN."""
+        import statistics as _stats
+        prices = []
+        for t in transactions:
+            for key in ("cena_jednostkowa", "cena", "wartosc", "price"):
+                raw = t.get(key)
+                if raw:
+                    try:
+                        prices.append(float(str(raw).replace(",", ".")))
+                        break
+                    except (ValueError, TypeError):
+                        pass
+        if prices:
+            return {
+                "price_median": round(_stats.median(prices), 2),
+                "price_min": round(min(prices), 2),
+                "price_max": round(max(prices), 2),
+                "sample_size": len(prices),
+            }
+        return {"price_median": None, "price_min": None, "price_max": None, "sample_size": 0}
 
     def _calculate_avg_price(self, transactions: list) -> Optional[float]:
         prices = []

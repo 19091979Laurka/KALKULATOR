@@ -193,6 +193,10 @@ def _check_intersection_with_features(
         logger.warning("_check_intersection: invalid parcel geom: %s", e)
         return {"detected": False, "features": [], "length_m": 0.0, "voltage": None}
 
+    # Buffer ~20m at 52°N: compensates for OSM vs GUGiK cadastral positional offset.
+    # 20m / 111132 ≈ 0.00018°; we use 0.0002° (~22m) to be safe.
+    parcel_buffered = parcel.buffer(0.0002)
+
     intersecting = []
     total_length = 0.0
     voltages = set()
@@ -206,11 +210,17 @@ def _check_intersection_with_features(
             if not line.is_valid:
                 line = line.buffer(0)
 
-            if not parcel.intersects(line):
+            # Use buffered parcel for detection — handles positional offset between
+            # OSM (GPS survey) and GUGiK cadastral data (typically 10-30m discrepancy)
+            if not parcel_buffered.intersects(line):
                 continue
 
-            # Oblicz długość przecięcia
+            # Length: use original (unbuffered) parcel for accurate crossing length
             intersection = parcel.intersection(line)
+            if intersection.is_empty:
+                # Line is within tolerance buffer but not strictly inside parcel boundary.
+                # Use buffered intersection to get approximate segment length.
+                intersection = parcel_buffered.intersection(line)
             seg_length = 0.0
             if intersection.geom_type == "LineString":
                 seg_length = _length_meters(intersection)
@@ -383,7 +393,7 @@ async def fetch_infrastructure(
     LOGIKA:
     1. Sprawdź REGIONAL CACHE (jeśli batch mode — prefetch_regional_osm)
     2. Jeśli brak cache → indywidualny Overpass query
-    3. KIUT WMS GetFeatureInfo — dodatkowa weryfikacja (opcjonalnie)
+    3. FALLBACK: Jeśli Overpass fail → zwróć "brak danych" ale NIE blokuj raportu
     """
     result = {
         "energie": {

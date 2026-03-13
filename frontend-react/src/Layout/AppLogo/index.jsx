@@ -39,7 +39,7 @@ class HeaderLogo extends React.Component {
     return (
       <Fragment>
         <div className="app-header__logo">
-          <span className="app-header__brand fw-bold">Kalkulator Roszczeń</span>
+          <div className="logo-src" />
           <div className="header__pane ms-auto">
             <div onClick={this.toggleEnableClosedSidebar}>
               <Hamburger 

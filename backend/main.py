@@ -52,6 +52,9 @@ class AnalyzeRequest(BaseModel):
     manual_land_type: Optional[str] = None        # "agricultural" | "building"
     manual_infra_detected: Optional[bool] = None  # Ręczne potwierdzenie infrastruktury
     manual_voltage: Optional[str] = None          # "WN" | "SN" | "nN"
+    manual_line_length_m: Optional[float] = None  # Ręczny pomiar długości linii [m]
+    years: int = 6                                 # Okres WBK (art. 118 KC): 6 lat od 2018
+    is_farmer: bool = False                        # Rolnik → wymusza agri=True, aktywuje R5 (szkoda rolna)
 
 class BatchParcelRow(BaseModel):
     parcel_id: str
@@ -71,18 +74,9 @@ async def index():
     if html_file.exists(): return FileResponse(html_file)
     return {"message": "KALKULATOR API v3.0 — BRAK FRONTENDU"}
 
-# Serwowanie statycznych assetów React (JS, CSS, images) — musi być po /api/ routach
-@app.get("/{full_path:path}")
-async def spa_fallback(full_path: str):
-    """SPA fallback — React Router obsługuje routing po stronie klienta."""
-    # Próbuj plik statyczny
-    static_file = FRONTEND_DIR / full_path
-    if static_file.exists() and static_file.is_file():
-        return FileResponse(static_file)
-    # Fallback → index.html (React Router)
-    html_file = FRONTEND_DIR / "index.html"
-    if html_file.exists(): return FileResponse(html_file)
-    return {"error": "not found"}
+# ═════════════════════════════════════════════════════════════════
+# API ROUTES — MUST BE DEFINED BEFORE CATCH-ALL SPA ROUTE
+# ═════════════════════════════════════════════════════════════════
 
 @app.post("/api/analyze")
 async def analyze(req: AnalyzeRequest):
@@ -107,6 +101,9 @@ async def analyze(req: AnalyzeRequest):
                 manual_land_type=req.manual_land_type,
                 manual_infra_detected=req.manual_infra_detected,
                 manual_voltage=req.manual_voltage,
+                manual_line_length_m=req.manual_line_length_m,
+                years=req.years,
+                is_farmer=req.is_farmer,
             )
             
             results.append({
@@ -194,8 +191,10 @@ async def analyze_batch_csv(file: UploadFile = File(...)):
                 t = await fetch_terrain(pid)
                 if t.get("ok") and t.get("geometry"):
                     return t["geometry"]
-            except:
-                pass
+                else:
+                    logger.warning("fetch_geom [%s]: terrain not ok — %s", pid, t.get("error", "brak geometrii"))
+            except Exception as e:
+                logger.error("fetch_geom [%s]: exception — %s", pid, e)
             return None
 
         # Pobierz geometrie równolegle (max 20 jednocześnie — throttle ULDK)
@@ -676,6 +675,23 @@ function filterParcels(mode) {{
 </script>
 </body>
 </html>"""
+
+
+# ═════════════════════════════════════════════════════════════════
+# CATCH-ALL SPA ROUTE — DEFINED LAST SO API ROUTES ARE MATCHED FIRST
+# ═════════════════════════════════════════════════════════════════
+
+@app.get("/{full_path:path}")
+async def spa_fallback(full_path: str):
+    """SPA fallback — React Router obsługuje routing po stronie klienta."""
+    # Próbuj plik statyczny
+    static_file = FRONTEND_DIR / full_path
+    if static_file.exists() and static_file.is_file():
+        return FileResponse(static_file)
+    # Fallback → index.html (React Router)
+    html_file = FRONTEND_DIR / "index.html"
+    if html_file.exists(): return FileResponse(html_file)
+    return {"error": "not found"}
 
 
 if __name__ == "__main__":

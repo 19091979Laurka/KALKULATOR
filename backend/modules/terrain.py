@@ -2,6 +2,7 @@
 Moduł: Cechy terenu (Spec v3.0 - Strict Data Policy)
 Pobiera dane geometryczne z ULDK i dane infrastruktury z GESUT/BDOT10k.
 """
+import asyncio
 import logging
 import math
 from typing import Dict, Any, Optional, List
@@ -40,25 +41,28 @@ async def fetch_terrain(
     }
 
     try:
+        # UWAGA: Wszystkie wywołania ULDK są synchroniczne (requests.get).
+        # asyncio.to_thread() zapobiega blokowaniu event loop przy batch (59 działek).
+
         # 1. Próba bezpośrednia: pełny TERYT ID (np. "140601_2.0004.74/4")
-        raw = _uldk.get_parcel_by_id(parcel_id)
+        raw = await asyncio.to_thread(_uldk.get_parcel_by_id, parcel_id)
 
         # 2. parcel_id zawiera spację → zakładamy format "NazwaObrebu NrDzialki"
         #    (np. "Cieszkowo Kolonia 74/4") — GetParcelByIdOrNr wymaga nazwy OBREBU, nie gminy
         if (not raw or not raw.get("ok")) and ' ' in parcel_id:
-            raw = _uldk.get_parcel_by_id_or_nr(parcel_id)
+            raw = await asyncio.to_thread(_uldk.get_parcel_by_id_or_nr, parcel_id)
 
         # 3. Obręb podany explicite → "NazwaObrebu NrDzialki" (najbardziej wiarygodne)
         if (not raw or not raw.get("ok")) and obreb:
-            raw = _uldk.get_parcel_by_id_or_nr(f"{obreb} {parcel_id}")
+            raw = await asyncio.to_thread(_uldk.get_parcel_by_id_or_nr, f"{obreb} {parcel_id}")
 
         # 4. Fallback: gmina lub powiat jako przybliżenie nazwy obrebu
         #    UWAGA: Gmina ≠ Obręb. Działa tylko gdy nazwa obrebu = nazwa gminy/wsi.
         #    Dla pewności podaj obreb explicite w żądaniu.
         if (not raw or not raw.get("ok")) and municipality:
-            raw = _uldk.get_parcel_by_id_or_nr(f"{municipality} {parcel_id}")
+            raw = await asyncio.to_thread(_uldk.get_parcel_by_id_or_nr, f"{municipality} {parcel_id}")
         if (not raw or not raw.get("ok")) and county:
-            raw = _uldk.get_parcel_by_id_or_nr(f"{county} {parcel_id}")
+            raw = await asyncio.to_thread(_uldk.get_parcel_by_id_or_nr, f"{county} {parcel_id}")
 
         if raw and raw.get("ok"):
             result["parcel_id"] = raw.get("teryt") or parcel_id
