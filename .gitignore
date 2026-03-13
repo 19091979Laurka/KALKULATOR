@@ -30,6 +30,7 @@ SNAPSHOT_*
 
 # Raporty tymczasowe
 raport_*.html
+raporty/
 
 # Claude worktrees i historia
 .claude/worktrees/

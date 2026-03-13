@@ -271,6 +271,70 @@ def _check_intersection_with_features(
     }
 
 
+def _estimate_length_nearby(parcel_geojson: Dict, features: List[Dict], buffer_deg: float = 0.002) -> float:
+    """Szacuj długość: bufor ~220m, przecięcie z liniami OSM → metry. Automatyczne narzędzie."""
+    if not parcel_geojson or not features:
+        return 0.0
+    try:
+        parcel = shape(parcel_geojson)
+        if not parcel.is_valid:
+            parcel = parcel.buffer(0)
+        buf = parcel.buffer(buffer_deg)
+        total = 0.0
+        for feat in features:
+            geom = feat.get("geometry")
+            if not geom:
+                continue
+            try:
+                line = shape(geom)
+                if not line.is_valid:
+                    line = line.buffer(0)
+                if not buf.intersects(line):
+                    continue
+                inter = buf.intersection(line)
+                if inter.geom_type == "LineString":
+                    total += _length_meters(inter)
+                elif inter.geom_type == "MultiLineString":
+                    for ls in inter.geoms:
+                        total += _length_meters(ls)
+                elif inter.geom_type == "GeometryCollection":
+                    for g in inter.geoms:
+                        if g.geom_type == "LineString":
+                            total += _length_meters(g)
+                        elif g.geom_type == "MultiLineString":
+                            for ls in g.geoms:
+                                total += _length_meters(ls)
+            except Exception:
+                continue
+        return round(total, 1)
+    except Exception as e:
+        logger.debug("_estimate_length_nearby: %s", e)
+        return 0.0
+
+
+def _estimate_length_kiut_only(parcel_geojson: Dict) -> float:
+    """Szacunek gdy KIUT wykrył linię a OSM nie ma wektora. Wymiary działki → 15–80m."""
+    if not parcel_geojson or parcel_geojson.get("type") != "Polygon":
+        return 0.0
+    try:
+        coords = parcel_geojson.get("coordinates", [])
+        if not coords:
+            return 0.0
+        ring = coords[0][0] if isinstance(coords[0][0][0], (list, tuple)) else coords[0]
+        lons = [p[0] for p in ring]
+        lats = [p[1] for p in ring]
+        lat0 = (min(lats) + max(lats)) / 2
+        dx_m = 111319.0 * math.cos(math.radians(lat0))
+        dy_m = 111132.0
+        w_m = (max(lons) - min(lons)) * dx_m
+        h_m = (max(lats) - min(lats)) * dy_m
+        est = min(abs(w_m), abs(h_m)) * 0.5
+        return round(max(15.0, min(80.0, est)), 1)
+    except Exception as e:
+        logger.debug("_estimate_length_kiut_only: %s", e)
+        return 40.0
+
+
 def _find_nearby_features(
     parcel_geojson: Dict,
     features: List[Dict],
@@ -630,25 +694,26 @@ async def fetch_infrastructure(
                      parcel_id, len(features), length_m, voltage, "OpenInfraMap" if from_oim else "Overpass")
 
     elif nearby:
-        # NEARBY: Linie w okolicy (BBOX) ale nie przecinają — DO WERYFIKACJI
-        # Raportuj jako detected z flagą "DO WERYFIKACJI" → Track A/B się policzy
+        # NEARBY: Automatyczny szacunek — bufor ~200m, przecięcie z liniami OSM
         voltage = osm_result.get("voltage", "SN")
         features = osm_result.get("features", [])
+        min_dist = osm_result.get("min_distance_m", 0)
+        length_m = _estimate_length_nearby(parcel_geom, features, buffer_deg=0.002)
 
-        result["energie"]["detected"] = True  # Traktuj jako detected dla kalkulacji
+        result["energie"]["detected"] = True
         result["energie"]["features"] = features
         result["energie"]["geojson"] = {"type": "FeatureCollection", "features": features}
         result["energie"]["feature_count"] = len(features)
-        result["energie"]["length_m"] = 0.0  # Brak przecięcia
+        result["energie"]["length_m"] = length_m
         result["energie"]["voltage"] = voltage
         result["energie"]["strefa_m"] = STREFY_OCHRONNE.get(f"elektro_{voltage}", 15)
-        result["energie"]["status"] = "NEARBY (OSM) — DO WERYFIKACJI"
-        result["energie"]["info"] = f"OSM: {len(features)} linii w okolicy (~1km) — DO WERYFIKACJI NA GEOPORTALU"
+        result["energie"]["status"] = f"SZACUNEK (OSM, linie ~{min_dist:.0f}m od działki)"
+        result["energie"]["info"] = f"OSM: {len(features)} linii w promieniu ~200m — szac. dł. {length_m:.1f}m (automatycznie)"
         result["energie"]["source"] = "OpenStreetMap (Overpass API)"
         result["energie"]["ok"] = True
         result["ok"] = True
-        logger.info("INFRA [%s]: NEARBY — %d linii w BBOX, voltage=%s — DO WERYFIKACJI",
-                     parcel_id, len(features), voltage)
+        logger.info("INFRA [%s]: NEARBY — %d linii, szac. length=%.1fm, voltage=%s",
+                     parcel_id, len(features), length_m, voltage)
 
     else:
         # NOT DETECTED w OSM — sprawdź KIUT WMS (niebieska linia nN często tylko w KIUT GUGiK)
@@ -690,22 +755,18 @@ async def fetch_infrastructure(
                     kiut_ok = True
                     kiut_pixel_source = red_count
         if kiut_ok:
+                length_m = _estimate_length_kiut_only(parcel_geom) if parcel_geom else 40.0
                 result["energie"]["detected"] = True
-                result["energie"]["length_m"] = 0.0
+                result["energie"]["length_m"] = length_m
                 result["energie"]["voltage"] = "nN"
                 result["energie"]["strefa_m"] = STREFY_OCHRONNE.get("elektro_nN", 5)
-                if kiut_pixel_source is not None:
-                    result["energie"]["status"] = "KIUT GUGiK (analiza pikseli WMS)"
-                    result["energie"]["info"] = f"Linia wykryta w KIUT WMS (analiza pikseli, {kiut_pixel_source} px). Brak wektora — wpisz długość w Korektę ręczną."
-                    result["energie"]["source"] = "KIUT GUGiK (WMS GetMap + pixel analysis)"
-                else:
-                    result["energie"]["status"] = "KIUT GUGiK (brak wektora — wpisz długość ręcznie)"
-                    result["energie"]["info"] = "Linia wykryta w warstwie KIUT GUGiK (np. nN). Brak geometrii wektorowej — zmierz długość w Geoportalu i wpisz w Korektę ręczną."
-                    result["energie"]["source"] = "KIUT GUGiK (WMS GetFeatureInfo)"
+                result["energie"]["status"] = "SZACUNEK (KIUT GUGiK + geometria działki)"
+                result["energie"]["info"] = f"Linia wykryta w KIUT WMS. Szac. dł. {length_m:.1f}m z wymiarów działki (automatycznie)"
+                result["energie"]["source"] = "KIUT GUGiK (WMS) + szacunek geometryczny"
                 result["energie"]["geojson"] = {"type": "FeatureCollection", "features": []}
                 result["energie"]["ok"] = True
                 result["ok"] = True
-                logger.info("INFRA [%s]: Wykryto linię w KIUT GUGiK (%s) — użytkownik wpisze długość",
-                            parcel_id, "pixel analysis" if kiut_pixel_source is not None else "GetFeatureInfo")
+                logger.info("INFRA [%s]: KIUT detected — automatyczny szacunek length=%.1fm",
+                            parcel_id, length_m)
 
     return result
