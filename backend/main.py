@@ -704,6 +704,183 @@ function filterParcels(mode) {{
 
 
 # ═════════════════════════════════════════════════════════════════
+# AI CHAT ENDPOINT
+# ═════════════════════════════════════════════════════════════════
+
+class AiChatRequest(BaseModel):
+    messages: list
+
+@app.post("/api/ai-chat")
+async def ai_chat(req: AiChatRequest):
+    """Proxy do OpenAI / Gemini dla wbudowanego asystenta AI."""
+    try:
+        import openai
+        client = openai.OpenAI()
+        response = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=req.messages,
+            max_tokens=1024,
+            temperature=0.7,
+        )
+        return {"reply": response.choices[0].message.content}
+    except Exception as e:
+        logger.error(f"AI chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ═════════════════════════════════════════════════════════════════
+# NOTEBOOKLM ENTERPRISE API ENDPOINTS
+# ═════════════════════════════════════════════════════════════════
+
+class NbCreateRequest(BaseModel):
+    title: str
+
+class NbAddTextSourceRequest(BaseModel):
+    notebook_id: str
+    source_title: str
+    content: str
+
+class NbAddUrlSourceRequest(BaseModel):
+    notebook_id: str
+    url: str
+    source_name: str = ""
+
+class NbGeneratePodcastRequest(BaseModel):
+    notebook_id: str
+    episode_focus: str = ""
+    language_code: str = "pl"
+
+class NbGetAudioRequest(BaseModel):
+    notebook_id: str
+    audio_overview_id: str
+
+
+def _nb_available() -> bool:
+    """Check if NotebookLM credentials are configured."""
+    has_project = bool(os.environ.get("NOTEBOOKLM_PROJECT_ID"))
+    has_key = bool(os.environ.get("GOOGLE_SA_KEY_PATH") or os.environ.get("GOOGLE_SA_KEY_JSON"))
+    return has_project and has_key
+
+
+@app.get("/api/notebooklm/status")
+async def notebooklm_status():
+    """Check if NotebookLM API is configured and available."""
+    configured = _nb_available()
+    project = os.environ.get("NOTEBOOKLM_PROJECT_ID", "")
+    location = os.environ.get("NOTEBOOKLM_LOCATION", "global")
+    return {
+        "configured": configured,
+        "project_id": project if configured else None,
+        "location": location if configured else None,
+        "message": "NotebookLM API gotowe" if configured else "Brak konfiguracji — ustaw NOTEBOOKLM_PROJECT_ID i GOOGLE_SA_KEY_PATH/GOOGLE_SA_KEY_JSON",
+    }
+
+
+@app.post("/api/notebooklm/notebooks")
+async def nb_create_notebook(req: NbCreateRequest):
+    """Utwórz nowy notebook w NotebookLM."""
+    if not _nb_available():
+        raise HTTPException(status_code=503, detail="NotebookLM API nie jest skonfigurowane. Ustaw zmienne środowiskowe.")
+    try:
+        from backend.integrations.notebooklm import create_notebook, notebook_url
+        result = create_notebook(req.title)
+        notebook_id = result.get("notebookId") or result.get("name", "").split("/")[-1]
+        return {
+            "notebook_id": notebook_id,
+            "title": result.get("title", req.title),
+            "url": notebook_url(notebook_id),
+            "raw": result,
+        }
+    except Exception as e:
+        logger.error(f"NotebookLM create error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/notebooklm/notebooks")
+async def nb_list_notebooks():
+    """Lista ostatnio oglądanych notebooków."""
+    if not _nb_available():
+        raise HTTPException(status_code=503, detail="NotebookLM API nie jest skonfigurowane.")
+    try:
+        from backend.integrations.notebooklm import list_notebooks
+        return list_notebooks()
+    except Exception as e:
+        logger.error(f"NotebookLM list error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/notebooklm/notebooks/{notebook_id}")
+async def nb_get_notebook(notebook_id: str):
+    """Pobierz notebook po ID."""
+    if not _nb_available():
+        raise HTTPException(status_code=503, detail="NotebookLM API nie jest skonfigurowane.")
+    try:
+        from backend.integrations.notebooklm import get_notebook, notebook_url
+        result = get_notebook(notebook_id)
+        result["_url"] = notebook_url(notebook_id)
+        return result
+    except Exception as e:
+        logger.error(f"NotebookLM get error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/notebooklm/sources/text")
+async def nb_add_text_source(req: NbAddTextSourceRequest):
+    """Dodaj źródło tekstowe do notebooka."""
+    if not _nb_available():
+        raise HTTPException(status_code=503, detail="NotebookLM API nie jest skonfigurowane.")
+    try:
+        from backend.integrations.notebooklm import add_text_source
+        return add_text_source(req.notebook_id, req.source_title, req.content)
+    except Exception as e:
+        logger.error(f"NotebookLM add text source error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/notebooklm/sources/url")
+async def nb_add_url_source(req: NbAddUrlSourceRequest):
+    """Dodaj źródło URL do notebooka."""
+    if not _nb_available():
+        raise HTTPException(status_code=503, detail="NotebookLM API nie jest skonfigurowane.")
+    try:
+        from backend.integrations.notebooklm import add_url_source
+        return add_url_source(req.notebook_id, req.url, req.source_name)
+    except Exception as e:
+        logger.error(f"NotebookLM add URL source error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/notebooklm/audio")
+async def nb_generate_podcast(req: NbGeneratePodcastRequest):
+    """Wygeneruj audio-brief (podcast) dla notebooka."""
+    if not _nb_available():
+        raise HTTPException(status_code=503, detail="NotebookLM API nie jest skonfigurowane.")
+    try:
+        from backend.integrations.notebooklm import generate_audio_overview
+        return generate_audio_overview(
+            req.notebook_id,
+            episode_focus=req.episode_focus,
+            language_code=req.language_code,
+        )
+    except Exception as e:
+        logger.error(f"NotebookLM generate podcast error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/notebooklm/audio/{notebook_id}/{audio_overview_id}")
+async def nb_get_audio_status(notebook_id: str, audio_overview_id: str):
+    """Sprawdź status generowania audio-briefu."""
+    if not _nb_available():
+        raise HTTPException(status_code=503, detail="NotebookLM API nie jest skonfigurowane.")
+    try:
+        from backend.integrations.notebooklm import get_audio_overview
+        return get_audio_overview(notebook_id, audio_overview_id)
+    except Exception as e:
+        logger.error(f"NotebookLM get audio error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ═════════════════════════════════════════════════════════════════
 # CATCH-ALL SPA ROUTE — DEFINED LAST SO API ROUTES ARE MATCHED FIRST
 # ═════════════════════════════════════════════════════════════════
 

@@ -50,6 +50,104 @@ export default function ClientsPage() {
   const [aiInput, setAiInput]   = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const aiChatEndRef             = useRef(null);
+  const [nbEditMode, setNbEditMode] = useState(false);
+  const [nbEditUrl, setNbEditUrl]   = useState("");
+  const [nbCopied, setNbCopied]     = useState(false);
+  const [nbApiStatus, setNbApiStatus] = useState(null); // null | {configured, message}
+  const [nbCreating, setNbCreating]   = useState(false);
+  const [nbAddingSource, setNbAddingSource] = useState(false);
+  const [nbPodcastLoading, setNbPodcastLoading] = useState(false);
+  const [nbPodcastStatus, setNbPodcastStatus]   = useState(null); // {audioOverviewId, status}
+  const [nbPodcastPollTimer, setNbPodcastPollTimer] = useState(null);
+
+  // Check NotebookLM API status on mount
+  useEffect(() => {
+    fetch("/api/notebooklm/status")
+      .then((r) => r.json())
+      .then((d) => setNbApiStatus(d))
+      .catch(() => setNbApiStatus({ configured: false, message: "Backend niedostępny" }));
+  }, []);
+
+  async function createNotebookForClient() {
+    if (!selectedClient || nbCreating) return;
+    const title = `${selectedClient.firstName} ${selectedClient.lastName} — sprawa ${selectedClient.caseNumber || selectedClient.id}`;
+    setNbCreating(true);
+    try {
+      const resp = await fetch("/api/notebooklm/notebooks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      if (!resp.ok) { const err = await resp.json(); throw new Error(err.detail || resp.statusText); }
+      const data = await resp.json();
+      setClients((prev) => prev.map((c) => c.id === selectedId ? { ...c, notebookLmUrl: data.url, notebookLmId: data.notebook_id } : c));
+      setNbEditUrl(data.url);
+      // Auto-add case summary as first text source
+      await addCaseSummarySource(data.notebook_id);
+    } catch (e) {
+      alert(`Błąd tworzenia notebooka: ${e.message}`);
+    }
+    setNbCreating(false);
+  }
+
+  async function addCaseSummarySource(notebookId) {
+    const client = clients.find((c) => c.id === selectedId);
+    if (!client) return;
+    const content = `STRESZCZENIE SPRAWY\n===================\nKlient: ${client.firstName} ${client.lastName}\nNr sprawy: ${client.caseNumber || 'brak'}\nAdres: ${client.address || 'brak'}\nStatus: ${client.status || 'aktywna'}\n\nWYNAGRODZENIE\n${client.compensation ? Number(client.compensation).toLocaleString('pl-PL') + ' zł' : 'nie ustalono'} | Zapłacone: ${client.compensationPaid ? 'TAK' : 'NIE'}\n\nANALIZY DZIAŁEK\n${(client.analyses || []).map((a, i) => `${i+1}. Działka ${a.parcelId || '?'}: Track A=${a.trackA||'?'} zł, Track B=${a.trackB||'?'} zł, Razem=${a.total||'?'} zł`).join('\n') || 'Brak analiz'}\n\nHISTORIA SPRAWY\n${(client.timeline || []).map((e) => `[${e.date}] ${eventLabel(e.type)}: ${e.text}`).join('\n') || 'Brak wpisów'}\n\nNOTATKI\n${client.notes || 'Brak notatek'}`;
+    try {
+      const resp = await fetch("/api/notebooklm/sources/text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notebook_id: notebookId, source_title: `Streszczenie sprawy — ${client.firstName} ${client.lastName}`, content }),
+      });
+      if (!resp.ok) console.warn("Nie udało się dodać streszczenia sprawy do notebooka");
+    } catch (e) { console.warn("addCaseSummarySource error:", e); }
+  }
+
+  async function generatePodcast() {
+    const client = clients.find((c) => c.id === selectedId);
+    if (!client?.notebookLmId || nbPodcastLoading) return;
+    setNbPodcastLoading(true);
+    setNbPodcastStatus(null);
+    try {
+      const resp = await fetch("/api/notebooklm/audio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notebook_id: client.notebookLmId, episode_focus: "Omów kluczowe aspekty prawne i finansowe tej sprawy służebności przesyłu.", language_code: "pl" }),
+      });
+      if (!resp.ok) { const err = await resp.json(); throw new Error(err.detail || resp.statusText); }
+      const data = await resp.json();
+      const aoId = data.audioOverviewId || data.name?.split("/").pop();
+      setNbPodcastStatus({ audioOverviewId: aoId, status: data.status || "AUDIO_OVERVIEW_STATUS_IN_PROGRESS" });
+      // Poll for completion
+      const timer = setInterval(async () => {
+        try {
+          const pr = await fetch(`/api/notebooklm/audio/${client.notebookLmId}/${aoId}`);
+          const pd = await pr.json();
+          setNbPodcastStatus({ audioOverviewId: aoId, status: pd.status, data: pd });
+          if (pd.status === "AUDIO_OVERVIEW_STATUS_COMPLETE" || pd.status === "AUDIO_OVERVIEW_STATUS_FAILED") {
+            clearInterval(timer);
+            setNbPodcastLoading(false);
+          }
+        } catch { clearInterval(timer); setNbPodcastLoading(false); }
+      }, 10000);
+      setNbPodcastPollTimer(timer);
+    } catch (e) {
+      alert(`Błąd generowania podcastu: ${e.message}`);
+      setNbPodcastLoading(false);
+    }
+  }
+
+  function saveNotebookUrl() {
+    setClients((prev) => prev.map((c) => c.id === selectedId ? { ...c, notebookLmUrl: nbEditUrl.trim() } : c));
+    setNbEditMode(false);
+  }
+  function copyPrompt() {
+    const client = clients.find((c) => c.id === selectedId);
+    if (!client) return;
+    const prompt = `Jesteś asystentem prawnym w sprawie służebności przesyłu.\nKlient: ${client.firstName} ${client.lastName}\nNr sprawy: ${client.caseNumber || 'brak'}\nAdres: ${client.address || 'brak'}\nAnalizy działek: ${(client.analyses || []).map((a) => `Działka ${a.parcelId}, Track A: ${a.trackA} zł, Track B: ${a.trackB} zł, Razem: ${a.total} zł`).join('; ') || 'brak'}\nDokumenty: ${(client.files || []).map((f) => f.name).join(', ') || 'brak'}\nHistoria: ${(client.timeline || []).map((e) => `[${e.date}] ${eventLabel(e.type)}: ${e.text}`).join('; ') || 'brak'}\nNotatki: ${client.notes || 'brak'}\n\nNa podstawie powyższych danych odpowiadaj na pytania dotyczące tej sprawy.`;
+    navigator.clipboard.writeText(prompt).then(() => { setNbCopied(true); setTimeout(() => setNbCopied(false), 2500); });
+  }
 
   useEffect(() => { saveClients(clients); }, [clients]);
   useEffect(() => { if (activeTab === "ai") aiChatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [clients, activeTab]);
@@ -456,16 +554,115 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
             {/* AI ASYSTENT */}
             {activeTab === "ai" && (
               <div className="cp-section cp-ai-section">
-                <div className="cp-notebooklm-bar">
-                  <span className="cp-notebooklm-icon">🔬</span>
-                  <span className="cp-notebooklm-label">NotebookLM:</span>
-                  {selectedClient.notebookLmUrl ? (
-                    <a href={selectedClient.notebookLmUrl} target="_blank" rel="noopener noreferrer" className="cp-notebooklm-link">Otwórz notebook klienta ↗</a>
-                  ) : (
-                    <span className="cp-notebooklm-empty">Brak linku — dodaj w edycji klienta</span>
+
+                {/* ─── NOTEBOOKLM PANEL ─── */}
+                <div className="cp-nb-panel">
+                  <div className="cp-nb-header">
+                    <div className="cp-nb-logo">
+                      <span className="cp-nb-logo-icon">📓</span>
+                      <div>
+                        <div className="cp-nb-title">NotebookLM Enterprise</div>
+                        <div className="cp-nb-subtitle">Notebook AI dla tej sprawy • {nbApiStatus ? (nbApiStatus.configured ? <span style={{color:"#2e7d32",fontWeight:700}}>✅ API aktywne</span> : <span style={{color:"#c62828"}}>⚠️ {nbApiStatus.message}</span>) : <span style={{color:"#888"}}>sprawdzam…</span>}</div>
+                      </div>
+                    </div>
+                    <div className="cp-nb-actions">
+                      {selectedClient.notebookLmUrl && (
+                        <a href={selectedClient.notebookLmUrl} target="_blank" rel="noopener noreferrer" className="cp-btn cp-btn-nb-open">🔗 Otwórz NotebookLM ↗</a>
+                      )}
+                      {nbApiStatus?.configured && !selectedClient.notebookLmId && (
+                        <button className="cp-btn cp-btn-nb-create" onClick={createNotebookForClient} disabled={nbCreating}>
+                          {nbCreating ? "⏳ Tworzę…" : "✨ Utwórz notebook automatycznie"}
+                        </button>
+                      )}
+                      <button className="cp-btn cp-btn-ghost" onClick={() => { setNbEditMode(!nbEditMode); setNbEditUrl(selectedClient.notebookLmUrl || ""); }}>
+                        {nbEditMode ? "✕ Anuluj" : (selectedClient.notebookLmUrl ? "✏️ Zmień link" : "+ Dodaj link ręcznie")}
+                      </button>
+                    </div>
+                  </div>
+
+                  {nbEditMode && (
+                    <div className="cp-nb-edit-row">
+                      <input
+                        className="cp-input cp-nb-input"
+                        placeholder="https://notebooklm.cloud.google.com/... lub https://notebooklm.google.com/notebook/..."
+                        value={nbEditUrl}
+                        onChange={(e) => setNbEditUrl(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") saveNotebookUrl(); }}
+                        autoFocus
+                      />
+                      <button className="cp-btn cp-btn-primary" onClick={saveNotebookUrl}>Zapisz</button>
+                    </div>
                   )}
-                  <button className="cp-btn cp-btn-ghost cp-notebooklm-edit" onClick={() => openEdit(selectedClient)}>✏️</button>
+
+                  {!selectedClient.notebookLmUrl && !nbEditMode && (
+                    <div className="cp-nb-empty">
+                      <div className="cp-nb-empty-icon">📓</div>
+                      <div className="cp-nb-empty-title">Brak notebooka dla tej sprawy</div>
+                      {nbApiStatus?.configured ? (
+                        <div className="cp-nb-empty-text">Kliknij <strong>✨ Utwórz notebook automatycznie</strong> — system stworzy notebook w NotebookLM Enterprise i automatycznie doda streszczenie sprawy jako pierwsze źródło.</div>
+                      ) : (
+                        <>
+                          <div className="cp-nb-empty-text">Utwórz notebook ręcznie w NotebookLM, wklej dokumenty klienta, a link zapisz tutaj.</div>
+                          <div className="cp-nb-steps">
+                            <div className="cp-nb-step"><span className="cp-nb-step-num">1</span><span>Wejdź na <a href="https://notebooklm.google.com" target="_blank" rel="noopener noreferrer">notebooklm.google.com</a></span></div>
+                            <div className="cp-nb-step"><span className="cp-nb-step-num">2</span><span>Utwórz nowy notebook → nazwa: <strong>{selectedClient.firstName} {selectedClient.lastName} — sprawa {selectedClient.caseNumber || 'nr'}</strong></span></div>
+                            <div className="cp-nb-step"><span className="cp-nb-step-num">3</span><span>Dodaj dokumenty klienta jako źródła (PDF, Word)</span></div>
+                            <div className="cp-nb-step"><span className="cp-nb-step-num">4</span><span>Skopiuj URL i kliknij <em>+ Dodaj link ręcznie</em></span></div>
+                          </div>
+                        </>
+                      )}
+                      <button className="cp-btn cp-btn-nb-prompt" onClick={copyPrompt}>
+                        {nbCopied ? "✅ Skopiowano!" : "📋 Kopiuj prompt startowy dla NotebookLM"}
+                      </button>
+                    </div>
+                  )}
+
+                  {selectedClient.notebookLmUrl && !nbEditMode && (
+                    <div className="cp-nb-linked">
+                      <div className="cp-nb-linked-info">
+                        <span className="cp-nb-linked-icon">✅</span>
+                        <span className="cp-nb-linked-url">{selectedClient.notebookLmUrl}</span>
+                      </div>
+                      <div className="cp-nb-linked-actions">
+                        <button className="cp-btn cp-btn-ghost cp-btn-sm" onClick={copyPrompt}>
+                          {nbCopied ? "✅ Skopiowano!" : "📋 Kopiuj prompt"}
+                        </button>
+                        {nbApiStatus?.configured && selectedClient.notebookLmId && (
+                          <button
+                            className="cp-btn cp-btn-podcast"
+                            onClick={generatePodcast}
+                            disabled={nbPodcastLoading}
+                            title="Wygeneruj 10-minutowy audio-brief sprawy"
+                          >
+                            {nbPodcastLoading ? "⏳ Generuję audio…" : "🎧 Generuj Audio-Brief"}
+                          </button>
+                        )}
+                        <span className="cp-nb-linked-hint">Wklej prompt jako pierwszą wiadomość w NotebookLM — AI pozna dane sprawy</span>
+                      </div>
+                      {nbPodcastStatus && (
+                        <div className="cp-nb-podcast-status">
+                          {nbPodcastStatus.status === "AUDIO_OVERVIEW_STATUS_IN_PROGRESS" && <span>⏳ Generowanie audio-briefu w toku… (może potrwać 1–2 min)</span>}
+                          {nbPodcastStatus.status === "AUDIO_OVERVIEW_STATUS_COMPLETE" && <span>✅ Audio-brief gotowy! <a href={nbPodcastStatus.data?.name} target="_blank" rel="noopener noreferrer">Otwórz w NotebookLM ↗</a></span>}
+                          {nbPodcastStatus.status === "AUDIO_OVERVIEW_STATUS_FAILED" && <span>❌ Błąd generowania audio. Spróbuj ponownie.</span>}
+                        </div>
+                      )}
+                      {nbApiStatus?.configured && selectedClient.notebookLmId && (
+                        <div className="cp-nb-sync-row">
+                          <button
+                            className="cp-btn cp-btn-ghost cp-btn-sm"
+                            onClick={() => addCaseSummarySource(selectedClient.notebookLmId)}
+                            disabled={nbAddingSource}
+                          >
+                            {nbAddingSource ? "⏳ Dodaję…" : "🔄 Aktualizuj streszczenie sprawy w NotebookLM"}
+                          </button>
+                          <span className="cp-nb-linked-hint">Synchronizuje dane klienta, analizy i historię z notebookiem</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
+
+                <div className="cp-nb-divider"><span>lub użyj wbudowanego asystenta AI</span></div>
                 <div className="cp-ai-header">
                   <div className="cp-ai-title">🤖 AI Asystent sprawy</div>
                   <div className="cp-ai-subtitle">Asystent zna dane klienta, analizy i historię sprawy</div>
