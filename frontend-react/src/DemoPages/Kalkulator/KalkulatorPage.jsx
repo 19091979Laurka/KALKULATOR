@@ -2395,6 +2395,18 @@ export default function KalkulatorPage() {
           {/* ════ ANALIZA PAGE ════ */}
           {activeNav === "analiza" && (<>
 
+          {/* ════ PAGE HERO ════ */}
+          <div className="ksws-page-hero">
+            <div className="ksws-page-hero-title">⚡ Analiza działki — Roszczenia KSWS</div>
+            <div className="ksws-page-hero-sub">
+              <span className="ksws-page-hero-badge">📍 ULDK GUGiK</span>
+              <span className="ksws-page-hero-badge">🗺 GESUT</span>
+              <span className="ksws-page-hero-badge">📊 GUS BDL</span>
+              <span className="ksws-page-hero-badge">🌐 OSM Overpass</span>
+              <span className="ksws-page-hero-badge">⚖️ Track A/B</span>
+              <span style={{ color: 'rgba(255,255,255,0.5)', marginLeft: '4px' }}>— wyłącznie dane rzeczywiste z rejestrów publicznych</span>
+            </div>
+          </div>
           {/* ════ FORMULARZ ════ */}
           <div className="ksws-card">
             <div className="ksws-card-header">
