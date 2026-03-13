@@ -21,6 +21,43 @@ from backend.modules.infrastructure import fetch_infrastructure
 
 logger = logging.getLogger(__name__)
 
+
+def _bbox_2180_from_geojson(geojson: Optional[Dict]) -> Optional[Tuple[float, float, float, float]]:
+    """
+    Oblicz BBOX (E_min, N_min, E_max, N_max) w EPSG:2180 z geometrii GeoJSON (WGS84).
+    Używane gdy ULDK get_parcel_bbox nie zwróci wyniku — pozwala nie tracić KIEG/RCN.
+    Przybliżenie liniowe dla Polski (bez pyproj).
+    """
+    if not geojson or geojson.get("type") not in ("Polygon", "MultiPolygon"):
+        return None
+    coords_raw = geojson.get("coordinates", [])
+    if not coords_raw:
+        return None
+    # Zbierz wszystkie pary (lon, lat)
+    points = []
+    if geojson["type"] == "Polygon":
+        for ring in coords_raw:
+            for pt in ring:
+                if len(pt) >= 2:
+                    points.append((float(pt[0]), float(pt[1])))
+    else:
+        for poly in coords_raw:
+            for ring in poly:
+                for pt in ring:
+                    if len(pt) >= 2:
+                        points.append((float(pt[0]), float(pt[1])))
+    if not points:
+        return None
+    # Przybliżenie WGS84 → EPSG:2180 (Poland 1992), wzór jak w rcn_gugik
+    meters_per_deg_lat = 111_320.0
+    e_list, n_list = [], []
+    for lon, lat in points:
+        m_lon = 111_320.0 * math.cos(math.radians(lat))
+        e_list.append(5_500_000 + (lon - 19.0) * m_lon)
+        n_list.append(5_200_000 + (lat - 52.0) * meters_per_deg_lat)
+    return (min(e_list), min(n_list), max(e_list), max(n_list))
+
+
 # KSWS coefficients (wbudowane w backend — nie mock, to standardy KSWS-V.5)
 KSWS_STANDARDS = {
     "elektro_WN": {"S": 0.250, "k": 0.650, "R": 0.060, "u": 0.065, "impact_judicial": 0.073, "band_width_m": 30, "track_b_mult": 1.80, "label": "Linie 110-400 kV"},
@@ -192,6 +229,15 @@ class PropertyAggregator:
         lon, lat = centroid.get("lon"), centroid.get("lat")
         # get_parcel_bbox jest synchroniczne (requests.get) — thread aby nie blokować event loop
         bbox_2180 = await asyncio.to_thread(self.uldk.get_parcel_bbox, resolved_pid, "2180")
+        bbox_source = "ULDK"
+        # Fallback: gdy ULDK nie zwróci bbox (np. timeout), oblicz z geometrii — żeby nie tracić KIEG/RCN
+        if not bbox_2180 and terrain.get("geometry"):
+            bbox_2180 = _bbox_2180_from_geojson(terrain.get("geometry"))
+            if bbox_2180:
+                bbox_source = "geometry_fallback"
+                logger.info("Bbox 2180 z geometrii (fallback), ULDK get_parcel_bbox nie zwrócił")
+        if not bbox_2180:
+            bbox_source = "brak"
         parts = resolved_pid.split('.')
         teryt_unit = parts[0] if len(parts) > 1 else ""
         parcel_nr = parts[-1] if len(parts) > 0 else resolved_pid
@@ -354,7 +400,12 @@ class PropertyAggregator:
             track_b = {"total": 0.0, "multiplier": coeffs["track_b_mult"]}
 
         master_record = {
-            "metadata": {"teryt_id": resolved_pid, "status": "REAL", "source": "ULDK GUGiK"},
+            "metadata": {
+                "teryt_id": resolved_pid,
+                "status": "REAL",
+                "source": "ULDK GUGiK",
+                "bbox_source": bbox_source,
+            },
             "parcel_metadata": {
                 "commune": terrain.get("commune"),
                 "county": terrain.get("county"),

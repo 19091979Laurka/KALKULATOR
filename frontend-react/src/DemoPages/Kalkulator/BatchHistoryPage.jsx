@@ -76,6 +76,31 @@ export default function BatchHistoryPage() {
 
     const parcelCards = results.map((p, i) => {
       const d = p.master_record || p.data || {};
+      const isError = d.status === "ERROR" || p.status === "ERROR";
+      const errorMsg = d.message || p.error || "Brak danych";
+
+      if (isError) {
+        return `
+      <div class="parcel-card" style="page-break-inside:avoid;break-inside:avoid;">
+        <div class="parcel-header" style="background:#fff5f5;border-top:4px solid #c62828;border-bottom:1px solid #ffcdd2;">
+          <div class="parcel-header-left">
+            <div class="parcel-num-badge" style="background:#ffebee;border:2px solid #c62828;color:#c62828;font-size:12px;">#${i + 1}</div>
+            <div>
+              <div class="parcel-id" style="color:#3d2319;">${p.parcel_id || "—"}</div>
+              <a href="https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${encodeURIComponent(p.parcel_id || "")}"
+                 target="_blank" class="geo-link" style="color:#3498db;">🔗 geoportal</a>
+            </div>
+            <span class="collision-badge" style="background:#ffebee;color:#c62828;border:1px solid #ef9a9a;">❌ BŁĄD POBRANIA</span>
+          </div>
+        </div>
+        <div style="padding:20px 22px;background:#fff8f8;border:1px solid #ffcdd2;border-radius:0 0 16px 16px;">
+          <div style="font-size:12px;color:#c62828;font-weight:700;margin-bottom:6px;">Dane nie zostały pobrane</div>
+          <div style="font-size:13px;color:#555;line-height:1.5;">${errorMsg.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+          <div style="font-size:11px;color:#888;margin-top:10px;">Sprawdź format identyfikatora (pełny TERYT lub obręb + nr działki w CSV).</div>
+        </div>
+      </div>`;
+      }
+
       const ta = (d.compensation?.track_a) || {};
       const tb = (d.compensation?.track_b) || {};
       const pl = d.infrastructure?.power_lines || {};
@@ -190,6 +215,17 @@ export default function BatchHistoryPage() {
 
     const summaryRows = results.map((p, i) => {
       const d = p.master_record || p.data || {};
+      const isError = d.status === "ERROR" || p.status === "ERROR";
+      if (isError) {
+        const errShort = (d.message || p.error || "Błąd").replace(/<[^>]+>/g, "").slice(0, 40);
+        return `<tr style="border-bottom:1px solid #f0f0f0;background:#fff8f8;">
+        <td style="padding:8px 12px;font-weight:600;">#${i+1} ${p.parcel_id || ""}</td>
+        <td style="padding:8px 12px;text-align:center;">
+          <span style="padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;background:#c62828;color:white;">BŁĄD</span>
+        </td>
+        <td colspan="3" style="padding:8px 12px;font-size:12px;color:#c62828;" title="${(d.message || p.error || "").replace(/"/g, "&quot;")}">— ${errShort}${(d.message || p.error || "").length > 40 ? "…" : ""}</td>
+      </tr>`;
+      }
       const ta = d.compensation?.track_a?.total || 0;
       const tb = d.compensation?.track_b?.total || 0;
       const collision = !!d.infrastructure?.power_lines?.detected;

@@ -161,10 +161,19 @@ out geom;
 
 
 def _parse_voltage_osm(tags: Dict) -> str:
-    """Parse voltage from OSM tags: WN (≥110kV), SN (1-110kV), nN (<1kV)."""
+    """Parse voltage from OSM tags: WN (≥110kV), SN (1-110kV), nN (<1kV).
+    Wartości < 1000 traktowane jako V (np. 400 → 0.4 kV → nN)."""
     v = tags.get("voltage") or tags.get("voltage:primary") or ""
     try:
-        kv = float(str(v).replace("kV", "").replace("000", ""))
+        s = str(v).strip().lower().replace(" ", "")
+        if "kv" in s:
+            kv = float(s.replace("kv", "").replace(",", "."))
+        elif "v" in s:
+            volt = float(s.replace("v", "").replace(",", "."))
+            kv = volt / 1000.0 if volt >= 1 else volt  # 400 V → 0.4 kV
+        else:
+            raw = float(s.replace(",", "."))
+            kv = raw if raw >= 10 else raw / 1000.0  # 22 → SN, 400 → nN
         if kv >= 110:
             return "WN"
         if kv >= 1:
@@ -338,9 +347,8 @@ async def _check_kiut_wms(lon: float, lat: float) -> Optional[bool]:
     NIE daje geometrii — tylko detekcja.
     """
     try:
-        # EPSG:4326 point → WMS pixel query
-        # GetFeatureInfo wymaga pełnych parametrów GetMap
-        bbox = f"{lon - 0.001},{lat - 0.001},{lon + 0.001},{lat + 0.001}"
+        # WMS 1.3.0 EPSG:4326: BBOX = lat_min, lon_min, lat_max, lon_max (nie lon,lat!)
+        bbox = f"{lat - 0.001},{lon - 0.001},{lat + 0.001},{lon + 0.001}"
         params = {
             "SERVICE": "WMS",
             "VERSION": "1.3.0",
@@ -515,11 +523,45 @@ async def fetch_infrastructure(
                      parcel_id, len(features), voltage)
 
     else:
-        # NOT DETECTED: Brak linii w okolicy
+        # NOT DETECTED w OSM — sprawdź KIUT WMS (niebieska linia nN często tylko w KIUT GUGiK)
         result["energie"]["detected"] = False
         result["energie"]["status"] = "NOT_DETECTED"
         result["energie"]["info"] = "Brak linii energetycznych w OSM — DO WERYFIKACJI"
         result["energie"]["source"] = "OpenStreetMap (Overpass API)"
-        logger.info("INFRA [%s]: NOT DETECTED", parcel_id)
+        logger.info("INFRA [%s]: NOT DETECTED (OSM)", parcel_id)
+
+        # Sprawdź KIUT w centroidzie oraz w kilku punktach działki (linia może biec wzdłuż granicy)
+        kiut_ok = False
+        if parcel_geom and parcel_geom.get("type") == "Polygon" and parcel_geom.get("coordinates"):
+            try:
+                ring = parcel_geom["coordinates"][0]
+                if isinstance(ring[0], (list, tuple)):
+                    ring = ring[0]
+                n = len(ring)
+                # centroid + 4 punkty (początek, 1/4, 1/2, 3/4 obwodu)
+                pts = [(lon, lat)]
+                for i in [0, n // 4, n // 2, 3 * n // 4]:
+                    if i < n and len(ring[i]) >= 2:
+                        pts.append((float(ring[i][0]), float(ring[i][1])))
+                for plon, plat in pts:
+                    if await _check_kiut_wms(plon, plat):
+                        kiut_ok = True
+                        break
+            except Exception as e:
+                logger.debug("KIUT multi-point sample error: %s", e)
+        if not kiut_ok and lon is not None and lat is not None:
+            kiut_ok = await _check_kiut_wms(lon, lat)
+        if kiut_ok:
+                result["energie"]["detected"] = True
+                result["energie"]["length_m"] = 0.0
+                result["energie"]["voltage"] = "nN"
+                result["energie"]["strefa_m"] = STREFY_OCHRONNE.get("elektro_nN", 5)
+                result["energie"]["status"] = "KIUT GUGiK (brak wektora — wpisz długość ręcznie)"
+                result["energie"]["info"] = "Linia wykryta w warstwie KIUT GUGiK (np. nN). Brak geometrii wektorowej — zmierz długość w Geoportalu i wpisz w Korektę ręczną."
+                result["energie"]["source"] = "KIUT GUGiK (WMS GetFeatureInfo)"
+                result["energie"]["geojson"] = {"type": "FeatureCollection", "features": []}
+                result["energie"]["ok"] = True
+                result["ok"] = True
+                logger.info("INFRA [%s]: Wykryto linię w KIUT GUGiK (nN) — użytkownik wpisze długość", parcel_id)
 
     return result

@@ -328,7 +328,7 @@ const BatchAnalysisPage = () => {
                 ? `📎 ${file.name}`
                 : "📂 Kliknij lub przeciągnij plik CSV"}
               <div style={{ fontSize: "0.8em", fontWeight: 400, marginTop: 6, color: "#9e8b83" }}>
-                Format: parcel_id[,obreb,county,municipality] · maks. 99 wierszy
+                Kolumny: <strong>parcel_id</strong> (wymagany), <strong>obręb</strong> (zalecany przy numerze bez TERYT), powiat, gmina · maks. 99 wierszy
               </div>
             </label>
             <input
@@ -357,7 +357,24 @@ const BatchAnalysisPage = () => {
           )}
 
           <p className="file-info">
-            Przykład CSV: <code>142003_2.0002.81/5</code> lub <code>142003_2.0002.81/5,Baboszewo,,</code>
+            Przykład: pełny TERYT <code>142003_2.0002.81/5</code> lub numer + obręb <code>81/5,Baboszewo</code>.{" "}
+            <button
+              type="button"
+              className="tab-download"
+              style={{ marginLeft: 6, padding: "2px 8px", fontSize: "0.85em" }}
+              onClick={() => {
+                const header = "parcel_id,obreb,county,municipality";
+                const rows = ["142003_2.0002.81/5,Baboszewo,,", "303/4,Niedarzyn,,"];
+                const csv = [header, ...rows].join("\n");
+                const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = "szablon_batch_dzialki.csv";
+                a.click();
+                URL.revokeObjectURL(a.href);
+              }}>
+              ⬇ Pobierz szablon CSV
+            </button>
           </p>
         </div>
       )}

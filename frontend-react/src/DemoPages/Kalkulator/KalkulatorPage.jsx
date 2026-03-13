@@ -582,7 +582,7 @@ function InfrastructureLayer() {
       "🌡 Ciepłowniczy (KIUT)": kiutCieplo,
       "📡 Telekomunikacyjny (KIUT)": kiutTelekom,
     };
-    const ctrl = L.control.layers(null, overlays, { collapsed: false, position: "topright" }).addTo(map);
+    const ctrl = L.control.layers(null, overlays, { collapsed: true, position: "topright" }).addTo(map);
 
     return () => {
       map.removeControl(ctrl);
@@ -638,7 +638,7 @@ function BatchMapLayerControl() {
       "📋 Siatka działek (GUGIK)": gugikEw,
       "⚡ Elektroenergetyczny (KIUT)": kiutElektro,
     };
-    const ctrl = L.control.layers(baseLayers, overlays, { collapsed: false, position: "topright" }).addTo(map);
+    const ctrl = L.control.layers(baseLayers, overlays, { collapsed: true, position: "topright" }).addTo(map);
 
     return () => {
       try { map.removeControl(ctrl); } catch(_) {}
@@ -1317,7 +1317,10 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
         <form onSubmit={handleUpload} style={{ marginBottom: "20px" }}>
           {/* KROK 1: Wybierz plik */}
           <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", padding: "15px", background: "#f9f9f9", borderRadius: "8px" }}>
-            <input type="file" accept=".csv" onChange={(e) => setCsvFile(e.target.files?.[0])} style={{ flex: 1, minWidth: "150px" }} />
+            <div style={{ flex: 1, minWidth: "200px" }}>
+              <input type="file" accept=".csv" onChange={(e) => setCsvFile(e.target.files?.[0])} style={{ width: "100%" }} />
+              <div style={{ fontSize: "0.75rem", color: "#7f8c8d", marginTop: "4px" }}>Kolumny: parcel_id, obręb (przy numerze bez TERYT), powiat, gmina</div>
+            </div>
             <button type="button" onClick={downloadCSV} disabled={!batchResults?.results} className="ksws-btn" style={{ whiteSpace: "nowrap" }}>
               ⬇️ CSV
             </button>
@@ -1989,6 +1992,24 @@ export default function KalkulatorPage() {
       setAllResults(data.parcels);
       setResult(first);
 
+      // Auto-uzupełnij pola korekty ręcznej danymi z API (widoczne od razu, użytkownik może nadpisać)
+      const mr = first.master_record || {};
+      const mkt = mr.market_data || {};
+      const egib = mr.egib || {};
+      const pl = mr.infrastructure?.power_lines || {};
+      const ksws = mr.ksws || {};
+      if (mkt.average_price_m2 != null && mkt.average_price_m2 > 0) {
+        setManualPrice(String(mkt.average_price_m2));
+      } else {
+        setManualPrice("");
+      }
+      setManualLandType(egib.land_type || "");
+      setManualInfraDetect(pl.detected === true ? "true" : pl.detected === false ? "false" : "");
+      const vol = pl.voltage;
+      setManualVoltage(vol === "WN" || vol === "SN" || vol === "nN" ? vol : vol ? String(vol) : "");
+      const len = pl.length_m ?? ksws.line_length_m;
+      setManualLineLength(len != null && len > 0 ? String(Math.round(len)) : "");
+
       const centroid = first.master_record?.geometry?.centroid_ll;
       if (Array.isArray(centroid) && centroid[0] != null) {
         const lat = Number(centroid[1]);
@@ -2491,6 +2512,9 @@ export default function KalkulatorPage() {
                         onChange={(e) => setObreb(e.target.value)}
                         placeholder="np. Szapsk, Cieszkowo Kolonia"
                       />
+                      <span className="ksws-form-hint" style={{ display: "block", marginTop: 4 }}>
+                        Wymagany przy wyszukiwaniu po samym numerze działki (bez pełnego TERYT).
+                      </span>
                     </div>
                     <div className="ksws-form-group">
                       <label className="ksws-form-label">Gmina</label>
@@ -2582,7 +2606,7 @@ export default function KalkulatorPage() {
                 </div>
 
                 {/* ── PRZYCISK ── */}
-                <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap", position: "relative", zIndex: 5 }}>
                   <button
                     type="submit"
                     className="ksws-btn ksws-btn-primary"
@@ -2651,8 +2675,8 @@ export default function KalkulatorPage() {
                         fontWeight: 500,
                       }}
                     >
-                      ⚠ Użyj gdy API zwraca błędne dane (np. rolna zamiast
-                      budowlanej, brak wykrytej linii)
+                      Pola poniżej są automatycznie uzupełniane danymi z API po analizie.
+                      Nadpisz tylko gdy API zwraca błędne dane (np. rolna zamiast budowlanej, brak wykrytej linii).
                     </div>
                     <div className="ksws-manual-grid">
                       <div className="ksws-form-group">
@@ -3002,23 +3026,34 @@ export default function KalkulatorPage() {
                       System: Brak wykrytej infrastruktury
                     </div>
                     <div className="ksws-alert-text">
-                      Automatyczna detekcja nie znalazła linii (WFS niedostępny
-                      lub działka poza zasięgiem). Jeśli wiesz, że działka ma
-                      linię — potwierdź poniżej.
+                      Automatyczna detekcja nie znalazła linii (OSM/KIUT). Jeśli na mapie widać linię (np. niebieską nN) — ustaw poniżej.
                     </div>
-                    <div className="ksws-alert-actions">
+                    <div className="ksws-alert-actions" style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
+                      <button
+                        className="ksws-btn ksws-btn-primary"
+                        onClick={() => {
+                          setManualInfraDetect("true");
+                          setManualVoltage("nN");
+                          setShowManual(true);
+                          setTimeout(() => {
+                            document.querySelector(".ksws-accordion-body")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                          }, 150);
+                        }}
+                        style={{ fontWeight: 600 }}
+                      >
+                        ⚡ Widać niebieską linię nN? — ustaw w kalkulacji
+                      </button>
                       <button
                         className="ksws-btn ksws-btn-success"
                         onClick={() => {
                           setManualInfraDetect("true");
-                          setShowManual(true); // otwórz korektę ręczną → ustaw napięcie
-                          // Scroll do korekty ręcznej
+                          setShowManual(true);
                           setTimeout(() => {
                             document.querySelector(".ksws-accordion-body")?.scrollIntoView({ behavior: "smooth", block: "center" });
                           }, 150);
                         }}
                       >
-                        ✓ TAK — ma linię (ustaw napięcie ↓)
+                        ✓ Inna linia (WN/SN) — ustaw napięcie ↓
                       </button>
                       <button
                         className="ksws-btn ksws-btn-neutral"
@@ -3026,6 +3061,9 @@ export default function KalkulatorPage() {
                       >
                         ✗ NIE — na pewno brak
                       </button>
+                    </div>
+                    <div style={{ marginTop: 10, fontSize: "0.8em", color: "#666" }}>
+                      Po kliknięciu wpisz <strong>Długość linii [m]</strong> w Korekcie ręcznej (pomiar z Geoportalu) i kliknij <strong>Generuj raport KSWS</strong>.
                     </div>
                   </div>
                 </div>

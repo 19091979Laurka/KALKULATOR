@@ -33,10 +33,18 @@ def _buffer_bbox(s: float, w: float, n: float, e: float, delta: float = 0.01) ->
 
 
 def _parse_voltage(tags: Dict) -> str:
-    """WN (>110kV), SN (1–110kV), nN (<1kV)."""
+    """WN (≥110kV), SN (1–110kV), nN (<1kV). Wartości <1000 jako V (400→nN)."""
     v = tags.get("voltage") or tags.get("voltage:primary") or ""
     try:
-        kv = float(str(v).replace("kV", "").replace("000", ""))
+        s = str(v).strip().lower().replace(" ", "")
+        if "kv" in s:
+            kv = float(s.replace("kv", "").replace(",", "."))
+        elif "v" in s:
+            volt = float(s.replace("v", "").replace(",", "."))
+            kv = volt / 1000.0 if volt >= 1 else volt
+        else:
+            raw = float(s.replace(",", "."))
+            kv = raw if raw >= 10 else raw / 1000.0
         if kv >= 110:
             return "WN"
         if kv >= 1:

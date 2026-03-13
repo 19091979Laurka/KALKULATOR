@@ -176,6 +176,24 @@ async def analyze_batch_csv(file: UploadFile = File(...)):
         if not rows:
             raise ValueError("CSV jest pusty lub brak kolumny parcel_id")
 
+        # Mapowanie kolumn obręb / gmina / powiat (różne nazwy w CSV)
+        def _norm(s: Optional[str]) -> Optional[str]:
+            out = (s or "").strip()
+            return out if out else None
+
+        keys_lower = { (k or "").strip().lower(): k for k in rows[0].keys() }
+        col_obreb = keys_lower.get("obreb") or keys_lower.get("obręb") or keys_lower.get("obreb_ewidencyjny") or keys_lower.get("obręb ewidencyjny")
+        col_county = keys_lower.get("county") or keys_lower.get("powiat")
+        col_municipality = keys_lower.get("municipality") or keys_lower.get("gmina")
+
+        for r in rows:
+            r["parcel_id"] = _norm(r.get("parcel_id") or "")
+            r["obreb"] = _norm(r.get("obreb") or (r.get(col_obreb) if col_obreb else ""))
+            r["county"] = _norm(r.get("county") or (r.get(col_county) if col_county else ""))
+            r["municipality"] = _norm(r.get("municipality") or (r.get(col_municipality) if col_municipality else ""))
+        if col_obreb or col_county or col_municipality:
+            logger.info("BATCH: Zmapowano kolumny CSV obręb=%s county=%s municipality=%s", col_obreb, col_county, col_municipality)
+
         aggregator = PropertyAggregator()
         all_results = []
 
@@ -183,12 +201,20 @@ async def analyze_batch_csv(file: UploadFile = File(...)):
         # Pobierz geometrie wszystkich działek (ULDK) → compute regional BBOX
         # → jedno zapytanie Overpass zamiast 99 osobnych
         logger.info("BATCH: Krok 0 — pobieranie geometrii %d działek z ULDK...", len(rows))
-        parcel_ids = [row.get('parcel_id', '').strip() for row in rows if row.get('parcel_id', '').strip()]
+        rows_with_id = [r for r in rows if (r.get('parcel_id') or '').strip()]
         parcel_geometries = []
 
-        async def fetch_geom(pid):
+        async def fetch_geom(row):
+            pid = (row.get('parcel_id') or '').strip() or None
+            if not pid:
+                return None
             try:
-                t = await fetch_terrain(pid)
+                t = await fetch_terrain(
+                    pid,
+                    obreb=row.get('obreb'),
+                    county=row.get('county'),
+                    municipality=row.get('municipality'),
+                )
                 if t.get("ok") and t.get("geometry"):
                     return t["geometry"]
                 else:
@@ -197,15 +223,15 @@ async def analyze_batch_csv(file: UploadFile = File(...)):
                 logger.error("fetch_geom [%s]: exception — %s", pid, e)
             return None
 
-        # Pobierz geometrie równolegle (max 20 jednocześnie — throttle ULDK)
+        # Pobierz geometrie równolegle (max 20 jednocześnie — throttle ULDK), z obrębem z CSV
         CHUNK_SIZE = 20
-        for i in range(0, len(parcel_ids), CHUNK_SIZE):
-            chunk = parcel_ids[i:i + CHUNK_SIZE]
-            geom_tasks = [fetch_geom(pid) for pid in chunk]
+        for i in range(0, len(rows_with_id), CHUNK_SIZE):
+            chunk = rows_with_id[i:i + CHUNK_SIZE]
+            geom_tasks = [fetch_geom(r) for r in chunk]
             geom_results = await asyncio.gather(*geom_tasks)
             parcel_geometries.extend([g for g in geom_results if g])
 
-        logger.info("BATCH: Pobrano %d/%d geometrii", len(parcel_geometries), len(parcel_ids))
+        logger.info("BATCH: Pobrano %d/%d geometrii", len(parcel_geometries), len(rows_with_id))
 
         # Jedno zapytanie Overpass dla CAŁEGO regionu
         try:
@@ -217,7 +243,7 @@ async def analyze_batch_csv(file: UploadFile = File(...)):
         # ====== KROK 1: Analiza wszystkich działek (z cache) ======
         async def analyze_single(row):
             try:
-                parcel_id = row.get('parcel_id', '').strip()
+                parcel_id = (row.get('parcel_id') or '').strip() or None
                 if not parcel_id:
                     return None
 
