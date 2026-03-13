@@ -491,7 +491,16 @@ def _parse_kiut_wms_response(resp) -> Optional[bool]:
     if resp.status_code != 200:
         return None
     ct = (resp.headers.get("Content-Type") or "").lower()
-    body = resp.text if isinstance(resp.text, str) else resp.content.decode("utf-8", errors="ignore")
+    
+    # Fix encoding issues by reading raw bytes or ensuring utf-8
+    if hasattr(resp, "content"):
+        try:
+            body = resp.content.decode("utf-8")
+        except UnicodeDecodeError:
+            body = resp.content.decode("iso-8859-1", errors="ignore")
+    else:
+        body = str(resp.text)
+        
     # JSON (gdy serwer kiedyś zwróci)
     if "json" in ct:
         try:
@@ -499,12 +508,16 @@ def _parse_kiut_wms_response(resp) -> Optional[bool]:
             return len(data.get("features", [])) > 0
         except Exception:
             pass
+            
     # XML od GUGiK: "Usługa nie udostępnia danych opisowych dla wybranego obiektu" = brak linii w tym pikselu
+    # Używamy ujednoliconego kodowania, ale na wszelki wypadek sprawdzamy też bajty
+    body_lower = body.lower()
     if "xml" in ct or body.strip().startswith("<?xml"):
-        if "nie udostępnia danych opisowych" in body or "nie udostepnia danych opisowych" in body:
+        # Czasami GUGiK zwraca błędy kodowania, więc sprawdzamy różne warianty
+        if "nie udost" in body_lower or "nie udostepnia" in body_lower or "danych opisowych" in body_lower:
             return False
         # FeatureCollection z inną treścią = prawdopodobnie obiekt (linia)
-        if "FeatureCollection" in body and "featureMember" in body:
+        if "featurecollection" in body_lower and "featuremember" in body_lower:
             return True
     return None
 
