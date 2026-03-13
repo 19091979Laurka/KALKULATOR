@@ -1342,3 +1342,53 @@
   .ksws-layout { display: block; }
   .ksws-card { box-shadow: none; border: 1px solid #ddd; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   KALKULATOR ROUTE OVERRIDES
+   Usuwa białe paski spowodowane przez klasy ArchitectUI:
+   fixed-sidebar (padding-left: 280px), fixed-header (padding-top: 60px),
+   fixed-footer (padding-bottom: 60px)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Wrapper div bez klas - musi być 100% */
+.kalkulator-route {
+  width: 100% !important;
+  min-height: 100vh !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Usuń padding-left z fixed-sidebar dla kalkulator-route */
+.kalkulator-route.fixed-sidebar .app-main .app-main__outer,
+.kalkulator-route.closed-sidebar.fixed-sidebar .app-main__outer {
+  padding-left: 0 !important;
+}
+
+/* Usuń padding-top z fixed-header dla kalkulator-route */
+.kalkulator-route.fixed-header .app-main {
+  padding-top: 0 !important;
+}
+
+/* Usuń padding-bottom z fixed-footer dla kalkulator-route */
+.kalkulator-route.fixed-footer .app-main .app-main__outer {
+  padding-bottom: 0 !important;
+}
+
+/* app-main bez marginesów dla kalkulator-route */
+.kalkulator-route .app-main {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* app-main__outer pełna szerokość */
+.kalkulator-route .app-main__outer {
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 100% !important;
+}
+
+/* Wrapper div (ref) pełna szerokość */
+.kalkulator-route,
+.kalkulator-route > * {
+  box-sizing: border-box;
+}

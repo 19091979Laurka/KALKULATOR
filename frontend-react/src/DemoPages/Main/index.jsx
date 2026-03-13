@@ -31,13 +31,13 @@ const Main = (props) => {
   return (
     <Fragment>
       {/* ThemeOptions hidden - layout settings are hardcoded */}
-      <div ref={ref}>
+      <div ref={ref} style={{ width: '100%', margin: 0, padding: 0 }}>
         <div
           className={cx(
             "app-container app-theme-" + colorScheme,
-            { "fixed-header": true },
-            { "fixed-sidebar": true },
-            { "fixed-footer": true },
+            { "fixed-header": !isKalkulatorRoute },
+            { "fixed-sidebar": !isKalkulatorRoute },
+            { "fixed-footer": !isKalkulatorRoute },
             { "closed-sidebar": enableClosedSidebar || width < 992 || isKalkulatorRoute },
             {
               "closed-sidebar-mobile": width < 992,
@@ -45,7 +45,8 @@ const Main = (props) => {
             { "sidebar-mobile-open": enableMobileMenu },
             { "body-tabs-shadow-btn": enablePageTabsAlt },
             { "kalkulator-route": isKalkulatorRoute }
-          )}>
+          )}
+          style={isKalkulatorRoute ? { width: '100%', minHeight: '100vh', padding: 0, margin: 0 } : {}}>
           {!isKalkulatorRoute && <AppHeader />}
           <div className="app-main">
             {!isKalkulatorRoute && <AppSidebar />}
