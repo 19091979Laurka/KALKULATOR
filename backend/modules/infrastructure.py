@@ -10,7 +10,8 @@ Dlatego jedynym źródłem wektorowym jest OpenStreetMap Overpass.
 
 ŹRÓDŁA DANYCH:
 1. OpenStreetMap Overpass API — dane wektorowe (geometria + atrybuty)
-2. GUGiK KIUT WMS GetFeatureInfo — detekcja obecności (bez geometrii)
+2. OpenInfraMap vector tiles — ta sama warstwa co na mapie (power_line), gdy Overpass nie zwraca
+3. GUGiK KIUT WMS GetFeatureInfo — detekcja obecności (bez geometrii)
 
 BATCH MODE: prefetch_regional_osm() pobiera linie dla całego regionu
 jednym zapytaniem — unika rate-limitingu Overpass (429).
@@ -22,6 +23,10 @@ import requests
 from typing import Dict, Any, Optional, List, Tuple
 from shapely.geometry import shape, LineString, MultiLineString
 from backend.integrations.overpass import fetch_power_lines, OVERPASS_URL, OVERPASS_TIMEOUT
+try:
+    from backend.integrations.openinframap import fetch_power_lines_oim
+except ImportError:
+    fetch_power_lines_oim = None  # mapbox-vector-tile optional
 
 logger = logging.getLogger(__name__)
 
@@ -339,6 +344,106 @@ def _length_meters(geom) -> float:
 # ========== KIUT WMS GetFeatureInfo (detekcja obecności) ==========
 KIUT_WMS_URL = "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu"
 
+# Minimalna liczba czerwonych pikseli (linia na WMS) do uznania "wykryto"
+KIUT_PIXEL_MIN_RED = 30
+
+
+async def _check_kiut_wms_pixel_analysis(parcel_geom: Optional[Dict]) -> Optional[tuple]:
+    """
+    KIUT WMS GetMap + analiza pikseli — detekcja linii (czerwone piksele na obrazie).
+    Zasada 7.B: NIE liczymy długości z pikseli — tylko obecność (detected).
+    Zwraca (detected: bool, red_count: int) lub None przy błędzie.
+    """
+    if not parcel_geom or parcel_geom.get("type") != "Polygon":
+        return None
+    coords = parcel_geom.get("coordinates", [])
+    if not coords:
+        return None
+    ring = coords[0][0] if isinstance(coords[0][0][0], (list, tuple)) else coords[0]
+    lons = [p[0] for p in ring]
+    lats = [p[1] for p in ring]
+    lat_min, lat_max = min(lats), max(lats)
+    lon_min, lon_max = min(lons), max(lons)
+    # WMS 1.3.0 EPSG:4326: BBOX = lat_min, lon_min, lat_max, lon_max
+    bbox = f"{lat_min},{lon_min},{lat_max},{lon_max}"
+    params = {
+        "SERVICE": "WMS",
+        "VERSION": "1.3.0",
+        "REQUEST": "GetMap",
+        "LAYERS": "przewod_elektroenergetyczny",
+        "CRS": "EPSG:4326",
+        "BBOX": bbox,
+        "WIDTH": "512",
+        "HEIGHT": "512",
+        "FORMAT": "image/png",
+        "TRANSPARENT": "TRUE",
+    }
+    try:
+        from PIL import Image
+        import io
+    except ImportError:
+        logger.debug("PIL not available — skip KIUT pixel analysis")
+        return None
+    try:
+        loop = asyncio.get_event_loop()
+        def _get():
+            r = requests.get(
+                KIUT_WMS_URL,
+                params=params,
+                timeout=10,
+                headers={"User-Agent": "Kalkulator-KIUT/3.0"},
+            )
+            return r
+        resp = await loop.run_in_executor(None, _get)
+        if resp.status_code != 200 or not resp.content:
+            return None
+        ct = (resp.headers.get("Content-Type") or "").lower()
+        if "image" not in ct and "png" not in ct:
+            # Może być XML przy błędzie
+            if b"ServiceException" in resp.content or b"<?xml" in resp.content[:100]:
+                return None
+        img = Image.open(io.BytesIO(resp.content))
+        img = img.convert("RGBA")
+        red_count = 0
+        for (r, g, b, a) in img.getdata():
+            if a < 128:
+                continue
+            if r > 120 and r > g and r > b:
+                red_count += 1
+        detected = red_count >= KIUT_PIXEL_MIN_RED
+        logger.info("KIUT WMS pixel analysis: red_count=%d detected=%s", red_count, detected)
+        return (detected, red_count)
+    except Exception as e:
+        logger.debug("KIUT WMS pixel analysis error: %s", e)
+        return None
+
+
+def _parse_kiut_wms_response(resp) -> Optional[bool]:
+    """
+    Parsuj odpowiedź KIUT WMS GetFeatureInfo.
+    GUGiK zwraca XML (text/xml), nie JSON. Komunikat "nie udostępnia danych opisowych"
+    = brak obiektu w tym punkcie. Inna zawartość featureMember = wykryto linię.
+    """
+    if resp.status_code != 200:
+        return None
+    ct = (resp.headers.get("Content-Type") or "").lower()
+    body = resp.text if isinstance(resp.text, str) else resp.content.decode("utf-8", errors="ignore")
+    # JSON (gdy serwer kiedyś zwróci)
+    if "json" in ct:
+        try:
+            data = resp.json()
+            return len(data.get("features", [])) > 0
+        except Exception:
+            pass
+    # XML od GUGiK: "Usługa nie udostępnia danych opisowych dla wybranego obiektu" = brak linii w tym pikselu
+    if "xml" in ct or body.strip().startswith("<?xml"):
+        if "nie udostępnia danych opisowych" in body or "nie udostepnia danych opisowych" in body:
+            return False
+        # FeatureCollection z inną treścią = prawdopodobnie obiekt (linia)
+        if "FeatureCollection" in body and "featureMember" in body:
+            return True
+    return None
+
 
 async def _check_kiut_wms(lon: float, lat: float) -> Optional[bool]:
     """
@@ -347,7 +452,7 @@ async def _check_kiut_wms(lon: float, lat: float) -> Optional[bool]:
     NIE daje geometrii — tylko detekcja.
     """
     try:
-        # WMS 1.3.0 EPSG:4326: BBOX = lat_min, lon_min, lat_max, lon_max (nie lon,lat!)
+        # WMS 1.3.0 EPSG:4326: BBOX = lat_min, lon_min, lat_max, lon_max
         bbox = f"{lat - 0.001},{lon - 0.001},{lat + 0.001},{lon + 0.001}"
         params = {
             "SERVICE": "WMS",
@@ -373,15 +478,16 @@ async def _check_kiut_wms(lon: float, lat: float) -> Optional[bool]:
                 headers={"User-Agent": "Kalkulator-KIUT/3.0"},
             ),
         )
-        if resp.status_code == 200:
+        out = _parse_kiut_wms_response(resp)
+        if out is None and resp.status_code == 200:
+            # Fallback: stara heurystyka (np. inny serwer)
             try:
                 data = resp.json()
-                features = data.get("features", [])
-                return len(features) > 0
+                out = len(data.get("features", [])) > 0
             except Exception:
-                # Nie JSON — pewnie GML/XML, sprawdź czy zawiera features
-                return b"Feature" in resp.content and b"przewod" in resp.content.lower()
-        return None
+                if b"Feature" in (resp.content if hasattr(resp, "content") else b""):
+                    out = b"przewod" in (resp.content or b"").lower()
+        return out
     except Exception as e:
         logger.debug("KIUT WMS GetFeatureInfo error: %s", e)
         return None
@@ -476,15 +582,32 @@ async def fetch_infrastructure(
             logger.error("INFRA [%s]: Overpass error: %s", parcel_id, e)
             osm_result = {"detected": False, "features": [], "length_m": 0.0, "voltage": None}
 
+    # --- KROK 2b: OPENINFRAMAP (gdy Overpass nie znalazł — ta sama warstwa co na mapie) ---
+    if fetch_power_lines_oim and parcel_geom and (not osm_result or (not osm_result.get("detected") and not osm_result.get("nearby"))):
+        try:
+            oim_data = await fetch_power_lines_oim(parcel_geom)
+            raw = oim_data.get("_raw_features", [])
+            if raw:
+                oim_intersect = _check_intersection_with_features(parcel_geom, raw)
+                if oim_intersect.get("detected"):
+                    oim_intersect["_source"] = "OpenInfraMap"
+                    osm_result = oim_intersect
+                    logger.info("INFRA [%s]: Wykryto linie z OpenInfraMap (vector tiles)", parcel_id)
+                elif not osm_result:
+                    osm_result = {"detected": False, "features": [], "length_m": 0.0, "voltage": None}
+        except Exception as e:
+            logger.debug("INFRA [%s]: OpenInfraMap fallback error: %s", parcel_id, e)
+
     # --- Wypełnij wynik ---
     detected = osm_result.get("detected", False) if osm_result else False
     nearby = osm_result.get("nearby", False) if osm_result else False
 
     if detected:
-        # CONFIRMED: Linie przecinają działkę
+        # CONFIRMED: Linie przecinają działkę (Overpass lub OpenInfraMap)
         voltage = osm_result.get("voltage", "SN")
         length_m = osm_result.get("length_m", 0.0)
         features = osm_result.get("features", [])
+        from_oim = osm_result.get("_source") == "OpenInfraMap"
 
         result["energie"]["detected"] = True
         result["energie"]["features"] = features
@@ -493,13 +616,18 @@ async def fetch_infrastructure(
         result["energie"]["length_m"] = length_m
         result["energie"]["voltage"] = voltage
         result["energie"]["strefa_m"] = STREFY_OCHRONNE.get(f"elektro_{voltage}", 15)
-        result["energie"]["status"] = "REAL (OSM Overpass)"
-        result["energie"]["info"] = f"OSM: {len(features)} linii, dł. przecięcia {length_m:.1f}m"
-        result["energie"]["source"] = "OpenStreetMap (Overpass API)"
+        if from_oim:
+            result["energie"]["status"] = "REAL (OpenInfraMap)"
+            result["energie"]["info"] = f"OpenInfraMap: {len(features)} linii, dł. przecięcia {length_m:.1f}m"
+            result["energie"]["source"] = "OpenInfraMap (vector tiles)"
+        else:
+            result["energie"]["status"] = "REAL (OSM Overpass)"
+            result["energie"]["info"] = f"OSM: {len(features)} linii, dł. przecięcia {length_m:.1f}m"
+            result["energie"]["source"] = "OpenStreetMap (Overpass API)"
         result["energie"]["ok"] = True
         result["ok"] = True
-        logger.info("INFRA [%s]: CONFIRMED — %d linii, length=%.1fm, voltage=%s",
-                     parcel_id, len(features), length_m, voltage)
+        logger.info("INFRA [%s]: CONFIRMED — %d linii, length=%.1fm, voltage=%s (%s)",
+                     parcel_id, len(features), length_m, voltage, "OpenInfraMap" if from_oim else "Overpass")
 
     elif nearby:
         # NEARBY: Linie w okolicy (BBOX) ale nie przecinają — DO WERYFIKACJI
@@ -530,7 +658,7 @@ async def fetch_infrastructure(
         result["energie"]["source"] = "OpenStreetMap (Overpass API)"
         logger.info("INFRA [%s]: NOT DETECTED (OSM)", parcel_id)
 
-        # Sprawdź KIUT w centroidzie oraz w kilku punktach działki (linia może biec wzdłuż granicy)
+        # Sprawdź KIUT w centroidzie oraz w wielu punktach obwodu (linia może przecinać działkę między punktami)
         kiut_ok = False
         if parcel_geom and parcel_geom.get("type") == "Polygon" and parcel_geom.get("coordinates"):
             try:
@@ -538,9 +666,10 @@ async def fetch_infrastructure(
                 if isinstance(ring[0], (list, tuple)):
                     ring = ring[0]
                 n = len(ring)
-                # centroid + 4 punkty (początek, 1/4, 1/2, 3/4 obwodu)
+                # Centroid + do 12 punktów równomiernie na obwodzie (większa szansa trafienia w linię)
                 pts = [(lon, lat)]
-                for i in [0, n // 4, n // 2, 3 * n // 4]:
+                for k in range(12):
+                    i = (k * n) // 12
                     if i < n and len(ring[i]) >= 2:
                         pts.append((float(ring[i][0]), float(ring[i][1])))
                 for plon, plat in pts:
@@ -551,17 +680,32 @@ async def fetch_infrastructure(
                 logger.debug("KIUT multi-point sample error: %s", e)
         if not kiut_ok and lon is not None and lat is not None:
             kiut_ok = await _check_kiut_wms(lon, lat)
+        # Fallback: KIUT WMS pixel analysis (GetMap 512×512, liczba czerwonych pikseli)
+        kiut_pixel_source = None
+        if not kiut_ok and parcel_geom:
+            pixel_result = await _check_kiut_wms_pixel_analysis(parcel_geom)
+            if pixel_result:
+                detected_pixel, red_count = pixel_result
+                if detected_pixel:
+                    kiut_ok = True
+                    kiut_pixel_source = red_count
         if kiut_ok:
                 result["energie"]["detected"] = True
                 result["energie"]["length_m"] = 0.0
                 result["energie"]["voltage"] = "nN"
                 result["energie"]["strefa_m"] = STREFY_OCHRONNE.get("elektro_nN", 5)
-                result["energie"]["status"] = "KIUT GUGiK (brak wektora — wpisz długość ręcznie)"
-                result["energie"]["info"] = "Linia wykryta w warstwie KIUT GUGiK (np. nN). Brak geometrii wektorowej — zmierz długość w Geoportalu i wpisz w Korektę ręczną."
-                result["energie"]["source"] = "KIUT GUGiK (WMS GetFeatureInfo)"
+                if kiut_pixel_source is not None:
+                    result["energie"]["status"] = "KIUT GUGiK (analiza pikseli WMS)"
+                    result["energie"]["info"] = f"Linia wykryta w KIUT WMS (analiza pikseli, {kiut_pixel_source} px). Brak wektora — wpisz długość w Korektę ręczną."
+                    result["energie"]["source"] = "KIUT GUGiK (WMS GetMap + pixel analysis)"
+                else:
+                    result["energie"]["status"] = "KIUT GUGiK (brak wektora — wpisz długość ręcznie)"
+                    result["energie"]["info"] = "Linia wykryta w warstwie KIUT GUGiK (np. nN). Brak geometrii wektorowej — zmierz długość w Geoportalu i wpisz w Korektę ręczną."
+                    result["energie"]["source"] = "KIUT GUGiK (WMS GetFeatureInfo)"
                 result["energie"]["geojson"] = {"type": "FeatureCollection", "features": []}
                 result["energie"]["ok"] = True
                 result["ok"] = True
-                logger.info("INFRA [%s]: Wykryto linię w KIUT GUGiK (nN) — użytkownik wpisze długość", parcel_id)
+                logger.info("INFRA [%s]: Wykryto linię w KIUT GUGiK (%s) — użytkownik wpisze długość",
+                            parcel_id, "pixel analysis" if kiut_pixel_source is not None else "GetFeatureInfo")
 
     return result

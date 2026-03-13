@@ -452,53 +452,15 @@ function BatchParcelsLayer({ results }) {
       const geojson = p.data?.geometry?.geojson_ll || p.data?.geometry?.geojson;
       const centroid = p.data?.geometry?.centroid_ll;
       const collision = p.data?.infrastructure?.power_lines?.detected;
-      const ta = p.data?.compensation?.track_a?.total || 0;
-      const tb = p.data?.compensation?.track_b?.total || 0;
-      const razem = ta + tb;
-      const color = MAT_PARCEL_COLORS[idx % MAT_PARCEL_COLORS.length];
-
-      const popup = `<div style="font-family:Inter,'Segoe UI',Arial,sans-serif;min-width:230px;border-radius:10px;overflow:hidden;font-size:12px;">
-        <div style="background:${color};color:white;padding:10px 14px;font-weight:900;font-size:13px;">
-          #${idx+1} · ${p.parcel_id||"—"}
-        </div>
-        <div style="padding:10px 14px;">
-          <div style="margin-bottom:8px;">
-            <span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${collision?"#e53935":"#43a047"};color:white;">
-              ${collision?"⚡ KOLIZJA":"✓ BEZ KOLIZJI"}
-            </span>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
-            <div style="background:#f5f5f5;border-radius:6px;padding:6px 8px;">
-              <div style="font-size:9px;color:#9e9e9e;text-transform:uppercase;font-weight:700;">Pow. działki</div>
-              <div style="font-weight:800;color:#212121;">${Math.round(p.data?.geometry?.area_m2||0).toLocaleString()} m²</div>
-            </div>
-            <div style="background:#f5f5f5;border-radius:6px;padding:6px 8px;">
-              <div style="font-size:9px;color:#9e9e9e;text-transform:uppercase;font-weight:700;">Napięcie</div>
-              <div style="font-weight:800;color:#212121;">${p.data?.infrastructure?.power_lines?.voltage||"—"}</div>
-            </div>
-          </div>
-          <div style="background:linear-gradient(135deg,#1976d2,#1565c0);border-radius:7px;padding:8px 10px;margin-bottom:5px;">
-            <div style="font-size:9px;color:rgba(255,255,255,0.65);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">⚖️ Track A · Sąd</div>
-            <div style="font-weight:900;color:white;font-size:13px;">${Math.round(ta).toLocaleString()} PLN</div>
-          </div>
-          <div style="background:linear-gradient(135deg,#f57c00,#e65100);border-radius:7px;padding:8px 10px;margin-bottom:5px;">
-            <div style="font-size:9px;color:rgba(255,255,255,0.65);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">🤝 Track B · Neg.</div>
-            <div style="font-weight:900;color:white;font-size:13px;">${Math.round(tb).toLocaleString()} PLN</div>
-          </div>
-          <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:7px;padding:8px 10px;">
-            <div style="font-size:9px;color:rgba(255,193,7,0.8);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">💰 RAZEM A+B</div>
-            <div style="font-weight:900;color:white;font-size:15px;">${Math.round(razem).toLocaleString()} PLN</div>
-          </div>
-        </div>
-      </div>`;
+      const color = collision ? "#e53935" : "#43a047";
 
       if (geojson?.coordinates) {
         try {
           const poly = L.geoJSON(geojson, {
-            style: { color, weight: 3, fillColor: color, fillOpacity: 0.3 },
-          }).bindPopup(popup, { maxWidth: 260 });
+            // Działka tylko jako delikatny obrys, żeby nie konkurowała z liniami
+            style: { color, weight: 2, fillColor: color, fillOpacity: 0.05 },
+          });
           group.addLayer(poly);
-          // Numbered label
           if (Array.isArray(centroid) && centroid[0] != null) {
             const icon = L.divIcon({
               className: "",
@@ -514,7 +476,7 @@ function BatchParcelsLayer({ results }) {
           html: `<div style="background:${color};color:white;font-weight:900;font-size:11px;padding:4px 8px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.35);border:2px solid white;">#${idx+1}</div>`,
           iconAnchor: [16, 12],
         });
-        L.marker([Number(centroid[1]), Number(centroid[0])], { icon }).bindPopup(popup).addTo(group);
+        L.marker([Number(centroid[1]), Number(centroid[0])], { icon }).addTo(group);
       }
 
       // Power lines
@@ -523,8 +485,9 @@ function BatchParcelsLayer({ results }) {
         plGeo.features.forEach((feat) => {
           try {
             const v = feat.properties?.voltage || "SN";
-            const lc = v === "WN" ? "#e53935" : v === "nN" ? "#1e88e5" : "#fb8c00";
-            L.geoJSON(feat.geometry, { style: { color: lc, weight: v === "WN" ? 5 : 3, opacity: 0.9 } }).addTo(group);
+            const lc = v === "WN" ? "#e60000" : v === "nN" ? "#0066ff" : "#ff9800";
+            const weight = v === "WN" ? 7 : v === "nN" ? 5 : 6;
+            L.geoJSON(feat.geometry, { style: { color: lc, weight, opacity: 0.95 } }).addTo(group);
           } catch(_) {}
         });
       }
@@ -561,6 +524,7 @@ function InfrastructureLayer() {
 
     // ── KIUT GUGiK WMS — linie energetyczne PL (oficjalne dane PL) ──
     const KIUT_URL = "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu";
+    const KIEG_URL = "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow";
     const wmsBase = { format: "image/png", transparent: true, opacity: 0.8, zIndex: 5 };
     const kiutElektro = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_elektroenergetyczny", attribution: "KIUT GUGiK" });
     const kiutGaz     = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_gazowy" });
@@ -569,9 +533,20 @@ function InfrastructureLayer() {
     const kiutCieplo  = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_cieplowniczy" });
     const kiutTelekom = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_telekomunikacyjny" });
 
-    // Domyślnie włączone: OIM (zawsze widoczna) + KIUT elektro
+    // ── KIEG GUGiK WMS — siatka działek (działki + numery) ──
+    const kiegParcels = L.tileLayer.wms(KIEG_URL, {
+      format: "image/png",
+      transparent: true,
+      opacity: 0.75,
+      zIndex: 4,
+      layers: "dzialki,numery_dzialek",
+      attribution: "KIEG GUGiK",
+    });
+
+    // Domyślnie włączone: OIM (zawsze widoczna) + KIUT elektro + siatka działek KIEG
     oimPower.addTo(map);
     kiutElektro.addTo(map);
+    kiegParcels.addTo(map);
 
     const overlays = {
       "⚡ Linie energetyczne (Open Infra Map)": oimPower,
@@ -581,12 +556,13 @@ function InfrastructureLayer() {
       "🚿 Kanalizacyjny (KIUT)": kiutKanal,
       "🌡 Ciepłowniczy (KIUT)": kiutCieplo,
       "📡 Telekomunikacyjny (KIUT)": kiutTelekom,
+      "📋 Działki i numery (KIEG GUGiK)": kiegParcels,
     };
     const ctrl = L.control.layers(null, overlays, { collapsed: true, position: "topright" }).addTo(map);
 
     return () => {
       map.removeControl(ctrl);
-      [oimPower, kiutElektro, kiutGaz, kiutWoda, kiutKanal, kiutCieplo, kiutTelekom].forEach((l) => {
+      [oimPower, kiutElektro, kiutGaz, kiutWoda, kiutKanal, kiutCieplo, kiutTelekom, kiegParcels].forEach((l) => {
         if (map.hasLayer(l)) map.removeLayer(l);
       });
     };
@@ -1933,6 +1909,7 @@ export default function KalkulatorPage() {
   const [mapCenter, setMapCenter] = useState(DEFAULT_CENTER);
   const [mapZoom, setMapZoom] = useState(DEFAULT_ZOOM);
   const [powerGeoJSON, setPowerGeoJSON] = useState(null);
+  const [mapLegendCollapsed, setMapLegendCollapsed] = useState(false);
 
   // ── History ──────────────────────────────────────────────────────────────────
   const [history, setHistory] = useState(loadHistory);
@@ -3028,7 +3005,7 @@ export default function KalkulatorPage() {
                       System: Brak wykrytej infrastruktury
                     </div>
                     <div className="ksws-alert-text">
-                      Automatyczna detekcja nie znalazła linii (OSM/KIUT). Jeśli na mapie widać linię (np. niebieską nN) — ustaw poniżej.
+                      Automatyczna detekcja (OSM Overpass + KIUT) nie znalazła linii. <strong>Na mapie widać warstwy KIUT GUGiK i OpenInfraMap</strong> — jeśli linie przechodzą przez działkę, ustaw poniżej (Korekta ręczna).
                     </div>
                     <div className="ksws-alert-actions" style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
                       <button
@@ -3255,32 +3232,50 @@ export default function KalkulatorPage() {
                           />
                         </MapContainer>
 
-                        {/* Legenda */}
-                        <div className="ksws-map-legend">
-                          <div className="ksws-map-legend-title">Linie energetyczne</div>
-                          {INFRA_LEGEND.map((item) => (
-                            <div key={item.label} className="ksws-map-legend-item">
-                              <div
-                                className="ksws-map-legend-swatch"
-                                style={{ background: item.color }}
-                              />
-                              <span>{item.label}</span>
-                            </div>
-                          ))}
-                          <div className="ksws-map-legend-source">
-                            OSM · KIUT GUGiK · Overpass
-                          </div>
-                          <div style={{ marginTop: 8 }}>
-                            <a
-                              href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${result?.parcel_id || ""}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              style={{ fontSize: "0.72rem", color: "#a91079", fontWeight: 600, textDecoration: "none" }}
+                        {/* Legenda — możliwość zminimalizowania, żeby nie zasłaniała mapy */}
+                        {mapLegendCollapsed ? (
+                          <button
+                            type="button"
+                            className="ksws-map-legend-toggle"
+                            onClick={() => setMapLegendCollapsed(false)}
+                          >
+                            Linie energetyczne · legenda
+                          </button>
+                        ) : (
+                          <div className="ksws-map-legend">
+                            <button
+                              type="button"
+                              className="ksws-map-legend-close"
+                              onClick={() => setMapLegendCollapsed(true)}
+                              aria-label="Ukryj legendę linii energetycznych"
                             >
-                              🇵🇱 Geoportal →
-                            </a>
+                              ×
+                            </button>
+                            <div className="ksws-map-legend-title">Linie energetyczne</div>
+                            {INFRA_LEGEND.map((item) => (
+                              <div key={item.label} className="ksws-map-legend-item">
+                                <div
+                                  className="ksws-map-legend-swatch"
+                                  style={{ background: item.color }}
+                                />
+                                <span>{item.label}</span>
+                              </div>
+                            ))}
+                            <div className="ksws-map-legend-source">
+                              OSM · KIUT GUGiK · Overpass
+                            </div>
+                            <div style={{ marginTop: 8 }}>
+                              <a
+                                href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${result?.parcel_id || ""}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{ fontSize: "0.72rem", color: "#a91079", fontWeight: 600, textDecoration: "none" }}
+                              >
+                                🇵🇱 Geoportal →
+                              </a>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     )}
 

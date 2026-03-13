@@ -193,6 +193,38 @@ function downloadParcelHtml(parcel, editedLen) {
   URL.revokeObjectURL(url);
 }
 
+async function downloadParcelPdf(parcel) {
+  if (!parcel || !parcel.data) return;
+  try {
+    const res = await fetch("/api/report/pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        parcels: [{ parcel_id: parcel.parcel_id, master_record: parcel.data }],
+        owner_name: "Właściciel",
+        kw_number: "",
+        address: "",
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `raport_KSWS_${parcel.parcel_id.replace(/[/.]/g, "_")}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    // Prosty komunikat błędu — ten widok jest narzędziowy
+    alert("Błąd generowania PDF: " + e.message);
+  }
+}
+
 // ─── CSV download all results ─────────────────────────────────────────────────
 function downloadCSV(parcels, editedLengths) {
   const header = ["parcel_id","kolizja","napiecie","pow_m2","cena_m2","dlugosc_linii_m","pas_m","pas_m2","track_a","track_b","razem","status"].join(";");
@@ -542,16 +574,32 @@ const BatchAnalysisPage = () => {
                             ? (calc.track_a + calc.track_b).toLocaleString("pl-PL")
                             : "—"}
                         </td>
-                        <td style={{ textAlign: "center" }}>
+                        <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                          <button
+                            onClick={() => downloadParcelPdf(p)}
+                            title="Pełny raport PDF (backend KSWS)"
+                            style={{
+                              background: "linear-gradient(135deg,#2c3e50,#4b6584)",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: 6,
+                              padding: "5px 8px",
+                              cursor: "pointer",
+                              fontSize: "0.8em",
+                              fontWeight: 600,
+                              marginRight: 6,
+                            }}>
+                            📄 PDF
+                          </button>
                           <button
                             onClick={() => downloadParcelHtml(p, lineLen > 0 ? lineLen : null)}
-                            title="Pobierz raport HTML"
+                            title="Pobierz raport HTML (z bieżącą długością)"
                             style={{
                               background: "linear-gradient(135deg,#5c3d2e,#b8963e)",
                               color: "#fff",
                               border: "none",
                               borderRadius: 6,
-                              padding: "5px 10px",
+                              padding: "5px 8px",
                               cursor: "pointer",
                               fontSize: "0.8em",
                               fontWeight: 600,

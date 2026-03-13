@@ -990,7 +990,41 @@
   font-size: 0.78rem;
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
   min-width: 130px;
-  pointer-events: none;
+  pointer-events: auto;
+}
+
+.ksws-map-legend-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: none;
+  background: transparent;
+  font-size: 0.9rem;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+}
+
+.ksws-map-legend-close:hover {
+  color: #666;
+}
+
+.ksws-map-legend-toggle {
+  position: absolute;
+  bottom: 30px;
+  right: 10px;
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.74rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  cursor: pointer;
+}
+
+.ksws-map-legend-toggle:hover {
+  background: #f3f4f6;
 }
 
 .ksws-map-legend-title {
