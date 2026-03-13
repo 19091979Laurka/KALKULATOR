@@ -310,85 +310,133 @@ const BatchAnalysisPage = () => {
 
   return (
     <div className="batch-wrapper">
-      {/* ── HEADER ── */}
+      {/* ── HERO HEADER ── */}
       <div className="batch-header">
         <h1>📊 Analiza Zbiorcza KSWS</h1>
-        <p>Wgraj CSV z listą działek — kalkulator pobierze dane, wykryje linie i obliczy roszczenia</p>
+        <p>Wgraj CSV z listą działek — kalkulator pobierze dane, wykryje linie i obliczy roszczenia dla każdej nieruchomości</p>
+        <div className="batch-header-badges">
+          <span className="batch-badge purple">📍 ULDK GUGiK</span>
+          <span className="batch-badge">🗺 OSM Overpass</span>
+          <span className="batch-badge">📊 GUS BDL</span>
+          <span className="batch-badge green">⚖️ Track A + B</span>
+          <span className="batch-badge">maks. 99 działek</span>
+        </div>
       </div>
 
       {/* ── UPLOAD SECTION ── */}
       {!results && (
-        <div className="batch-upload-section">
-          <div className="upload-box"
-            onDragOver={e => e.preventDefault()}
-            onDrop={handleDrop}>
-            <label
-              className="file-label"
-              htmlFor="csv-input"
-              onClick={() => fileInputRef.current?.click()}>
-              {file
-                ? `📎 ${file.name}`
-                : "📂 Kliknij lub przeciągnij plik CSV"}
-              <div style={{ fontSize: "0.8em", fontWeight: 400, marginTop: 6, color: "#9e8b83" }}>
-                Kolumny: <strong>parcel_id</strong> (wymagany), <strong>obręb</strong> (zalecany przy numerze bez TERYT), powiat, gmina · maks. 99 wierszy
+        <div className="batch-content">
+          <div className="batch-upload-section">
+            <div className="upload-grid">
+              {/* LEFT: upload card */}
+              <div className="upload-card">
+                <div className="upload-card-title">📂 Wgraj plik CSV z działkami</div>
+                <div className="upload-box"
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={handleDrop}>
+                  <label
+                    className="file-label"
+                    htmlFor="csv-input"
+                    onClick={() => fileInputRef.current?.click()}>
+                    <span className="upload-icon">{file ? "📎" : "📂"}</span>
+                    <span>{file ? file.name : "Kliknij lub przeciągnij plik CSV"}</span>
+                    <span className="upload-hint">Format: .csv · Maks. 99 wierszy</span>
+                  </label>
+                  <input
+                    id="csv-input"
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    style={{ display: "none" }}
+                    onChange={handleFileChange}
+                  />
+                </div>
+
+                {error && <div className="error-box">❌ {error}</div>}
+
+                <button
+                  className="submit-btn"
+                  disabled={!file || loading}
+                  onClick={handleSubmit}>
+                  {loading ? "⏳ Analizuję działki..." : "🚀 Analizuj działki"}
+                </button>
+
+                {loading && (
+                  <p className="file-info" style={{ marginBottom: 10 }}>
+                    ⏳ Pobieranie danych z ULDK, OSM Overpass i GUS BDL — może potrwać 1–3 min...
+                  </p>
+                )}
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                  <button
+                    type="button"
+                    className="tab-download"
+                    onClick={() => {
+                      const header = "parcel_id,obreb,county,municipality";
+                      const rows = ["142003_2.0002.81/5,Baboszewo,,", "303/4,Niedarzyn,,"];
+                      const csv = [header, ...rows].join("\n");
+                      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+                      const a = document.createElement("a");
+                      a.href = URL.createObjectURL(blob);
+                      a.download = "szablon_batch_dzialki.csv";
+                      a.click();
+                      URL.revokeObjectURL(a.href);
+                    }}>
+                    ⬇ Pobierz szablon CSV
+                  </button>
+                  <button type="button" className="tab-download" onClick={() => navigate("/kalkulator/historia")}>
+                    📋 Historia analiz
+                  </button>
+                </div>
               </div>
-            </label>
-            <input
-              id="csv-input"
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              style={{ display: "none" }}
-              onChange={handleFileChange}
-            />
+
+              {/* RIGHT: info cards */}
+              <div className="info-cards">
+                <div className="info-card">
+                  <div className="info-card-title">📋 Wymagane kolumny CSV</div>
+                  <div className="csv-columns">
+                    <div className="csv-col-item">
+                      <span className="csv-col-badge required">wymagany</span>
+                      <span className="info-card-content"><code>parcel_id</code> — TERYT lub nr działki</span>
+                    </div>
+                    <div className="csv-col-item">
+                      <span className="csv-col-badge optional">zalecany</span>
+                      <span className="info-card-content"><code>obreb</code> — przy numerze bez TERYT</span>
+                    </div>
+                    <div className="csv-col-item">
+                      <span className="csv-col-badge optional">opcjonalny</span>
+                      <span className="info-card-content"><code>county</code>, <code>municipality</code></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="info-card">
+                  <div className="info-card-title">💡 Przykłady identyfikatorów</div>
+                  <div className="info-card-content">
+                    Pełny TERYT: <code>142003_2.0002.81/5</code><br/>
+                    Numer + obręb: <code>81/5,Baboszewo</code><br/>
+                    Format: <code>WWPPGG_R.OOOO.NR</code>
+                  </div>
+                </div>
+
+                <div className="info-card">
+                  <div className="info-card-title">⚡ Źródła danych</div>
+                  <div className="info-card-content">
+                    <strong>ULDK GUGiK</strong> — geometria działek<br/>
+                    <strong>OSM Overpass</strong> — linie energetyczne<br/>
+                    <strong>GUS BDL</strong> — ceny gruntów<br/>
+                    <strong>KSWS-V.5</strong> — metodyka wyceny
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-
-          {error && <div className="error-box">❌ {error}</div>}
-
-          <button
-            className="submit-btn"
-            disabled={!file || loading}
-            onClick={handleSubmit}>
-            {loading ? "⏳ Analizuję działki..." : "🚀 Analizuj działki"}
-          </button>
-
-          {loading && (
-            <p className="file-info">
-              Pobieranie danych z ULDK, OSM Overpass i GUS BDL — może potrwać 1-3 min dla większych zbiorów...
-            </p>
-          )}
-
-          <p className="file-info">
-            Przykład: pełny TERYT <code>142003_2.0002.81/5</code> lub numer + obręb <code>81/5,Baboszewo</code>.{" "}
-            <button
-              type="button"
-              className="tab-download"
-              style={{ marginLeft: 6, padding: "2px 8px", fontSize: "0.85em" }}
-              onClick={() => {
-                const header = "parcel_id,obreb,county,municipality";
-                const rows = ["142003_2.0002.81/5,Baboszewo,,", "303/4,Niedarzyn,,"];
-                const csv = [header, ...rows].join("\n");
-                const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
-                const a = document.createElement("a");
-                a.href = URL.createObjectURL(blob);
-                a.download = "szablon_batch_dzialki.csv";
-                a.click();
-                URL.revokeObjectURL(a.href);
-              }}>
-              ⬇ Pobierz szablon CSV
-            </button>
-          </p>
-          <p className="file-info" style={{ marginTop: 12 }}>
-            <button type="button" className="tab-download" style={{ fontSize: "0.85em" }} onClick={() => navigate("/kalkulator/historia")}>
-              📋 Historia analiz zbiorczych — otwórz raport z mapami
-            </button>
-          </p>
         </div>
       )}
 
       {/* ── RESULTS ── */}
       {results && totals && (
-        <div className="results-section">
+        <div className="results-section batch-content">
           {/* Stats row */}
           <div className="stats-row">
             <div className="stat-card">

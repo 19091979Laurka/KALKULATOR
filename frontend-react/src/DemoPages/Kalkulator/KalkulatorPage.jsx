@@ -1303,14 +1303,13 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
   } : null;
 
   return (
-    <div className="ksws-card">
-      <div className="ksws-card-header">
-        <span className="ksws-card-header-icon">📄</span>
-          <div>
-          <div className="ksws-card-header-title">Oferty hurtowe · Batch CSV</div>
-          <div className="ksws-card-header-sub">Załaduj CSV · wyniki i karty z poprzednich batchy poniżej</div>
-        </div>
+    <div className="ksws-batch-page">
+      <div className="ksws-batch-hero">
+        <div className="ksws-batch-hero-title">📊 Oferty hurtowe · Batch CSV</div>
+        <div className="ksws-batch-hero-sub">Załaduj CSV z działkami · automatyczna analiza do 100 działek · raport zbiorczy PDF + mapa</div>
       </div>
+      <div style={{ padding: '0 4px' }}>
+      <div className="ksws-card">
       <div className="ksws-card-body">
         {batchError && <div style={{ padding: "10px", background: "#ffe6e6", color: "#c0392b", borderRadius: "5px", marginBottom: "15px" }}>❌ {batchError}</div>}
 
@@ -1801,6 +1800,8 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
         </div>
       </div>
     </div>
+    </div>
+      </div>
   );
 }
 
@@ -2264,15 +2265,22 @@ export default function KalkulatorPage() {
 
           {/* ════ HISTORIA PAGE ════ */}
           {activeNav === "historia" && (
-            <div className="ksws-card">
-              <div className="ksws-card-header">
-                <span className="ksws-card-header-icon">📋</span>
-                <div>
-                  <div className="ksws-card-header-title">Historia działek</div>
-                  <div className="ksws-card-header-sub">Pojedyncze analizy · pełne dane wyliczeń · kliknij aby załadować</div>
+            <div className="ksws-historia-page">
+              <div className="ksws-historia-hero">
+                <div className="ksws-historia-hero-title">📋 Historia działek</div>
+                <div className="ksws-historia-hero-sub">Pojedyncze analizy · pełne dane wyliczeń · kliknij aby załadować</div>
+                <div className="ksws-historia-stats">
+                  <div className="ksws-historia-stat">
+                    <div className="ksws-historia-stat-val">{history.length}</div>
+                    <div className="ksws-historia-stat-label">Analiz</div>
+                  </div>
+                  <div className="ksws-historia-stat">
+                    <div className="ksws-historia-stat-val">{history.filter(h => h.collision).length}</div>
+                    <div className="ksws-historia-stat-label">Kolizji</div>
+                  </div>
                 </div>
               </div>
-              <div className="ksws-card-body">
+              <div style={{ padding: '0 4px' }}>
                 {history.length === 0 ? (
                   <div className="ksws-empty" style={{ padding: "40px 0" }}>
                     <div className="ksws-empty-icon">📋</div>
@@ -2384,7 +2392,7 @@ export default function KalkulatorPage() {
                   </div>
                 )}
               </div>
-            </div>
+              </div>
           )}
 
           {/* ════ BATCH CSV PAGE ════ */}
@@ -2393,8 +2401,41 @@ export default function KalkulatorPage() {
           )}
 
           {/* ════ ANALIZA PAGE ════ */}
-          {activeNav === "analiza" && (<>
-
+          {activeNav === "analiza" && (
+          <div className="ksws-analiza-page">
+          {/* ════ ANIMATED LOADING OVERLAY ════ */}
+          {loading && (
+            <div className="ksws-loading-overlay">
+              <div className="ksws-loading-card">
+                <div className="ksws-loading-logo">⚡</div>
+                <div className="ksws-loading-title">Analizuję działkę…</div>
+                <div className="ksws-loading-sub">Pobieranie danych z rejestrów publicznych</div>
+                <div className="ksws-loading-steps">
+                  {[
+                    { icon: "📍", label: "ULDK GUGiK", sub: "Identyfikacja i geometria działki" },
+                    { icon: "🌿", label: "GUS BDL", sub: "Klasa gruntu i ceny rynkowe" },
+                    { icon: "⚡", label: "GESUT / OSM Overpass", sub: "Detekcja infrastruktury energetycznej" },
+                    { icon: "📐", label: "Obliczenia KSWS", sub: "Wyliczanie R1–R5 Track A i Track B" },
+                    { icon: "📄", label: "Generowanie raportu", sub: "Kompilacja wyników PDF" },
+                  ].map((step, i) => (
+                    <div key={i} className="ksws-loading-step active">
+                      <div className="ksws-loading-step-icon" style={{ color: "#fff" }}>{step.icon}</div>
+                      <div className="ksws-loading-step-text">
+                        <div className="ksws-loading-step-label">{step.label}</div>
+                        <div className="ksws-loading-step-sub">{step.sub}</div>
+                      </div>
+                      <div className="ksws-loading-step-status">
+                        <div className="ksws-dots"><span /><span /><span /></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="ksws-loading-progress">
+                  <div className="ksws-loading-progress-bar" />
+                </div>
+              </div>
+            </div>
+          )}
           {/* ════ PAGE HERO ════ */}
           <div className="ksws-page-hero">
             <div className="ksws-page-hero-title">⚡ Analiza działki — Roszczenia KSWS</div>
@@ -2408,463 +2449,414 @@ export default function KalkulatorPage() {
             </div>
           </div>
           {/* ════ FORMULARZ ════ */}
-          <div className="ksws-card">
-            <div className="ksws-card-header">
-              <span className="ksws-card-header-icon">📍</span>
-              <div>
-                <div className="ksws-card-header-title">Identyfikacja działki</div>
-                <div className="ksws-card-header-sub">
-                  Dane pobierane automatycznie z ULDK GUGiK · GUS BDL · GESUT
+          {/* ════ LOADING OVERLAY ════ */}
+            {loading && (
+              <div className="ksws-loading-modern">
+                <div className="ksws-loading-card">
+                  <div className="ksws-loading-logo">⚡</div>
+                  <div className="ksws-loading-title">Analizuję działkę…</div>
+                  <div className="ksws-loading-sub">Pobieranie danych z rejestrów publicznych</div>
+                  <div className="ksws-loading-steps-modern">
+                    {[
+                      { icon: "🗺", label: "ULDK GUGiK — granice działki" },
+                      { icon: "⚡", label: "GESUT — infrastruktura energetyczna" },
+                      { icon: "📊", label: "GUS BDL — ceny gruntów" },
+                      { icon: "🌐", label: "OSM Overpass — weryfikacja" },
+                      { icon: "⚖️", label: "Obliczanie R1–R5 Track A/B" },
+                    ].map((step, i) => (
+                      <div key={i} className="ksws-loading-step-modern active">
+                        <div className="ksws-loading-step-dot" />
+                        <div className="ksws-loading-step-text-modern">{step.icon} {step.label}</div>
+                        <div className="ksws-loading-step-status-modern">●●●</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="ksws-loading-progressbar">
+                    <div className="ksws-loading-progressbar-fill" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ════ HERO BANNER ════ */}
+            <div className="ksws-analiza-hero">
+              <div className="ksws-analiza-hero-inner">
+                <div>
+                  <div className="ksws-analiza-hero-title">
+                    Analiza <span>Służebności Przesyłu</span>
+                  </div>
+                  <div className="ksws-analiza-hero-sub">
+                    Automatyczna identyfikacja działki · Detekcja infrastruktury · Wyliczenie roszczeń KSWS
+                  </div>
+                  <div className="ksws-analiza-hero-badges">
+                    <span className="ksws-analiza-hero-badge">📍 ULDK GUGiK</span>
+                    <span className="ksws-analiza-hero-badge">🗺 GESUT</span>
+                    <span className="ksws-analiza-hero-badge">📊 GUS BDL</span>
+                    <span className="ksws-analiza-hero-badge">🌐 OSM Overpass</span>
+                    <span className="ksws-analiza-hero-badge">⚖️ Track A + B</span>
+                  </div>
+                </div>
+                <div className="ksws-analiza-hero-stats">
+                  <div className="ksws-analiza-hero-stat">
+                    <div className="ksws-analiza-hero-stat-val">&lt;30s</div>
+                    <div className="ksws-analiza-hero-stat-label">Czas analizy</div>
+                  </div>
+                  <div className="ksws-analiza-hero-stat">
+                    <div className="ksws-analiza-hero-stat-val">3</div>
+                    <div className="ksws-analiza-hero-stat-label">Rejestry API</div>
+                  </div>
+                  <div className="ksws-analiza-hero-stat">
+                    <div className="ksws-analiza-hero-stat-val">R1–R5</div>
+                    <div className="ksws-analiza-hero-stat-label">Składniki</div>
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="ksws-card-body">
-              <form onSubmit={runAnalysis}>
 
-                {/* ── KARTA KLIENTA ── */}
-                <div className="ksws-client-card">
-                  <div className="ksws-client-card-header">
-                    <span style={{ fontSize: "1em" }}>👤</span>
-                    <span>Karta klienta</span>
-                    <span className="ksws-client-card-note">— dane trafiają do raportu</span>
-                  </div>
-                  <div className="ksws-client-card-grid">
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">Imię i nazwisko / Firma</label>
-                      <input
-                        className="ksws-form-input"
-                        value={clientName}
-                        onChange={(e) => setClientName(e.target.value)}
-                        placeholder="Jan Kowalski"
-                      />
-                    </div>
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">E-mail klienta</label>
-                      <input
-                        className="ksws-form-input"
-                        type="email"
-                        value={clientEmail}
-                        onChange={(e) => setClientEmail(e.target.value)}
-                        placeholder="jan@email.pl"
-                      />
-                    </div>
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">Nr sprawy</label>
-                      <input
-                        className="ksws-form-input"
-                        value={caseNumber}
-                        onChange={(e) => setCaseNumber(e.target.value)}
-                        placeholder="SZU/2026/001"
-                      />
-                    </div>
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">Data wysłania maila</label>
-                      <input
-                        className="ksws-form-input"
-                        type="date"
-                        value={emailSentDate}
-                        onChange={(e) => setEmailSentDate(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </div>
+            {/* ════ FORMULARZ — 2 KOLUMNY ════ */}
+            <form onSubmit={runAnalysis}>
+              <div className="ksws-form-2col">
 
-                {/* ── BOX 1: Identyfikator działki ── */}
-                <div className="ksws-form-box">
-                  <div className="ksws-form-box-label">
-                    <span className="ksws-form-box-num">1</span>
-                    Identyfikator działki
+                {/* ════ LEWA KOLUMNA ════ */}
+                <div className="ksws-form-col">
+
+                  {/* BOX: Karta klienta */}
+                  <div className="ksws-glass-box client">
+                    <div className="ksws-box-header">
+                      <div className="ksws-box-icon purple">👤</div>
+                      <div>
+                        <div className="ksws-box-title">Karta klienta</div>
+                        <div className="ksws-box-subtitle">Dane trafiają do raportu PDF</div>
+                      </div>
+                    </div>
+                    <div className="ksws-inputs-grid-2">
+                      <div className="ksws-float-group" style={{ gridColumn: "1 / -1" }}>
+                        <input
+                          className="ksws-float-input"
+                          value={clientName}
+                          onChange={(e) => setClientName(e.target.value)}
+                          placeholder=" "
+                          id="clientName"
+                        />
+                        <label className="ksws-float-label" htmlFor="clientName">Imię i nazwisko / Firma</label>
+                      </div>
+                      <div className="ksws-float-group">
+                        <input
+                          className="ksws-float-input"
+                          type="email"
+                          value={clientEmail}
+                          onChange={(e) => setClientEmail(e.target.value)}
+                          placeholder=" "
+                          id="clientEmail"
+                        />
+                        <label className="ksws-float-label" htmlFor="clientEmail">E-mail klienta</label>
+                      </div>
+                      <div className="ksws-float-group">
+                        <input
+                          className="ksws-float-input"
+                          value={caseNumber}
+                          onChange={(e) => setCaseNumber(e.target.value)}
+                          placeholder=" "
+                          id="caseNumber"
+                        />
+                        <label className="ksws-float-label" htmlFor="caseNumber">Nr sprawy (SZU/2026/001)</label>
+                      </div>
+                      <div className="ksws-float-group">
+                        <input
+                          className="ksws-float-input"
+                          type="date"
+                          value={emailSentDate}
+                          onChange={(e) => setEmailSentDate(e.target.value)}
+                          placeholder=" "
+                          id="emailSentDate"
+                        />
+                        <label className="ksws-float-label" htmlFor="emailSentDate">Data wysłania maila</label>
+                      </div>
+                    </div>
                   </div>
-                  <div className="ksws-form-group" style={{ marginBottom: 0 }}>
-                    <label className="ksws-form-label">
-                      Identyfikator działki *
-                      <span className="ksws-form-hint">
-                        Pełny TERYT np. <code>141906_5.0029.60</code> — lub wpisz sam numer i uzupełnij Obręb poniżej
-                      </span>
-                    </label>
+
+                  {/* BOX: Identyfikator działki */}
+                  <div className="ksws-glass-box identifier">
+                    <div className="ksws-box-header">
+                      <div className="ksws-box-icon green">📍</div>
+                      <div>
+                        <div className="ksws-box-title">Identyfikator działki</div>
+                        <div className="ksws-box-subtitle">TERYT lub numer + obręb</div>
+                      </div>
+                    </div>
+                    <div className="ksws-float-group" style={{ marginBottom: 8 }}>
+                      <input
+                        className="ksws-float-input ksws-float-input-lg"
+                        value={parcelIds}
+                        onChange={(e) => setParcelIds(e.target.value)}
+                        placeholder=" "
+                        id="parcelIds"
+                        autoComplete="off"
+                      />
+                      <label className="ksws-float-label" htmlFor="parcelIds">TERYT np. 141906_5.0029.60 (lub kilka po przecinku)</label>
+                    </div>
+                    <div className="ksws-input-hint">
+                      Format: <code>WWPPGG_R.OOOO.NR</code> — WW=woj. PP=pow. GG=gmina R=rodzaj O=obręb NR=numer
+                    </div>
+                  </div>
+
+                  {/* BOX: Rolnik */}
+                  <label className={`ksws-farmer-toggle${isFarmer ? " active" : ""}`}>
                     <input
-                      className="ksws-form-input ksws-form-input-lg"
-                      value={parcelIds}
-                      onChange={(e) => setParcelIds(e.target.value)}
-                      placeholder="141906_5.0029.60  lub wiele po przecinku: 141906_5.0029.60, 141906_5.0029.129"
-                      autoComplete="off"
+                      type="checkbox"
+                      checked={isFarmer}
+                      onChange={(e) => setIsFarmer(e.target.checked)}
+                      style={{ display: "none" }}
                     />
-                    <div className="ksws-form-tip">
-                      Format TERYT: <strong>WWPPGG_R.OOOO.NR</strong> — WW=województwo PP=powiat GG=gmina R=rodzaj O=obręb NR=numer
+                    <div className="ksws-farmer-icon">🌾</div>
+                    <div className="ksws-farmer-text">
+                      <div className="ksws-farmer-title">Klient jest rolnikiem</div>
+                      <div className="ksws-farmer-sub">Aktywuje R5 — szkoda rolna: fundamenty + wyspy sprzętowe</div>
                     </div>
-                  </div>
-                </div>
+                    <div className="ksws-toggle-switch">
+                      <input type="checkbox" checked={isFarmer} readOnly />
+                      <span className="ksws-toggle-slider" />
+                    </div>
+                  </label>
 
-                {/* ── BOX 2: Dane ewidencyjne ── */}
-                <div className="ksws-form-box">
-                  <div className="ksws-form-box-label">
-                    <span className="ksws-form-box-num">2</span>
-                    Dane ewidencyjne
-                    <span style={{ marginLeft: 8, fontSize: "0.72em", color: "#8ac926", fontWeight: 700 }}>
-                      ✓ Uzupełniają się automatycznie po analizie
-                    </span>
-                  </div>
-                  <div className="ksws-form-grid" style={{ marginBottom: 0 }}>
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">Numer działki</label>
-                      <input
-                        className="ksws-form-input"
-                        value={parcelIds.includes(",") ? "" : parcelIds.split(".").pop() || parcelIds}
-                        onChange={(e) => {
-                          const nr = e.target.value.trim();
-                          if (obreb) setParcelIds(nr);
-                          else setParcelIds(nr);
+                  {/* CTA */}
+                  <div className="ksws-cta-section">
+                    <button
+                      type="submit"
+                      className="ksws-btn-mega"
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <>
+                          <span className="ksws-btn-mega-spinner" />
+                          Analizuję działkę…
+                        </>
+                      ) : (
+                        <>
+                          <span className="ksws-btn-mega-icon">⚡</span>
+                          Generuj raport KSWS
+                        </>
+                      )}
+                    </button>
+                    <div className="ksws-btn-secondary-row">
+                      <button
+                        type="button"
+                        className="ksws-btn-outline"
+                        onClick={() => setShowManual((v) => !v)}
+                      >
+                        ⚙️ {showManual ? "Ukryj korektę ręczną" : "Korekta ręczna"}
+                      </button>
+                      <button
+                        type="button"
+                        className="ksws-btn-outline"
+                        onClick={() => {
+                          setParcelIds(""); setClientName(""); setClientEmail("");
+                          setCaseNumber(""); setKwNumber(""); setObreb("");
+                          setMunicipality(""); setCounty(""); setVoivodeship("");
+                          setChecks({ pismoStarosty: false, wnioskowanieWZ: false, odmowaWZ: false, pismoOperatora: false });
                         }}
-                        placeholder="np. 60 lub 114/2"
-                      />
-                    </div>
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">Obręb ewidencyjny</label>
-                      <input
-                        className="ksws-form-input"
-                        value={obreb}
-                        onChange={(e) => setObreb(e.target.value)}
-                        placeholder="np. Szapsk, Cieszkowo Kolonia"
-                      />
-                      <span className="ksws-form-hint" style={{ display: "block", marginTop: 4 }}>
-                        Wymagany przy wyszukiwaniu po samym numerze działki (bez pełnego TERYT).
-                      </span>
-                    </div>
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">Gmina</label>
-                      <input
-                        className="ksws-form-input"
-                        value={municipality}
-                        onChange={(e) => setMunicipality(e.target.value)}
-                        placeholder="np. Baboszewo"
-                      />
-                    </div>
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">Powiat</label>
-                      <input
-                        className="ksws-form-input"
-                        value={county}
-                        onChange={(e) => setCounty(e.target.value)}
-                        placeholder="np. płoński"
-                      />
-                    </div>
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">Województwo</label>
-                      <input
-                        className="ksws-form-input"
-                        value={voivodeship}
-                        onChange={(e) => setVoivodeship(e.target.value)}
-                        placeholder="np. mazowieckie"
-                      />
+                      >
+                        🗑 Wyczyść formularz
+                      </button>
                     </div>
                   </div>
+
                 </div>
 
-                {/* ── BOX 3: KW + Status prawny ── */}
-                <div className="ksws-form-box">
-                  <div className="ksws-form-box-label">
-                    <span className="ksws-form-box-num">3</span>
-                    Księga Wieczysta i status prawny
+                {/* ════ PRAWA KOLUMNA ════ */}
+                <div className="ksws-form-col">
+
+                  {/* BOX: Dane ewidencyjne */}
+                  <div className="ksws-glass-box">
+                    <div className="ksws-box-header">
+                      <div className="ksws-box-icon green">🗺</div>
+                      <div>
+                        <div className="ksws-box-title">Dane ewidencyjne</div>
+                        <div className="ksws-box-subtitle">Uzupełniają się automatycznie po analizie ✓</div>
+                      </div>
+                    </div>
+                    <div className="ksws-inputs-grid-2" style={{ marginBottom: 12 }}>
+                      <div className="ksws-float-group">
+                        <input
+                          className="ksws-float-input"
+                          value={parcelIds.includes(",") ? "" : parcelIds.split(".").pop() || parcelIds}
+                          onChange={(e) => {
+                            const nr = e.target.value.trim();
+                            if (obreb) setParcelIds(nr);
+                            else setParcelIds(nr);
+                          }}
+                          placeholder=" "
+                          id="parcelNr"
+                        />
+                        <label className="ksws-float-label" htmlFor="parcelNr">Numer działki</label>
+                      </div>
+                      <div className="ksws-float-group">
+                        <input
+                          className="ksws-float-input"
+                          value={obreb}
+                          onChange={(e) => setObreb(e.target.value)}
+                          placeholder=" "
+                          id="obreb"
+                        />
+                        <label className="ksws-float-label" htmlFor="obreb">Obręb ewidencyjny</label>
+                      </div>
+                      <div className="ksws-float-group">
+                        <input
+                          className="ksws-float-input"
+                          value={municipality}
+                          onChange={(e) => setMunicipality(e.target.value)}
+                          placeholder=" "
+                          id="municipality"
+                        />
+                        <label className="ksws-float-label" htmlFor="municipality">Gmina</label>
+                      </div>
+                      <div className="ksws-float-group">
+                        <input
+                          className="ksws-float-input"
+                          value={county}
+                          onChange={(e) => setCounty(e.target.value)}
+                          placeholder=" "
+                          id="county"
+                        />
+                        <label className="ksws-float-label" htmlFor="county">Powiat</label>
+                      </div>
+                      <div className="ksws-float-group" style={{ gridColumn: "1 / -1" }}>
+                        <input
+                          className="ksws-float-input"
+                          value={voivodeship}
+                          onChange={(e) => setVoivodeship(e.target.value)}
+                          placeholder=" "
+                          id="voivodeship"
+                        />
+                        <label className="ksws-float-label" htmlFor="voivodeship">Województwo</label>
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-start" }}>
-                    {/* KW */}
-                    <div className="ksws-form-group" style={{ minWidth: 220, flex: "0 0 260px" }}>
-                      <label className="ksws-form-label">
-                        Nr Księgi Wieczystej
-                        <span className="ksws-form-hint">Format: AAAA/NNNNNNNN/N (np. WA1M/00012345/6)</span>
-                      </label>
+
+                  {/* BOX: Księga Wieczysta */}
+                  <div className="ksws-glass-box kw">
+                    <div className="ksws-box-header">
+                      <div className="ksws-box-icon blue">📖</div>
+                      <div>
+                        <div className="ksws-box-title">Księga Wieczysta</div>
+                        <div className="ksws-box-subtitle">Format: AAAA/NNNNNNNN/N</div>
+                      </div>
+                    </div>
+                    <div className="ksws-float-group">
                       <input
-                        className="ksws-form-input"
+                        className="ksws-float-input"
                         value={kwNumber}
                         onChange={(e) => {
-                          // Auto-format: AAAA/NNNNNNNN/N
                           let v = e.target.value.toUpperCase().replace(/[^A-Z0-9/]/g, "");
-                          // Strip existing slashes to reformat
                           const raw = v.replace(/\//g, "");
                           if (raw.length <= 4) v = raw;
                           else if (raw.length <= 12) v = raw.slice(0, 4) + "/" + raw.slice(4);
                           else v = raw.slice(0, 4) + "/" + raw.slice(4, 12) + "/" + raw.slice(12, 13);
                           setKwNumber(v);
                         }}
-                        placeholder="WA1M/00012345/6"
+                        placeholder=" "
+                        id="kwNumber"
                         maxLength={15}
-                        style={{ fontFamily: "monospace", letterSpacing: "1px" }}
+                        style={{ fontFamily: "monospace", letterSpacing: "2px" }}
                       />
+                      <label className="ksws-float-label" htmlFor="kwNumber">Nr Księgi Wieczystej (WA1M/00012345/6)</label>
                     </div>
+                  </div>
 
-                    {/* Checkboxy */}
-                    <div style={{ flex: 1 }}>
-                      <div className="ksws-form-label" style={{ marginBottom: 10 }}>
-                        Status sprawy
+                  {/* BOX: Status sprawy */}
+                  <div className="ksws-glass-box status">
+                    <div className="ksws-box-header">
+                      <div className="ksws-box-icon gold">⚖️</div>
+                      <div>
+                        <div className="ksws-box-title">Status sprawy</div>
+                        <div className="ksws-box-subtitle">Etap postępowania prawnego</div>
                       </div>
-                      <div className="ksws-checks-grid">
-                        {[
-                          { key: "pismoStarosty",  label: "Pismo od starosty" },
-                          { key: "wnioskowanieWZ", label: "Wnioskowane o WZ" },
-                          { key: "odmowaWZ",       label: "Odmowa WZ" },
-                          { key: "pismoOperatora", label: "Pismo od operatora" },
-                        ].map(({ key, label }) => (
-                          <label key={key} className="ksws-check-item">
+                    </div>
+                    <div className="ksws-toggle-grid">
+                      {[
+                        { key: "pismoStarosty",  label: "📄 Pismo od starosty" },
+                        { key: "wnioskowanieWZ", label: "📋 Wnioskowane o WZ" },
+                        { key: "odmowaWZ",       label: "❌ Odmowa WZ" },
+                        { key: "pismoOperatora", label: "📧 Pismo od operatora" },
+                      ].map(({ key, label }) => (
+                        <label key={key} className={`ksws-toggle-item${checks[key] ? " active" : ""}`}>
+                          <span className="ksws-toggle-label">{label}</span>
+                          <div className="ksws-toggle-switch">
                             <input
                               type="checkbox"
-                              className="ksws-check-input"
                               checked={checks[key]}
                               onChange={(e) => setChecks((prev) => ({ ...prev, [key]: e.target.checked }))}
                             />
-                            <span className="ksws-check-label">{label}</span>
-                          </label>
-                        ))}
-                      </div>
+                            <span className="ksws-toggle-slider" />
+                          </div>
+                        </label>
+                      ))}
                     </div>
                   </div>
-                </div>
 
-                {/* ── PRZYCISK ── */}
-                <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap", position: "relative", zIndex: 5 }}>
-                  <button
-                    type="submit"
-                    className="ksws-btn ksws-btn-primary"
-                    disabled={loading}
-                    style={{ minWidth: 200 }}
-                  >
-                    {loading ? (
-                      <>
-                        <span className="ksws-spinner-inline" />
-                        Analizuję…
-                      </>
-                    ) : (
-                      <>⚡ Generuj raport KSWS</>
-                    )}
-                  </button>
-                  {(checks.pismoStarosty || checks.wnioskowanieWZ || checks.odmowaWZ || checks.pismoOperatora) && (
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {checks.pismoStarosty  && <span className="ksws-badge ksws-badge-blue">📄 Pismo starosty</span>}
-                      {checks.wnioskowanieWZ && <span className="ksws-badge ksws-badge-blue">📋 WZ złożone</span>}
-                      {checks.odmowaWZ       && <span className="ksws-badge" style={{ background: "#ff595e", color: "#fff" }}>❌ Odmowa WZ</span>}
-                      {checks.pismoOperatora && <span className="ksws-badge ksws-badge-blue">📧 Pismo operatora</span>}
+                  {/* Korekta ręczna accordion */}
+                  {showManual && (
+                    <div className="ksws-glass-box">
+                      <div className="ksws-box-header">
+                        <div className="ksws-box-icon purple">⚙️</div>
+                        <div>
+                          <div className="ksws-box-title">Korekta ręczna</div>
+                          <div className="ksws-box-subtitle">Nadpisz dane API gdy są błędne</div>
+                        </div>
+                      </div>
+                      <div
+                        style={{ fontSize: "0.75rem", color: "#7d6608", marginBottom: 14, padding: "8px 12px",
+                          background: "#fffdf0", borderRadius: 8, border: "1px solid #ffd43b" }}
+                      >
+                        ⚠️ Pola uzupełniają się automatycznie po analizie. Nadpisz tylko gdy API zwraca błędne dane.
+                      </div>
+                      <div className="ksws-manual-grid">
+                        <div className="ksws-form-group">
+                          <label className="ksws-form-label">Cena rynkowa [zł/m²]</label>
+                          <input type="number" step="0.01" min="0" className="ksws-form-input"
+                            placeholder="np. 200" value={manualPrice} onChange={(e) => setManualPrice(e.target.value)} />
+                        </div>
+                        <div className="ksws-form-group">
+                          <label className="ksws-form-label">Typ gruntu</label>
+                          <select className="ksws-form-input" value={manualLandType} onChange={(e) => setManualLandType(e.target.value)}>
+                            <option value="">— auto —</option>
+                            <option value="building">Budowlany</option>
+                            <option value="agricultural">Rolny</option>
+                          </select>
+                        </div>
+                        <div className="ksws-form-group">
+                          <label className="ksws-form-label">Infrastruktura wykryta</label>
+                          <select className="ksws-form-input" value={manualInfraDetect} onChange={(e) => setManualInfraDetect(e.target.value)}>
+                            <option value="">— auto —</option>
+                            <option value="true">TAK</option>
+                            <option value="false">NIE</option>
+                          </select>
+                        </div>
+                        <div className="ksws-form-group">
+                          <label className="ksws-form-label">Napięcie linii</label>
+                          <select className="ksws-form-input" value={manualVoltage} onChange={(e) => setManualVoltage(e.target.value)}>
+                            <option value="">— auto —</option>
+                            <option value="WN 110kV">WN 110kV</option>
+                            <option value="WN 220kV">WN 220kV</option>
+                            <option value="WN 400kV">WN 400kV</option>
+                            <option value="SN 15kV">SN 15kV</option>
+                            <option value="SN 20kV">SN 20kV</option>
+                            <option value="nN 0.4kV">nN 0.4kV</option>
+                          </select>
+                        </div>
+                        <div className="ksws-form-group">
+                          <label className="ksws-form-label">Długość linii [m]</label>
+                          <input type="number" step="0.1" min="0" className="ksws-form-input"
+                            placeholder="np. 120" value={manualLineLength} onChange={(e) => setManualLineLength(e.target.value)} />
+                        </div>
+                      </div>
                     </div>
                   )}
+
                 </div>
+              </div>
+            </form>
 
-                {/* ── Typ klienta: Rolnik ── */}
-                <label
-                  style={{
-                    display: "flex", alignItems: "center", gap: "8px",
-                    marginTop: "10px", marginBottom: "2px",
-                    cursor: "pointer", fontWeight: isFarmer ? "600" : "400",
-                    color: isFarmer ? "#1a7a2e" : "#444",
-                    background: isFarmer ? "#eafaf1" : "transparent",
-                    border: isFarmer ? "1px solid #27ae60" : "1px solid transparent",
-                    borderRadius: "6px", padding: "6px 10px",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isFarmer}
-                    onChange={(e) => setIsFarmer(e.target.checked)}
-                    style={{ width: "16px", height: "16px", accentColor: "#27ae60" }}
-                  />
-                  <span>🌾 Rolnik — aktywuje R5 (szkoda rolna: fundamenty + wyspy sprzętowe)</span>
-                </label>
-
-                <div style={{ marginTop: "6px" }}></div>
-
-                {/* ── Korekta ręczna accordion ── */}
-                <button
-                  type="button"
-                  className="ksws-accordion-toggle"
-                  onClick={() => setShowManual((v) => !v)}
-                >
-                  <span>{showManual ? "▲" : "▼"}</span>
-                  {showManual ? "Ukryj korektę ręczną" : "Korekta ręczna — nadpisz dane API"}
-                </button>
-
-                {showManual && (
-                  <div className="ksws-accordion-body">
-                    <div
-                      style={{
-                        fontSize: "0.8rem",
-                        color: "#7d6608",
-                        marginBottom: "14px",
-                        fontWeight: 500,
-                      }}
-                    >
-                      Pola poniżej są automatycznie uzupełniane danymi z API po analizie.
-                      Nadpisz tylko gdy API zwraca błędne dane (np. rolna zamiast budowlanej, brak wykrytej linii).
-                    </div>
-                    <div className="ksws-manual-grid">
-                      <div className="ksws-form-group">
-                        <label className="ksws-form-label">Cena rynkowa [zł/m²]</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          className="ksws-form-input"
-                          placeholder="np. 200"
-                          value={manualPrice}
-                          onChange={(e) => setManualPrice(e.target.value)}
-                        />
-                      </div>
-                      <div className="ksws-form-group">
-                        <label className="ksws-form-label">Typ gruntu</label>
-                        <select
-                          className="ksws-form-input"
-                          value={manualLandType}
-                          onChange={(e) => setManualLandType(e.target.value)}
-                        >
-                          <option value="">— auto —</option>
-                          <option value="building">Budowlany</option>
-                          <option value="agricultural">Rolny</option>
-                        </select>
-                      </div>
-                      <div className="ksws-form-group">
-                        <label className="ksws-form-label">Infrastruktura wykryta</label>
-                        <select
-                          className="ksws-form-input"
-                          value={manualInfraDetect}
-                          onChange={(e) => setManualInfraDetect(e.target.value)}
-                        >
-                          <option value="">— auto —</option>
-                          <option value="true">TAK — potwierdzona</option>
-                          <option value="false">NIE — brak</option>
-                        </select>
-                      </div>
-                      <div className="ksws-form-group">
-                        <label className="ksws-form-label">Napięcie</label>
-                        <select
-                          className="ksws-form-input"
-                          value={manualVoltage}
-                          onChange={(e) => setManualVoltage(e.target.value)}
-                        >
-                          <option value="">— auto —</option>
-                          <option value="WN">WN (110–400 kV)</option>
-                          <option value="SN">SN (15–30 kV)</option>
-                          <option value="nN">nN (&lt;1 kV)</option>
-                        </select>
-                      </div>
-                      <div className="ksws-form-group">
-                        <label className="ksws-form-label">
-                          Długość linii [m]
-                          <span style={{ fontSize: "0.7rem", color: "#888", fontWeight: 400, marginLeft: 4 }}>
-                            (z Geoportalu / geodety)
-                          </span>
-                        </label>
-                        <input
-                          type="number"
-                          step="1"
-                          min="0"
-                          className="ksws-form-input"
-                          placeholder="np. 180"
-                          value={manualLineLength}
-                          onChange={(e) => setManualLineLength(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    {/* ── INSTRUKCJA GEOPORTAL ── */}
-                    <div style={{
-                      marginTop: 14,
-                      padding: "12px 14px",
-                      background: "#f0f4ff",
-                      border: "1px solid #c5d0f0",
-                      borderRadius: 8,
-                      fontSize: "0.78rem",
-                      color: "#344",
-                      lineHeight: 1.6,
-                    }}>
-                      <div style={{ fontWeight: 700, marginBottom: 6, color: "#2c3e7a", fontSize: "0.8rem" }}>
-                        📐 Jak zmierzyć linię i ustalić napięcie w Geoportalu?
-                      </div>
-                      <ol style={{ margin: 0, paddingLeft: 18 }}>
-                        <li>
-                          <a
-                            href={result?.parcel_id
-                              ? `https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${result.parcel_id}`
-                              : "https://mapy.geoportal.gov.pl/"}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: "#1a56db", fontWeight: 600 }}
-                          >
-                            Otwórz działkę w Geoportalu →
-                          </a>
-                        </li>
-                        <li>
-                          W panelu warstw włącz <strong>Uzbrojenie terenu (KIUT)</strong> — linie pojawią się na mapie
-                        </li>
-                        <li>
-                          <strong>Kliknij na linię</strong> — pojawi się okno z atrybutami, np.:
-                          <div style={{ margin: "5px 0 3px 0", padding: "6px 10px", background: "#fff", border: "1px solid #d0d8f0", borderRadius: 5, fontFamily: "monospace", fontSize: "0.75rem", color: "#333" }}>
-                            Rodzaj: <strong>linia elektroenergetyczna średniego napięcia</strong><br/>
-                            <span style={{ color: "#888" }}>→ "wysokiego" = WN &nbsp;|&nbsp; "średniego" = SN &nbsp;|&nbsp; "niskiego" = nN</span>
-                          </div>
-                        </li>
-                        <li>
-                          Kliknij ikonę <strong>📏 Pomiar odległości</strong> (pasek narzędzi u góry) i kliknij wzdłuż linii <em>w granicach działki</em>
-                        </li>
-                        <li>Wpisz napięcie i długość powyżej, kliknij <em>Generuj</em></li>
-                      </ol>
-                      <div style={{ marginTop: 8, color: "#666", fontSize: "0.72rem" }}>
-                        💡 Brak warstwy KIUT? Spróbuj <a href="https://inspire.miasternet.pl/kiut/" target="_blank" rel="noopener noreferrer" style={{ color: "#1a56db" }}>KIUT na miasternet.pl</a> lub poproś o mapę zasadniczą u starosty.
-                      </div>
-                    </div>
-
-                    {hasManualActive && (
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          marginTop: "10px",
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <span
-                          className="ksws-badge ksws-badge-gold"
-                          style={{ fontSize: "0.72rem" }}
-                        >
-                          Aktywna korekta:
-                        </span>
-                        {manualPrice && (
-                          <span className="ksws-badge ksws-badge-blue">
-                            cena {manualPrice} zł/m²
-                          </span>
-                        )}
-                        {manualLandType && (
-                          <span className="ksws-badge ksws-badge-blue">
-                            {manualLandType === "building" ? "budowlany" : "rolny"}
-                          </span>
-                        )}
-                        {manualInfraDetect && (
-                          <span className="ksws-badge ksws-badge-blue">
-                            infra: {manualInfraDetect === "true" ? "TAK" : "NIE"}
-                          </span>
-                        )}
-                        {manualVoltage && (
-                          <span className="ksws-badge ksws-badge-blue">{manualVoltage}</span>
-                        )}
-                        {manualLineLength && (
-                          <span className="ksws-badge ksws-badge-blue">{manualLineLength} m</span>
-                        )}
-                        <button
-                          type="button"
-                          className="ksws-btn-link"
-                          onClick={() => {
-                            setManualPrice("");
-                            setManualLandType("");
-                            setManualInfraDetect("");
-                            setManualVoltage("");
-                            setManualLineLength("");
-                          }}
-                        >
-                          Wyczyść
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </form>
-            </div>
-          </div>
 
 
           {/* ════ BANER BŁĘDU — ULDK niedostępny ════ */}
@@ -2914,7 +2906,7 @@ export default function KalkulatorPage() {
 
           {/* ════════════════════ WYNIKI ════════════════════ */}
           {result && (
-            <>
+            <div className="ksws-result-section">
               {/* ── NAGŁÓWEK WYNIKOWY (ciemna karta) ── */}
               <div className="ksws-result-header">
                 <div className="ksws-result-header-left">
@@ -3793,10 +3785,11 @@ export default function KalkulatorPage() {
                   </div>
                 );
               })()}
-            </>
+            </div>
           )}
 
-          </>)}
+          </div>
+          )}
           {/* END ANALIZA PAGE */}
 
         </main>
