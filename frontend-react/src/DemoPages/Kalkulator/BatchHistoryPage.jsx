@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { Spinner, Badge, Button } from "reactstrap";
 import "./BatchHistoryPage.css";
 
 export default function BatchHistoryPage() {
+  const navigate = useNavigate();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedBatch, setSelectedBatch] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Load batch history from backend
   useEffect(() => {
@@ -587,6 +590,21 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
         <p>Wcześniej wykonane analizy CSV — kliknij by załadować raport z mapami</p>
       </div>
 
+      {!loading && history.length > 0 && (
+        <div className="history-search-wrap" style={{ padding: "0 24px 12px", maxWidth: 480 }}>
+          <label htmlFor="history-search" className="visually-hidden">Szukaj po nazwie klienta lub pliku</label>
+          <input
+            id="history-search"
+            type="search"
+            className="history-search-input"
+            placeholder="Szukaj po nazwie klienta lub pliku…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Szukaj po nazwie klienta lub pliku"
+          />
+        </div>
+      )}
+
       {loading ? (
         <div className="loading-container">
           <Spinner color="primary" />
@@ -595,47 +613,83 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
       ) : history.length === 0 ? (
         <div className="empty-state">
           <p>📭 Brak historii analiz</p>
-          <p className="hint">Wykonaj nową analizę CSV w sekcji „Batch CSV"</p>
+          <p className="hint">Wykonaj nową analizę CSV w sekcji „Analiza hurtowa"</p>
         </div>
-      ) : (
-        <div className="history-table">
-          {history.map((item, idx) => (
-            <div key={item.batch_id} className="history-row">
-              <div className="row-number">{idx + 1}</div>
-              <div className="row-content">
-                <div className="row-header">
-                  <div className="timestamp">
-                    📅 {new Date(item.timestamp).toLocaleDateString("pl-PL", {
-                      year: "numeric",
-                      month: "2-digit",
-                      day: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                  <div className="file-name">📄 {item.file_name}</div>
-                </div>
-                <div className="row-stats">
-                  <Badge color="info" pill>
-                    📦 {item.total} działek
-                  </Badge>
-                  <Badge color="success" pill>
-                    ✓ {item.successful} analizowanych
-                  </Badge>
-                </div>
+      ) : (() => {
+        const q = (searchQuery || "").trim().toLowerCase();
+        const filtered = q
+          ? history.filter(
+              (item) =>
+                (item.client_name || "").toLowerCase().includes(q) ||
+                (item.file_name || "").toLowerCase().includes(q)
+            )
+          : history;
+        return (
+          <div className="history-table">
+            {filtered.length === 0 ? (
+              <div className="empty-state" style={{ padding: 24 }}>
+                <p>Brak raportów pasujących do „{searchQuery}"</p>
+                <Button color="secondary" size="sm" onClick={() => setSearchQuery("")} style={{ marginTop: 8 }}>
+                  Wyczyść wyszukiwanie
+                </Button>
               </div>
-              <Button
-                color="primary"
-                size="sm"
-                onClick={() => loadBatchDetails(item.batch_id)}
-                className="view-button"
-              >
-                📊 Otwórz raport
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
+            ) : (
+              filtered.map((item, idx) => (
+                <div key={item.batch_id} className="history-row">
+                  <div className="row-number">{idx + 1}</div>
+                  <div className="row-content">
+                    <div className="row-header">
+                      <div className="timestamp">
+                        📅 {new Date(item.timestamp).toLocaleDateString("pl-PL", {
+                          year: "numeric",
+                          month: "2-digit",
+                          day: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                      <div className="file-name">📄 {item.client_name || item.file_name || "Brak nazwy"}</div>
+                      {item.file_name && item.client_name !== item.file_name && (
+                        <div style={{ fontSize: "0.85em", color: "#64748b" }}>{item.file_name}</div>
+                      )}
+                    </div>
+                    <div className="row-stats">
+                      <Badge color="info" pill>
+                        📦 {item.total} działek
+                      </Badge>
+                      <Badge color="success" pill>
+                        ✓ {item.successful} analizowanych
+                      </Badge>
+                      {item.client_id && (
+                        <Badge color="secondary" pill style={{ marginLeft: 6 }}>CRM</Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    {(!item.client_id && item.batch_id) && (
+                      <Button
+                        color="light"
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); navigate("/kalkulator/klienci", { state: { assignBatchId: item.batch_id, assignBatchFileName: item.file_name } }); }}
+                      >
+                        Przypisz do CRM
+                      </Button>
+                    )}
+                    <Button
+                      color="primary"
+                      size="sm"
+                      onClick={() => loadBatchDetails(item.batch_id)}
+                      className="view-button"
+                    >
+                      📊 Otwórz raport
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

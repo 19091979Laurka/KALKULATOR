@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import "./BatchAnalysisPage.css";
 
 // ─── KSWS coefficients (muszą być zsynchronizowane z backend/modules/property.py) ───
@@ -101,8 +102,8 @@ function buildParcelHtml(parcel, editedLen) {
   </div>
 
   <div class="total-box">
-    <div class="tl">💰 ŁĄCZNE ROSZCZENIE (Track A + Track B)</div>
-    <div class="tv">${(ta + tb).toLocaleString("pl-PL")} PLN</div>
+    <div class="tl">💰 Przedział roszczenia (wybór Track A lub B — nie sumować)</div>
+    <div class="tv">${ta.toLocaleString("pl-PL")} – ${tb.toLocaleString("pl-PL")} PLN</div>
   </div>
 
   <div class="track-grid" style="margin-bottom:18px">
@@ -238,12 +239,17 @@ function downloadCSV(parcels, editedLengths) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 const BatchAnalysisPage = () => {
+  const navigate = useNavigate();
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [results, setResults] = useState(null);
   const [editedLengths, setEditedLengths] = useState({});
   const [activeTab, setActiveTab] = useState("table");
+  const [pastedList, setPastedList] = useState("");
+  const [batchClientName, setBatchClientName] = useState("");
+  const [batchClientId, setBatchClientId] = useState("");
+  const [batchIsFarmer, setBatchIsFarmer] = useState(false);
   const fileInputRef = useRef(null);
 
   const handleFileChange = (e) => {
@@ -257,6 +263,35 @@ const BatchAnalysisPage = () => {
     if (f && (f.name.endsWith(".csv") || f.type === "text/csv")) setFile(f);
   }, []);
 
+  const runPasteAnalysis = useCallback(async () => {
+    const lines = pastedList.trim().split(/\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0 || !batchClientName.trim()) return;
+    setLoading(true);
+    setError(null);
+    setResults(null);
+    setEditedLengths({});
+    try {
+      const header = "parcel_id,obreb,county,municipality";
+      const rows = lines.slice(0, 99).map(l => (l.includes(",") ? l : `${l},,,`));
+      const csv = [header, ...rows].join("\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+      const formData = new FormData();
+      formData.append("file", blob, "batch_dzialki.csv");
+      if (batchClientName.trim()) formData.append("client_name", batchClientName.trim());
+      if (batchClientId.trim()) formData.append("client_id", batchClientId.trim());
+      formData.append("is_farmer", batchIsFarmer ? "1" : "0");
+      const res = await fetch("/api/analyze/batch", { method: "POST", body: formData });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.detail || `HTTP ${res.status}`);
+      if (!json.ok) throw new Error(json.error || "Błąd analizy");
+      setResults(json);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [pastedList, batchClientName, batchClientId, batchIsFarmer]);
+
   const handleSubmit = async () => {
     if (!file) return;
     setLoading(true);
@@ -266,6 +301,9 @@ const BatchAnalysisPage = () => {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      if (batchClientName.trim()) formData.append("client_name", batchClientName.trim());
+      if (batchClientId.trim()) formData.append("client_id", batchClientId.trim());
+      formData.append("is_farmer", batchIsFarmer ? "1" : "0");
       const res = await fetch("/api/analyze/batch", { method: "POST", body: formData });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail || `HTTP ${res.status}`);
@@ -311,10 +349,10 @@ const BatchAnalysisPage = () => {
       {/* ── HEADER ── */}
       <div className="batch-header">
         <h1>📊 Analiza Zbiorcza KSWS</h1>
-        <p>Wgraj CSV z listą działek — kalkulator pobierze dane, wykryje linie i obliczy roszczenia</p>
+        <p>Wgraj CSV lub wklej listę działek. Wyniki pojawią się na stronie; raport zbiorczy zapisze się w <strong>Historii raportów</strong>.</p>
       </div>
 
-      {/* ── UPLOAD SECTION ── */}
+      {/* ── UPLOAD + SETTINGS ── */}
       {!results && (
         <div className="batch-upload-section">
           <div className="upload-box"
@@ -328,7 +366,7 @@ const BatchAnalysisPage = () => {
                 ? `📎 ${file.name}`
                 : "📂 Kliknij lub przeciągnij plik CSV"}
               <div style={{ fontSize: "0.8em", fontWeight: 400, marginTop: 6, color: "#9e8b83" }}>
-                Kolumny: <strong>parcel_id</strong> (wymagany), <strong>obręb</strong> (zalecany przy numerze bez TERYT), powiat, gmina · maks. 99 wierszy
+                Kolumny: <strong>parcel_id</strong> (wymagany), <strong>obręb</strong>, powiat, gmina · maks. 99 wierszy
               </div>
             </label>
             <input
@@ -341,27 +379,70 @@ const BatchAnalysisPage = () => {
             />
           </div>
 
+          <details style={{ marginTop: 12, marginBottom: 12 }}>
+            <summary style={{ cursor: "pointer", fontWeight: 600, color: "#5c3d2e" }}>Albo wklej listę działek</summary>
+            <textarea
+              value={pastedList}
+              onChange={e => setPastedList(e.target.value)}
+              placeholder="np. 142003_2.0002.81/5&#10;81/6&#10;303/4"
+              rows={4}
+              style={{ width: "100%", marginTop: 8, padding: 10, fontFamily: "inherit", fontSize: "0.9em", border: "1px solid #D6CCC2", borderRadius: 8 }}
+            />
+            <button
+              type="button"
+              className="tab-download"
+              disabled={!pastedList.trim() || loading || !batchClientName.trim()}
+              onClick={runPasteAnalysis}
+              style={{ marginTop: 6 }}
+            >
+              {loading ? "Analizuję…" : "Analizuj z listy"}
+            </button>
+          </details>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Nazwa raportu / klienta <span style={{ color: "#c0392b" }}>*</span></label>
+            <input
+              type="text"
+              value={batchClientName}
+              onChange={e => setBatchClientName(e.target.value)}
+              placeholder="np. Kowalski — 99 działek"
+              style={{ width: "100%", maxWidth: 400, padding: "8px 12px", border: "1px solid #D6CCC2", borderRadius: 8, fontSize: "0.95em" }}
+            />
+            <label style={{ display: "block", fontWeight: 600, marginBottom: 6, marginTop: 12 }}>ID klienta (CRM)</label>
+            <input
+              type="text"
+              value={batchClientId}
+              onChange={e => setBatchClientId(e.target.value)}
+              placeholder="opcjonalnie"
+              style={{ width: "100%", maxWidth: 400, padding: "8px 12px", border: "1px solid #D6CCC2", borderRadius: 8, fontSize: "0.95em" }}
+            />
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, cursor: "pointer" }} title="Włącza roszczenie R5 (szkoda rolna) dla działek z kolizją.">
+              <input type="checkbox" checked={batchIsFarmer} onChange={e => setBatchIsFarmer(e.target.checked)} />
+              <span>🌾 Gospodarstwo rolne (R5)</span>
+            </label>
+            <p style={{ fontSize: "0.8rem", color: "#7f8c8d", marginTop: 4, marginBottom: 0 }}>Włącza szkodę rolną (R5) w wyliczeniach dla działek z kolizją.</p>
+          </div>
+
           {error && <div className="error-box">❌ {error}</div>}
 
           <button
             className="submit-btn"
-            disabled={!file || loading}
-            onClick={handleSubmit}>
-            {loading ? "⏳ Analizuję działki..." : "🚀 Analizuj działki"}
+            disabled={(!file && !pastedList.trim()) || loading || !batchClientName.trim()}
+            onClick={file ? handleSubmit : runPasteAnalysis}>
+            {loading ? "⏳ Analizuję działki…" : "🚀 Analizuj działki"}
           </button>
 
           {loading && (
             <p className="file-info">
-              Pobieranie danych z ULDK, OSM Overpass i GUS BDL — może potrwać 1-3 min dla większych zbiorów...
+              Pobieranie z ULDK, OSM, GUS BDL — ok. 1–3 min
             </p>
           )}
 
-          <p className="file-info">
-            Przykład: pełny TERYT <code>142003_2.0002.81/5</code> lub numer + obręb <code>81/5,Baboszewo</code>.{" "}
+          <p className="file-info" style={{ marginTop: 16 }}>
             <button
               type="button"
               className="tab-download"
-              style={{ marginLeft: 6, padding: "2px 8px", fontSize: "0.85em" }}
+              style={{ marginRight: 8 }}
               onClick={() => {
                 const header = "parcel_id,obreb,county,municipality";
                 const rows = ["142003_2.0002.81/5,Baboszewo,,", "303/4,Niedarzyn,,"];
@@ -374,6 +455,9 @@ const BatchAnalysisPage = () => {
                 URL.revokeObjectURL(a.href);
               }}>
               ⬇ Pobierz szablon CSV
+            </button>
+            <button type="button" className="tab-download" onClick={() => navigate("/kalkulator/historia")}>
+              📋 Historia raportów
             </button>
           </p>
         </div>
@@ -408,8 +492,8 @@ const BatchAnalysisPage = () => {
 
           {/* Total box */}
           <div className="summary-box">
-            <div className="summary-title">💰 ŁĄCZNE ROSZCZENIA (Track A + Track B)</div>
-            <div className="summary-value">{Math.round(totals.track_a + totals.track_b).toLocaleString("pl-PL")} PLN</div>
+            <div className="summary-title">💰 Przedział roszczenia (wybór Track A lub B — nie sumować)</div>
+            <div className="summary-value">{Math.round(totals.track_a).toLocaleString("pl-PL")} – {Math.round(totals.track_b).toLocaleString("pl-PL")} PLN</div>
           </div>
 
           {/* Tabs */}
@@ -447,7 +531,7 @@ const BatchAnalysisPage = () => {
                     <th style={{ textAlign: "right" }}>Pas [m²]</th>
                     <th style={{ textAlign: "right" }}>Track A</th>
                     <th style={{ textAlign: "right" }}>Track B</th>
-                    <th style={{ textAlign: "right" }}>Razem</th>
+                    <th style={{ textAlign: "right" }} title="Wybór A lub B — nie sumować">Razem</th>
                     <th style={{ textAlign: "center" }}>Raport</th>
                   </tr>
                 </thead>
@@ -530,7 +614,7 @@ const BatchAnalysisPage = () => {
                         <td style={{ textAlign: "right", color: "#b8963e", fontWeight: 700 }}>
                           {calc.track_b > 0 ? calc.track_b.toLocaleString("pl-PL") : "—"}
                         </td>
-                        <td style={{ textAlign: "right", fontWeight: 800 }}>
+                        <td style={{ textAlign: "right", fontWeight: 800 }} title="Wybór Track A lub B — nie sumować">
                           {(calc.track_a + calc.track_b) > 0
                             ? (calc.track_a + calc.track_b).toLocaleString("pl-PL")
                             : "—"}
@@ -538,7 +622,7 @@ const BatchAnalysisPage = () => {
                         <td style={{ textAlign: "center" }}>
                           <button
                             onClick={() => downloadParcelHtml(p, lineLen > 0 ? lineLen : null)}
-                            title="Pobierz raport HTML"
+                            title="Pobierz prosty raport HTML (z edycją długości). Pełny raport: Historia raportów → Otwórz Raport."
                             style={{
                               background: "linear-gradient(135deg,#5c3d2e,#b8963e)",
                               color: "#fff",
@@ -557,6 +641,11 @@ const BatchAnalysisPage = () => {
                     );
                   })}
                 </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={12} style={{ textAlign: "right", padding: "8px 10px", fontSize: "0.85em", color: "#7f8c8d" }}>— (wybór Track A lub B, nie sumować)</td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}
@@ -573,6 +662,13 @@ const BatchAnalysisPage = () => {
                 <div><strong>Błędów:</strong> {results.summary?.failed}</div>
               </div>
               <hr style={{ margin: "16px 0", border: "0", borderTop: "1px solid #ede8e3" }} />
+              <h3>📄 Różne formy raportów</h3>
+              <ul style={{ fontSize: "0.88em", lineHeight: 1.7, paddingLeft: 20, marginTop: 8 }}>
+                <li><strong>Pobierz HTML</strong> (Tabela działek) — prosty raport jednej działki, uwzględnia Twoją edycję długości linii.</li>
+                <li><strong>Historia raportów → Otwórz Raport</strong> — pełny raport z mapą i R1–R5.</li>
+                <li>Track A i Track B <strong>nie sumują się</strong> — wybiera się jedną ścieżkę (albo A, albo B).</li>
+              </ul>
+              <hr style={{ margin: "16px 0", border: "0", borderTop: "1px solid #ede8e3" }} />
               <h3>📡 Źródła danych</h3>
               <ul style={{ fontSize: "0.88em", lineHeight: 1.8, paddingLeft: 20, marginTop: 8 }}>
                 <li><strong>Geometria działek:</strong> ULDK GUGiK (uldk.gugik.gov.pl)</li>
@@ -585,9 +681,8 @@ const BatchAnalysisPage = () => {
               <h3>✏️ Edycja długości linii</h3>
               <p style={{ fontSize: "0.88em", lineHeight: 1.6, marginTop: 8 }}>
                 Gdy detekcja automatyczna (OSM) nie wykryje linii lub jej długość wynosi 0,
-                należy wpisać długość ręcznie na podstawie geoportalu lub dokumentacji inwestora.
-                Po wpisaniu wartości Track A/B przeliczają się automatycznie w tabeli.
-                Użyj przycisku <strong>"⬇ HTML"</strong> by pobrać raport z zaktualizowanymi wartościami.
+                wpisz długość ręcznie (geoportal lub dokumentacja inwestora). Track A/B przeliczają się w tabeli.
+                Użyj <strong>Pobierz HTML</strong> by zapisać raport z zaktualizowanymi wartościami.
               </p>
             </div>
           )}
