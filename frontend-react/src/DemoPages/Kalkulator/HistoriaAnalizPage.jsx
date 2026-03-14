@@ -4,7 +4,7 @@ import "./KalkulatorPage.css";
 
 const HISTORY_KEY = "ksws_history";
 
-function buildSingleHtml(item) {
+export function buildSingleHtml(item) {
   const mr = item.full_master_record || {};
   const geom = mr.geometry || {};
   const comp = mr.compensation || {};
@@ -26,6 +26,10 @@ function buildSingleHtml(item) {
 
   const parcelGeo = geom.geojson_ll || geom.geojson || null;
   const centroid = geom.centroid_ll || null;
+  const plGeojson = pl.geojson || null;
+  const plFeatures = (plGeojson && plGeojson.features && Array.isArray(plGeojson.features)) ? plGeojson.features : (pl.features && Array.isArray(pl.features)) ? pl.features : [];
+  const powerLinesGeojson = (plGeojson && (plGeojson.features?.length || plGeojson.type === "LineString" || plGeojson.type === "MultiLineString" || plGeojson.coordinates)) ? plGeojson : (plFeatures.length > 0) ? { type: "FeatureCollection", features: plFeatures } : null;
+  const powerLinesVoltage = pl.voltage || null;
 
   return `<!DOCTYPE html>
 <html lang="pl">
@@ -118,6 +122,9 @@ function buildSingleHtml(item) {
     
     .print-btn { display: block; width: 100%; padding: 12px; background: #d4af37; color: white; text-align: center; border-radius: 8px; text-decoration: none; font-weight: 700; margin-top: 20px; cursor: pointer; border: none; font-size: 14px; }
     .print-btn:hover { background: #c5a028; }
+    
+    .no-bg-tooltip { background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; }
+    .no-bg-tooltip::before { display: none !important; }
     
     @media print {
       body { background: white; }
@@ -400,6 +407,35 @@ function buildSingleHtml(item) {
     (function() {
       var centroid = ${JSON.stringify(centroid || null)};
       var geojson = ${JSON.stringify(parcelGeo || null)};
+      var powerLinesGeojson = ${JSON.stringify(powerLinesGeojson || null)};
+      var defaultVoltage = ${JSON.stringify(powerLinesVoltage || null)};
+      function styleByVoltage(voltage) {
+        var v = (voltage || '').toUpperCase();
+        var base = { opacity: 0.9, lineCap: 'round', lineJoin: 'round' };
+        if (v === 'WN') return Object.assign({ color: '#E91E63', weight: 4 }, base);
+        if (v === 'NN' || v === 'N' || v === 'NN') return Object.assign({ color: '#6A1B9A', weight: 2 }, base);
+        return Object.assign({ color: '#9C27B0', weight: 3 }, base);
+      }
+      function addPowerLinesToMap(map, g, defVolt) {
+        if (!g) return;
+        try {
+          L.geoJSON(g, {
+            style: function(f) {
+              var vol = (f && f.properties && f.properties.voltage) || defVolt;
+              return styleByVoltage(vol);
+            },
+            onEachFeature: function(f, layer) {
+              var vol = (f && f.properties && f.properties.voltage) || defVolt || '';
+              var v = vol.toUpperCase();
+              var label = (v === 'WN') ? 'G1' : (v === 'SN') ? 'G3' : (v === 'NN' || v === 'N') ? 'G4' : '';
+              if (label) {
+                 var c = styleByVoltage(v).color;
+                 layer.bindTooltip('<span style="color:'+c+';font-weight:bold;font-size:10px;background:rgba(255,255,255,0.85);padding:1px 3px;border-radius:3px;">'+label+'</span>', { permanent: true, direction: 'center', className: 'no-bg-tooltip' });
+              }
+            }
+          }).addTo(map);
+        } catch (e) {}
+      }
       function init() {
         if (typeof L === 'undefined') { setTimeout(init, 300); return; }
         var el = document.getElementById('map');
@@ -408,27 +444,35 @@ function buildSingleHtml(item) {
         if (Array.isArray(centroid) && centroid.length >= 2 && centroid[0] != null) {
           center = [Number(centroid[1]), Number(centroid[0])];
         }
-        var map = L.map(el, { zoomControl: true, attributionControl: false });
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-          subdomains: 'abcd',
-          maxZoom: 19
-        }).addTo(map);
-        L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', {
-          layers: 'dzialki,numery_dzialek',
-          format: 'image/png',
-          transparent: true,
-          opacity: 0.75
-        }).addTo(map);
-        L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-          opacity: 0.85
-        }).addTo(map);
+        var map = L.map(el, { zoomControl: true, attributionControl: false, scrollWheelZoom: true, dragging: true, doubleClickZoom: true });
+        
+        var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '© Esri' }).addTo(map);
+        var kiutLayer = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu', { layers:'przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy', format:'image/png', transparent:true, opacity:1.0 }).addTo(map);
+        var egibLayer = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.8 }).addTo(map);
+        var powerLayer = L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png', { maxZoom:19, opacity:1.0, attribution:'© OpenInfra' }).addTo(map);
+
+        L.control.layers(
+          { 'Satelita (Esri)': satLayer },
+          {
+            '⚡ Raster z KIUT (GUGiK)': kiutLayer,
+            '⚡ Vektory OSM (Power)': powerLayer,
+            '🗺️ Granice EGiB': egibLayer
+          },
+          { position: 'topright', collapsed: true }
+        ).addTo(map);
+
+        L.circle(center, {
+          radius: 200, color: '#ffffff', fillColor: 'transparent', weight: 1.5, dashArray: '5, 5'
+        }).addTo(map).bindTooltip("Zasięg analizy promieniowej (200m)", { sticky: true, className: 'no-bg-tooltip', direction: 'top' });
+
         if (geojson && geojson.coordinates) {
           var layer = L.geoJSON(geojson, {
-            style: { color: '#b8963e', weight: 3, fillColor: '#b8963e', fillOpacity: 0.15 }
+            style: { color: collision ? '#ff0055' : '#00ffff', weight: 4, fillOpacity: 0.15 }
           }).addTo(map);
+          addPowerLinesToMap(map, powerLinesGeojson, defaultVoltage);
           try { map.fitBounds(layer.getBounds(), { padding: [16, 16] }); } catch(e) { map.setView(center, 15); }
         } else {
+          addPowerLinesToMap(map, powerLinesGeojson, defaultVoltage);
           map.setView(center, 15);
         }
       }
@@ -473,18 +517,23 @@ export default function HistoriaAnalizPage() {
   }, []);
 
   return (
-    <div className="ksws-card" style={{ maxWidth: 900, margin: "0 auto" }}>
+    <>
+      <header className="ksws-page-header">
+        <h1 className="ksws-page-header-title">📋 Historia analiz</h1>
+        <p className="ksws-page-header-sub">Pojedyncze analizy z zakładki Analiza działki (zapis w przeglądarce). Kliknij wiersz → podgląd raportu z mapą i liniami energetycznymi.</p>
+      </header>
+      <div className="ksws-card" style={{ maxWidth: 900, margin: "0 auto" }}>
       <div className="ksws-card-header">
         <span className="ksws-card-header-icon">📋</span>
         <div>
-          <div className="ksws-card-header-title">Historia analiz</div>
-          <div className="ksws-card-header-sub">Lista analiz pojedynczych · kliknij, aby otworzyć podgląd raportu z mapą</div>
+          <div className="ksws-card-header-title">Lista analiz</div>
+          <div className="ksws-card-header-sub">Kliknij wiersz, aby otworzyć raport z mapą i wyliczeniami w nowej karcie.</div>
         </div>
       </div>
       <div className="ksws-card-body">
         {history.length === 0 ? (
           <div className="ksws-empty" style={{ padding: "32px 0" }}>
-            <div className="ksws-empty-sub">Brak zapisanych analiz. Przejdź do Analiza działki i wygeneruj raport KSWS.</div>
+            <div className="ksws-empty-sub">Brak zapisanych analiz. Wejdź w <strong>Analiza działki</strong>, wpisz działkę i wygeneruj raport — wtedy wpis pojawi się tutaj.</div>
             <button type="button" className="ksws-btn ksws-btn-primary" style={{ marginTop: 16 }} onClick={() => navigate("/kalkulator/analiza")}>
               Analiza działki
             </button>
@@ -546,5 +595,6 @@ export default function HistoriaAnalizPage() {
         )}
       </div>
     </div>
+    </>
   );
 }

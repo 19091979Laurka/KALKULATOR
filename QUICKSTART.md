@@ -20,7 +20,8 @@ Expected output: 3 real scenarios with calculations totaling **14.23M PLN** 💰
 
 ### Step 1: Backend (Terminal A)
 ```bash
-cd /Users/szwrk/Documents/GitHub/KALKULATOR
+cd <katalog-główny-projektu-KALKULATOR>
+# opcjonalnie: source .venv/bin/activate
 uvicorn backend.main:app --reload --port 8080
 ```
 
@@ -74,6 +75,16 @@ curl -X POST http://localhost:8080/api/valuation \
 2. Enter parcel ID (or test data)
 3. Click "Analizuj"
 4. See results with map visualization
+
+---
+
+## ⚠️ Local nie działa?
+
+- **Backend musi działać pierwszy** — frontend (3001) przekierowuje `/api` na `localhost:8080`. Bez backendu na 8080 formularz i analiza się nie połączą.
+- **Jedna komenda (oba serwisy):** w katalogu głównym repo uruchom `./START_SYSTEM.sh` (wymaga: Python z venv, `npm install` w `frontend-react`).
+- **Dwa terminale:** Terminal 1: `uvicorn backend.main:app --reload --port 8080`. Terminal 2: `cd frontend-react && npm start`.
+- **Port 8080 zajęty?** `lsof -ti :8080 | xargs kill -9` albo uruchom backend na innym porcie i w `frontend-react/vite.config.js` zmień proxy na ten port.
+- **Błąd Pythona/uvicorn?** Zainstaluj zależności: `pip install -r requirements.txt` (w venv), potem ponownie `uvicorn backend.main:app --port 8080`.
 
 ---
 

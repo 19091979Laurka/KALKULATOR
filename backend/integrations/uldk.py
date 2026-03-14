@@ -31,6 +31,8 @@ class ULDKClient(ULDKClientFixed):
         try:
             logger.info("ULDK GetParcelByIdOrNr response: status=%s len=%s", resp.status_code, len(resp.text or ""))
             parsed = self._parse_response(resp.text, None)
+            if parsed:
+                parsed["ok"] = bool(parsed.get("geometry"))
             if parsed and parsed.get("ok"):
                 logger.info("ULDK GetParcelByIdOrNr OK: teryt=%s commune=%s", parsed.get("teryt"), parsed.get("commune"))
                 return parsed

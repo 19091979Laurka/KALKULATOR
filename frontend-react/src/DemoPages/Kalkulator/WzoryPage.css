@@ -4,10 +4,17 @@
 
 .wz-root {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
   width: 100%;
   background: #f4f6fb;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+.wz-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
   overflow: hidden;
 }
 
@@ -367,7 +374,7 @@ textarea.wz-input {
 
 /* ── RESPONSIVE ───────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .wz-root { flex-direction: column; }
+  .wz-body { flex-direction: column; }
   .wz-sidebar { width: 100%; height: 220px; min-width: unset; }
   .wz-row { grid-template-columns: 1fr; }
   .wz-form-wrap { padding: 16px; }

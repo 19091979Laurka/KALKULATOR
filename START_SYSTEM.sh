@@ -1,10 +1,17 @@
 #!/bin/bash
 
 # KALKULATOR Full System Startup Script
-# Run this to start backend + frontend together
+# Run this to start backend + frontend together (from repo root)
 
-PROJECT_DIR="/Users/szwrk/Documents/GitHub/KALKULATOR"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
+
+# Opcjonalnie: aktywuj venv jeśli istnieje (backend wymaga Pythona)
+if [ -d ".venv/bin" ]; then
+  source .venv/bin/activate
+elif [ -d "venv/bin" ]; then
+  source venv/bin/activate
+fi
 
 echo "════════════════════════════════════════════════════════════════"
 echo "  🚀 KALKULATOR ROSZCZEŃ - SYSTEM STARTUP"

@@ -484,17 +484,19 @@ def generate_pdf_cards(parcels_data: list, parcel_ids: list) -> bytes:
     story = []
     W_txt = W - 3*cm
 
-    # Cover
-    total_a = sum((((p.get("compensation") or {}).get("track_a") or {}).get("total") or 0) for p in parcels_data)
-    total_b = sum((((p.get("compensation") or {}).get("track_b") or {}).get("total") or 0) for p in parcels_data)
-    story.append(Spacer(1, 50*mm))
-    story.append(Paragraph("ANALIZA ODSZKODOWAWCZA", S["cover_title"]))
-    story.append(Paragraph("Oferty hurtowe · karty działek", S["cover_sub"]))
-    story.append(Spacer(1, 10*mm))
-    story.append(Paragraph(f"{len(parcels_data)} działek · Razem: <b>{total_a + total_b:,.2f} PLN</b>".replace(",", " "), S["cover_det"]))
-    story.append(Spacer(1, 6*mm))
-    story.append(Paragraph(f"Data: <b>{datetime.now().strftime('%d.%m.%Y')}</b>", S["cover_det"]))
-    story.append(PageBreak())
+    # Cover (tylko widoczny przy >1 działek)
+    if len(parcels_data) > 1:
+        total_a = sum((((p.get("compensation") or {}).get("track_a") or {}).get("total") or 0) for p in parcels_data)
+        total_b = sum((((p.get("compensation") or {}).get("track_b") or {}).get("total") or 0) for p in parcels_data)
+        story.append(Spacer(1, 40*mm))
+        story.append(Paragraph("ANALIZA ODSZKODOWAWCZA", S["h1"]))
+        story.append(Spacer(1, 4*mm))
+        story.append(Paragraph("Oferty hurtowe · karty działek", S["center"]))
+        story.append(Spacer(1, 10*mm))
+        story.append(Paragraph(f"{len(parcels_data)} działek · Razem: <b>{total_a + total_b:,.2f} PLN</b>".replace(",", " "), S["bc"]))
+        story.append(Spacer(1, 6*mm))
+        story.append(Paragraph(f"Data: <b>{datetime.now().strftime('%d.%m.%Y')}</b>", S["center"]))
+        story.append(PageBreak())
 
     VOLT_LABEL = {"WN": "WN >110 kV", "SN": "SN 1–110 kV", "nN": "nN <1 kV"}
 

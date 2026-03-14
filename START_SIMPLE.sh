@@ -1,8 +1,9 @@
 #!/bin/bash
 
-# Simple startup - just tell user what to do
+# Simple startup - just tell user what to do (run from repo root)
 
-cd /Users/szwrk/Documents/GitHub/KALKULATOR
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 cat << 'EOF'
 
@@ -15,10 +16,9 @@ cat << 'EOF'
 WINDOW 1 - BACKEND API:
 ─────────────────────────────────────────────────────────────────────
 
-Paste this command:
-
-    cd /Users/szwrk/Documents/GitHub/KALKULATOR
-    uvicorn backend.main:app --port 8080
+  cd <katalog-główny-KALKULATOR>    # np. cd ~/Documents/GitHub/KALKULATOR
+  source .venv/bin/activate         # opcjonalnie, jeśli masz venv
+  uvicorn backend.main:app --port 8080
 
 Wait for:
     Application startup complete [uvicorn/main] Uvicorn running on http://0.0.0.0:8080
@@ -30,10 +30,9 @@ Then move to WINDOW 2.
 WINDOW 2 - FRONTEND REACT:
 ─────────────────────────────────────────────────────────────────────
 
-Paste this command:
+Paste this command (from repo root):
 
-    cd /Users/szwrk/Documents/GitHub/KALKULATOR/frontend-react
-    npm start
+    cd frontend-react && npm start
 
 Wait for browser to open at:
     http://localhost:3001

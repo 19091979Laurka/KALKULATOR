@@ -502,11 +502,15 @@ export default function WzoryPage() {
 
   return (
     <div className="wz-root">
-
+      <header className="ksws-page-header">
+        <h1 className="ksws-page-header-title">📝 Wzory dokumentów</h1>
+        <p className="ksws-page-header-sub">Szablony pism do starostwa, operatora sieci i KW · wypełnij pola, wygeneruj dokument do druku</p>
+      </header>
+      <div className="wz-body">
       {/* ══ LEFT — template picker ══ */}
       <aside className="wz-sidebar">
         <div className="wz-sidebar-title">
-          <span>📄</span> Wzory dokumentów
+          <span>📄</span> Wybór wzoru
         </div>
         <div className="wz-template-list">
           {TEMPLATES.map((t) => (
@@ -570,6 +574,7 @@ export default function WzoryPage() {
           </div>
         )}
       </main>
+      </div>
     </div>
   );
 }

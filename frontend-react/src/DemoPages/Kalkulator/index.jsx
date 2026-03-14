@@ -11,9 +11,9 @@ import KalkulatorLayout from "./KalkulatorLayout.jsx";
 import PrintPreviewPage from "./PrintPreviewPage.jsx";
 
 /**
- * Logika zakładek:
- * - Ze strony głównej (Layout): Batch CSV = wgranie pliku (BatchAnalysisPage), Historia zbiorcza = raporty batch z mapami (BatchHistoryPage).
- * - Z Analiza działki (KalkulatorPage): Historia działek = pojedyncze analizy (localStorage), Oferty hurtowe · CSV = wgranie CSV + karty batch (BatchCSVSection).
+ * Logika zakładek i przepływ: docs/KALKULATOR_PRZEPLYW_ZAKLADEK.md
+ * - Jedna działka: Analiza działki → (localStorage) → Historia analiz → raport-druk
+ * - Wiele działek: Analiza hurtowa → (backend) → Historia raportów → raport-druk
  */
 const Kalkulator = () => {
   return (

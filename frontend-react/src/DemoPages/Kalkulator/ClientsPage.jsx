@@ -247,6 +247,11 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
 
   return (
     <div className="cp-root">
+      <header className="ksws-page-header">
+        <h1 className="ksws-page-header-title">👥 Klienci</h1>
+        <p className="ksws-page-header-sub">Baza klientów i spraw · przypisuj analizy działek i dokumenty · powiązanie z Historii raportów</p>
+      </header>
+      <div className="cp-body">
       {/* LEFT SIDEBAR */}
       <aside className="cp-sidebar">
         <div className="cp-sidebar-top">
@@ -732,6 +737,7 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
           </div>
         )}
       </main>
+      </div>
     </div>
   );
 }

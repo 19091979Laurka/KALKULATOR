@@ -279,6 +279,11 @@ export default function LandingPage() {
               <span>📊</span> Analiza zbiorcza CSV
             </button>
           </div>
+          <div className="lp-hero-flow-hint">
+            <span className="lp-flow-item">Jedna działka → <strong>Analiza działki</strong> → Historia analiz → raport do druku</span>
+            <span className="lp-flow-sep"> · </span>
+            <span className="lp-flow-item">Wiele działek → <strong>Analiza hurtowa</strong> → Historia raportów → raport zbiorczy</span>
+          </div>
           <div className="lp-hero-scroll-hint">
             <span>Przewiń, aby dowiedzieć się więcej</span>
             <div className="lp-scroll-arrow">↓</div>
@@ -624,30 +629,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
-      {/* ══ FOOTER ═══════════════════════════════════════════════════════ */}
-      <footer className="lp-footer">
-        <div className="lp-footer-inner">
-          <div className="lp-footer-brand">
-            <div className="lp-footer-logo">
-              <span className="lp-footer-symbol">§</span>
-              <div>
-                <div className="lp-footer-name">SZUWARA</div>
-                <div className="lp-footer-tagline">Kancelaria Prawno-Podatkowa</div>
-              </div>
-            </div>
-            <div className="lp-footer-contact">
-              <a href="https://www.kancelaria-szuwara.pl" target="_blank" rel="noopener noreferrer">www.kancelaria-szuwara.pl</a>
-              <a href="tel:790411412">790 411 412</a>
-            </div>
-          </div>
-          <div className="lp-footer-note">
-            Narzędzie analityczne · Nie zastępuje operatu szacunkowego<br />
-            Dane: ULDK GUGiK · GUS BDL · GESUT · BDOT10k · OSM · Geoportal
-          </div>
-          <div className="lp-footer-version">KSWS v3.0 · Track A/B · GUGiK</div>
-        </div>
-      </footer>
 
     </div>
   );

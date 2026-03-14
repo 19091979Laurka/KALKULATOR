@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import { Spinner, Badge, Button } from "reactstrap";
 import "./BatchHistoryPage.css";
+import { buildSingleHtml } from "./HistoriaAnalizPage";
+
+/* Pasek listy: history-row--replaceable — Manus może podmienić na własny komponent (zachowaj: duża nazwa klienta, PRZYPISZ DO CRM, Otwórz raport). */
 
 export default function BatchHistoryPage() {
+  const navigate = useNavigate();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedBatch, setSelectedBatch] = useState(null);
@@ -54,10 +58,12 @@ export default function BatchHistoryPage() {
 
   const displayBatchReport = (batchData) => {
     // Reuse the same report generation logic from KalkulatorPage
-    const results = batchData.results || [];
-    const dateStr = new Date(batchData.timestamp).toLocaleDateString("pl-PL");
+    const results = Array.isArray(batchData?.results) ? batchData.results : [];
+    const dateStr = new Date(batchData?.timestamp || Date.now()).toLocaleDateString("pl-PL");
+    const isFarmerReport = batchData?.is_farmer === true;
 
     const fmtN = (v) => (v || 0).toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const safeScriptJson = (obj) => JSON.stringify(obj).replace(/<\/script/gi, "<\\/script");
     const fmtI = (v) => Math.round(v || 0).toLocaleString("pl-PL");
     const VOLT_LABEL = { WN: "WN >110 kV", SN: "SN 1–110 kV", nN: "nN <1 kV" };
 
@@ -104,11 +110,12 @@ export default function BatchHistoryPage() {
       const ta = (d.compensation?.track_a) || {};
       const tb = (d.compensation?.track_b) || {};
       const pl = d.infrastructure?.power_lines || {};
+      const power = d.infrastructure?.power || {};
       const ksws = d.ksws || {};
       const geom = d.geometry || {};
       const md = d.market_data || {};
       const meta = d.parcel_metadata || {};
-      const collision = !!pl.detected;
+      const collision = !!(pl.detected || power.exists);
       const volt = VOLT_LABEL[pl.voltage] || pl.voltage || "—";
       const accentColor = collision ? "#e74c3c" : "#27ae60";
       
@@ -119,13 +126,16 @@ export default function BatchHistoryPage() {
 
       return `
       <div class="parcel-card page-break" style="page-break-inside:avoid;break-inside:avoid; background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #eee; margin-bottom: 30px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 12px; margin-bottom: 20px;">
-          <div>
-            <span style="background: #1a2a3a; color: white; padding: 4px 10px; border-radius: 6px; font-weight: 700; margin-right: 10px;">#${i + 1}</span>
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 2px solid #eee; padding-bottom: 12px; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <span style="background: #1a2a3a; color: white; padding: 6px 12px; border-radius: 6px; font-weight: 800; font-size: 14px;">RAPORT DZIAŁKI ${i + 1}</span>
             <span style="font-size: 18px; font-weight: 800; color: #2c3e50;">${p.parcel_id || "—"}</span>
           </div>
-          <div style="background: ${collision ? '#ffebee' : '#e8f5e9'}; color: ${collision ? '#c0392b' : '#27ae60'}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; border: 1px solid ${collision ? '#ffcdd2' : '#c8e6c9'};">
-            ${collision ? "⚡ KOLIZJA" : "✓ BEZ KOLIZJI"}
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <button type="button" class="btn-pdf no-print" data-parcel-index="${i}" style="background: linear-gradient(135deg,#b8963e,#d4af62); color: white; border: none; padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 8px rgba(184,150,62,0.4);">📄 Otwórz Raport</button>
+            <span style="background: ${collision ? '#ffebee' : '#e8f5e9'}; color: ${collision ? '#c0392b' : '#27ae60'}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; border: 1px solid ${collision ? '#ffcdd2' : '#c8e6c9'};">
+              ${collision ? "⚡ KOLIZJA" : "✓ BEZ KOLIZJI"}
+            </span>
           </div>
         </div>
 
@@ -225,12 +235,12 @@ export default function BatchHistoryPage() {
         <td style="padding:8px 12px;text-align:center;">
           <span style="padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;background:#c62828;color:white;">BŁĄD</span>
         </td>
-        <td colspan="3" style="padding:8px 12px;font-size:12px;color:#c62828;" title="${(d.message || p.error || "").replace(/"/g, "&quot;")}">— ${errShort}${(d.message || p.error || "").length > 40 ? "…" : ""}</td>
+        <td colspan="2" style="padding:8px 12px;font-size:12px;color:#c62828;" title="${(d.message || p.error || "").replace(/"/g, "&quot;")}">— ${errShort}${(d.message || p.error || "").length > 40 ? "…" : ""}</td>
       </tr>`;
       }
       const ta = d.compensation?.track_a?.total || 0;
       const tb = d.compensation?.track_b?.total || 0;
-      const collision = !!d.infrastructure?.power_lines?.detected;
+      const collision = !!(d.infrastructure?.power_lines?.detected || d.infrastructure?.power?.exists);
       return `<tr style="border-bottom:1px solid #f0f0f0;">
         <td style="padding:8px 12px;font-weight:600;">#${i+1} ${p.parcel_id || ""}</td>
         <td style="padding:8px 12px;text-align:center;">
@@ -240,7 +250,6 @@ export default function BatchHistoryPage() {
         </td>
         <td style="padding:8px 12px;text-align:right;color:#27ae60;font-weight:700;">${fmtN(ta)} PLN</td>
         <td style="padding:8px 12px;text-align:right;color:#e67e22;font-weight:700;">${fmtN(tb)} PLN</td>
-        <td style="padding:8px 12px;text-align:right;font-weight:800;font-size:14px;">${fmtN(ta + tb)} PLN</td>
       </tr>`;
     }).join("\n");
 
@@ -253,19 +262,22 @@ export default function BatchHistoryPage() {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3d2319;font-size:14px;line-height:1.5}
+body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#fff;color:#3d2319;font-size:14px;line-height:1.5}
 @media print{
-  body{background:white}
+  body{background:#fff}
   .no-print{display:none!important}
   .parcel-card{page-break-inside:avoid;break-inside:avoid}
   .page-break{page-break-before:always;break-before:always}
   .report-header,.kpi-card,.razem-box,.track-a,.track-b,.collision-badge{
     -webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
-.wrap{max-width:1100px;margin:0 auto;padding:28px 20px 60px}
+.wrap{max-width:1100px;margin:0 auto;padding:28px 20px 60px;background:#fff}
+.leaflet-container{background:#fff !important}
+#collective-map,.parcel-card [id^="parcel-map-"]{background:#fff;min-height:200px}
+.summary-table tfoot tr{background:#fff;border-top:2px solid #3d2319}
 .print-bar{text-align:right;margin-bottom:20px}
 .btn-print{background:linear-gradient(135deg,#b8963e,#d4af62);color:white;border:none;padding:10px 28px;border-radius:50px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(184,150,62,.4)}
 .report-header{background:linear-gradient(135deg,#1a1a2e 0%,#2c3e50 60%,#1a2a5c 100%);color:white;padding:36px 44px;border-radius:16px;margin-bottom:28px;box-shadow:0 8px 30px rgba(0,0,0,.25);display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap}
@@ -319,9 +331,12 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
 .summary-table{width:100%;border-collapse:collapse;background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.07)}
 .summary-table thead tr{background:#3d2319;color:white}
 .summary-table thead th{padding:11px 12px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px}
-.summary-table tfoot tr{background:#EDEDE9;border-top:2px solid #3d2319}
+.summary-table tfoot tr{background:#fff;border-top:2px solid #3d2319}
 .summary-table tfoot td{padding:12px;font-weight:800;font-size:14px}
 .report-footer{text-align:center;margin-top:40px;font-size:11px;color:#95a5a6;padding:20px;border-top:1px solid #e8ecf0}
+@media (max-width:640px){.track-explanation-grid{grid-template-columns:1fr!important}}
+.no-bg-tooltip { background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; }
+.no-bg-tooltip::before { display: none !important; }
 </style>
 </head>
 <body>
@@ -347,12 +362,19 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
           <div class="meta-label">⚡ Kolizje</div>
           <div class="meta-value">${collisionCount}</div>
         </div>
+        ${isFarmerReport ? `
+        <div class="meta-item">
+          <div class="meta-label">🌾 Kontekst</div>
+          <div class="meta-value">Gospodarstwo rolne</div>
+        </div>
+        ` : ''}
       </div>
     </div>
     <div class="header-badge-col">
+      ${isFarmerReport ? '<span class="badge" style="background:rgba(46,125,50,0.4);">🌾 GOSP. ROLNE</span>' : ''}
       <div style="text-align:right;margin-bottom:12px;">
         <div style="font-size:13px;color:#b8963e;font-weight:700;">www.kancelaria-szuwara.pl</div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.7);margin-top:2px;">tel. 790 411 412</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.7);margin-top:2px;">tel. 500 013 269</div>
       </div>
       <span class="badge">✓ REAL DATA POLICY</span>
       <span class="badge">KSWS-V.5 · TK P 10/16</span>
@@ -367,21 +389,51 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
     <div class="kpi-card blue"><div><div class="kpi-label">Track A · Sąd</div><div class="kpi-value sm">${fmtN(totalA)} PLN</div><div class="kpi-sub">ścieżka sądowa</div></div><div class="kpi-icon">⚖️</div></div>
     <div class="kpi-card purple"><div><div class="kpi-label">Track B · Neg.</div><div class="kpi-value sm">${fmtN(totalB)} PLN</div><div class="kpi-sub">negocjacje</div></div><div class="kpi-icon">🤝</div></div>
   </div>
-  <div class="razem-banner">
-    <div class="razem-banner-label">💰 Razem odszkodowanie (Track A + B)</div>
-    <div class="razem-banner-amount">${fmtN(totalA + totalB)} PLN</div>
+  <div class="track-explanation" style="background:#f8f9fc;border:1px solid #e0e0e0;border-radius:12px;padding:20px 24px;margin-bottom:24px;">
+    <div style="font-size:14px;font-weight:800;color:#3d2319;margin-bottom:12px;">⚖️ Track A i Track B — o co chodzi?</div>
+    <div class="track-explanation-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;font-size:13px;line-height:1.5;">
+      <div style="padding:14px;background:#e8f5e9;border-radius:10px;border-left:4px solid #27ae60;">
+        <strong style="color:#1b5e20;">Track A — ścieżka sądowa</strong><br>
+        Szacunek odszkodowania w razie dochodzenia roszczeń na drodze sądowej (art. 124, 305² KC, 225 KC). Stosuje się <strong>albo</strong> tę ścieżkę <strong>albo</strong> Track B — nie sumuje się obu.
+        <div style="margin-top:10px;font-weight:800;color:#27ae60;">Łącznie Track A: ${fmtN(totalA)} PLN</div>
+      </div>
+      <div style="padding:14px;background:#fff3e0;border-radius:10px;border-left:4px solid #e67e22;">
+        <strong style="color:#e65100;">Track B — negocjacje</strong><br>
+        Szacunek kwoty do negocjacji z operatorem (ugoda, wykup, odszkodowanie poza sądem). Stosuje się <strong>albo</strong> tę ścieżkę <strong>albo</strong> Track A — nie sumuje się obu.
+        <div style="margin-top:10px;font-weight:800;color:#e67e22;">Łącznie Track B: ${fmtN(totalB)} PLN</div>
+      </div>
+    </div>
+    <p style="font-size:12px;color:#7f8c8d;margin:12px 0 0 0;">W zestawieniu zbiorczym poniżej podane są obie kwoty dla każdej działki; w praktyce wybiera się jedną ze ścieżek.</p>
+  </div>
+
+  <div class="charts-row section-title">📈 Podsumowanie — wykresy</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-bottom:28px;">
+    <div style="background:#fff;border-radius:12px;padding:16px;border:1px solid #e8eaf0;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+      <div style="font-size:12px;font-weight:700;color:#3d2319;margin-bottom:12px;">Kolizja vs brak kolizji</div>
+      <canvas id="chart-collision" width="260" height="200" style="max-width:100%;height:auto;"></canvas>
+    </div>
+    <div style="background:#fff;border-radius:12px;padding:16px;border:1px solid #e8eaf0;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+      <div style="font-size:12px;font-weight:700;color:#3d2319;margin-bottom:12px;">Track A vs Track B (sumy)</div>
+      <canvas id="chart-tracks" width="260" height="200" style="max-width:100%;height:auto;"></canvas>
+    </div>
+    <div style="background:#fff;border-radius:12px;padding:16px;border:1px solid #e8eaf0;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+      <div style="font-size:12px;font-weight:700;color:#3d2319;margin-bottom:12px;">Proporcja Track A / Track B</div>
+      <canvas id="chart-counts" width="260" height="200" style="max-width:100%;height:auto;"></canvas>
+    </div>
   </div>
 
   <!-- COLLECTIVE MAP VISUALIZATION -->
-  <div class="section-title">🗺️ Mapa zbiorcza wszystkich działek</div>
-  <div id="collective-map" style="height:500px;width:100%;margin:0 0 30px 0;border-radius:10px;overflow:hidden;box-shadow:0 4px 15px rgba(0,0,0,0.1);"></div>
+  <div class="section-title">🗺️ Napowietrzne linie energetyczne — mapa zbiorcza</div>
+  <p style="font-size:12px;color:#7f8c8d;margin:-8px 0 12px 0;">Infrastruktura · granice działek i linie WN/SN/nN z legendą G1/G3/G4</p>
+  <div id="collective-map" style="height:500px;width:100%;margin:0 0 30px 0;border-radius:10px;overflow:hidden;box-shadow:0 4px 15px rgba(0,0,0,0.1);background:#fff;"></div>
 
   <!-- PER-PARCEL CARDS -->
   <div class="section-title">📋 Analiza poszczególnych działek</div>
   ${parcelCards}
 
-  <!-- SUMMARY TABLE -->
+  <!-- SUMMARY TABLE (jedno zestawienie zbiorcze) -->
   <div class="section-title page-break">📊 Zestawienie zbiorcze</div>
+  <p style="font-size:12px;color:#7f8c8d;margin-bottom:12px;">Track A = ścieżka sądowa, Track B = negocjacje — stosuje się jedną z opcji (albo/albo), nie sumę.</p>
   <table class="summary-table">
     <thead>
       <tr>
@@ -389,16 +441,14 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
         <th>Status</th>
         <th>Track A — Sąd</th>
         <th>Track B — Negocjacje</th>
-        <th>RAZEM</th>
       </tr>
     </thead>
     <tbody>${summaryRows}</tbody>
     <tfoot>
       <tr>
-        <td colspan="2">SUMA (${results.length} działek)</td>
+        <td colspan="2">Suma (${results.length} działek)</td>
         <td style="text-align:right;color:#27ae60;">${fmtN(totalA)} PLN</td>
         <td style="text-align:right;color:#e67e22;">${fmtN(totalB)} PLN</td>
-        <td style="text-align:right;color:#3d2319;">${fmtN(totalA + totalB)} PLN</td>
       </tr>
     </tfoot>
   </table>
@@ -410,7 +460,8 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
       <span style="color:#b8963e;font-size:11px;">Kancelaria Prawno-Podatkowa</span>
     </div>
     <a href="https://www.kancelaria-szuwara.pl" style="color:#b8963e;font-weight:700;">www.kancelaria-szuwara.pl</a>
-    &nbsp;·&nbsp; tel. 790 411 412<br>
+    &nbsp;·&nbsp; tel. 500 013 269<br>
+    Kancelaria Prawno Podatkowa Rafał Szuwara · Created by Rafał Szuwara<br>
     Raport wygenerowany: <strong>${dateStr}</strong> · KALKULATOR KSWS v3.0 ·
     Dane: ULDK GUGiK, OSM Overpass, GUS BDL · Metodyka: KSWS-V.5 · TK P 10/16<br>
     <em>Dokument ma charakter informacyjno-analityczny i nie zastępuje operatu szacunkowego.</em>
@@ -419,21 +470,84 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
 
 <script>
 (function() {
-  var PARCEL_MAPS = ${JSON.stringify(results.map(p => {
+  var PARCEL_MAPS = ${safeScriptJson(results.map(p => {
     const d = p.master_record || p.data || {};
+    const pl = d.infrastructure?.power_lines || {};
+    const power = d.infrastructure?.power || {};
+    const energie = d.infrastructure?.energie || {};
+    const geojson = pl.geojson || energie.geojson;
+    const features = (geojson && geojson.features && Array.isArray(geojson.features)) ? geojson.features : (pl.features && Array.isArray(pl.features)) ? pl.features : (energie.features && Array.isArray(energie.features)) ? energie.features : [];
+    var powerLinesGeojson = null;
+    if (geojson && (geojson.features?.length || geojson.type === 'LineString')) powerLinesGeojson = geojson;
+    else if (features.length) powerLinesGeojson = { type: 'FeatureCollection', features: features };
     return {
       centroid: d.geometry?.centroid_ll,
       geojson: d.geometry?.geojson_ll || d.geometry?.geojson,
-      collision: !!d.infrastructure?.power_lines?.detected,
+      collision: !!(pl.detected || power.exists),
+      voltage: pl.voltage || energie.voltage || null,
+      powerLinesGeojson: powerLinesGeojson,
     };
   }))};
+  var RESULTS_FOR_PDF = ${safeScriptJson(results.map(p => ({
+    parcel_id: p.parcel_id,
+    master_record: p.master_record || p.data || {},
+  })))};
+
+  function styleByVoltage(voltage) {
+    var v = (voltage || '').toUpperCase();
+    var base = { opacity: 0.9, lineCap: 'round', lineJoin: 'round', pane: 'powerLinesPane' };
+    if (v === 'WN') return Object.assign({ color: '#E91E63', weight: 4 }, base);
+    if (v === 'NN' || v === 'N') return Object.assign({ color: '#6A1B9A', weight: 2 }, base);
+    return Object.assign({ color: '#9C27B0', weight: 3 }, base);
+  }
+  function ensurePowerLinesPane(map) {
+    if (!map.getPane('powerLinesPane')) {
+      map.createPane('powerLinesPane');
+      map.getPane('powerLinesPane').style.zIndex = 650;
+    }
+  }
+  function addPowerLinesToMap(map, powerLinesGeojson, defaultVoltage) {
+    if (!powerLinesGeojson) return;
+    ensurePowerLinesPane(map);
+    try {
+      L.geoJSON(powerLinesGeojson, {
+        style: function(f) {
+          var vol = (f && f.properties && f.properties.voltage) || defaultVoltage;
+          return styleByVoltage(vol);
+        },
+        onEachFeature: function(f, layer) {
+          var vol = (f && f.properties && f.properties.voltage) || defaultVoltage || '';
+          var v = vol.toUpperCase();
+          var label = (v === 'WN') ? 'G1' : (v === 'SN') ? 'G3' : (v === 'NN' || v === 'N') ? 'G4' : '';
+          if (label) {
+             var c = styleByVoltage(v).color;
+             layer.bindTooltip('<span style="color:'+c+';font-weight:bold;font-size:10px;background:rgba(255,255,255,0.85);padding:1px 3px;border-radius:3px;">'+label+'</span>', { permanent: true, direction: 'center', className: 'no-bg-tooltip' });
+          }
+        }
+      }).addTo(map);
+    } catch (e) {}
+  }
+  function addMapLegend(map, isCollective) {
+    var leg = L.control({ position: 'bottomleft' });
+    leg.onAdd = function() {
+        var div = L.DomUtil.create('div', 'info');
+        div.style.cssText = 'background:white;padding:12px 14px;border-radius:8px;font-size:11px;line-height:1.6;box-shadow:0 2px 10px rgba(0,0,0,0.15);min-width:200px;';
+        div.innerHTML = '<strong style="display:block;margin-bottom:8px;font-size:12px;">Legenda — Linie energetyczne</strong>' +
+          '<div style="margin:4px 0;"><span style="display:inline-block;width:24px;height:4px;background:#E91E63;vertical-align:middle;margin-right:6px;"></span> G1 WN (wysokie/najwyższe napięcie)</div>' +
+          '<div style="margin:4px 0;"><span style="display:inline-block;width:24px;height:3px;background:#9C27B0;vertical-align:middle;margin-right:6px;"></span> G3 SN (średnie napięcie)</div>' +
+          '<div style="margin:4px 0;"><span style="display:inline-block;width:24px;height:2px;background:#6A1B9A;vertical-align:middle;margin-right:6px;"></span> G4 nN (niskie napięcie)</div>' +
+          '<div style="margin:8px 0 4px 0;border-top:1px solid #eee;padding-top:6px;"></div>' +
+          '<div style="margin:4px 0;"><span style="display:inline-block;width:20px;height:20px;border:2px solid #2196F3;background:rgba(33,150,243,0.1);vertical-align:middle;margin-right:6px;border-radius:2px;"></span> Wybrany obszar (działka)</div>' +
+          (isCollective ? '<div style="margin:4px 0;"><span style="color:#e53935;font-weight:bold;">———</span> Działka z kolizją</div><div style="margin:4px 0;"><span style="color:#2196F3;font-weight:bold;">———</span> Działka bez kolizji</div>' : '');
+        return div;
+    };
+    leg.addTo(map);
+  }
 
   function initMaps() {
-    if (typeof L === 'undefined') { setTimeout(initMaps, 300); return; }
-    console.log('initMaps called, Leaflet version:', L.version, 'Maps to render:', PARCEL_MAPS.length);
+    if (typeof L === 'undefined') return;
     PARCEL_MAPS.forEach(function(parcel, i) {
       var el = document.getElementById('parcel-map-' + i);
-      console.log('Parcel', i, '- Element found:', !!el, 'Data:', { centroid: parcel.centroid, hasGeoJSON: !!parcel.geojson, collision: parcel.collision });
       if (!el || el._leaflet_id) return;
       var center = [52.069, 19.480];
       if (Array.isArray(parcel.centroid) && parcel.centroid.length >= 2 && parcel.centroid[0] != null) {
@@ -448,27 +562,50 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
           }
         } catch(e) {}
       }
-      var map = L.map(el, { zoomControl: false, attributionControl: false, scrollWheelZoom: false, dragging: false, doubleClickZoom: false });
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { subdomains:'abcd', maxZoom:19 }).addTo(map);
-      L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.75 }).addTo(map);
-      // Warstwa uzbrojenia terenu - Open Infrastructure Map (stabilne, zawsze dostępne)
-      L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png', { maxZoom:19, opacity:0.8, attribution:'© OpenStreetMap contributors' }).addTo(map);
+      var map = L.map(el, { zoomControl: true, attributionControl: false, scrollWheelZoom: true, dragging: true, doubleClickZoom: true });
+      var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '© Esri' }).addTo(map);
+      var kiutLayer = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu', { layers:'przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy', format:'image/png', transparent:true, opacity:1.0 }).addTo(map);
+      var egibLayer = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.8 }).addTo(map);
+      var powerLayer = L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png', { maxZoom:19, opacity:1.0, attribution:'© OpenInfra' }).addTo(map);
+      
+      L.control.layers(
+        { 'Satelita (Esri)': satLayer },
+        {
+          '⚡ Raster z KIUT (GUGiK)': kiutLayer,
+          '⚡ Vektory OSM (Power)': powerLayer,
+          '🗺️ Granice EGiB': egibLayer
+        },
+        { position: 'topright', collapsed: true }
+      ).addTo(map);
+
+      // Dodanie promienia 200m wzorem OnGeo
+      L.circle(center, {
+        radius: 200,
+        color: '#ffffff',
+        fillColor: 'transparent',
+        weight: 1.5,
+        dashArray: '5, 5'
+      }).addTo(map).bindTooltip("Zasięg analizy promieniowej (200m)", { sticky: true, className: 'no-bg-tooltip', direction: 'top' });
+
+      var boundsToFit = null;
       if (parcel.geojson && parcel.geojson.coordinates) {
-        var color = parcel.collision ? '#e53935' : '#1e88e5';
-        var layer = L.geoJSON(parcel.geojson, { style: { color: color, weight: 3, fillColor: color, fillOpacity: 0.12 } }).addTo(map);
-        try { map.fitBounds(layer.getBounds(), { padding: [8, 8] }); } catch(e) { map.setView(center, 14); }
-      } else {
-        map.setView(center, 14);
+        var color = parcel.collision ? '#ff0055' : '#00ffff';
+        var layer = L.geoJSON(parcel.geojson, {
+          style: { color: color, weight: 4, dashArray: 'none', fillOpacity: 0.15 }
+        }).addTo(map);
+        try { boundsToFit = layer.getBounds(); } catch(e) {}
       }
+      addPowerLinesToMap(map, parcel.powerLinesGeojson, parcel.voltage);
+      addMapLegend(map, false);
+      if (boundsToFit) try { map.fitBounds(boundsToFit, { padding: [12, 12] }); } catch(e) { map.setView(center, 14); }
+      else map.setView(center, 14);
     });
   }
 
   function initCollectiveMap() {
-    if (typeof L === 'undefined') { setTimeout(initCollectiveMap, 300); return; }
+    if (typeof L === 'undefined') return;
     var el = document.getElementById('collective-map');
     if (!el || el._leaflet_id) return;
-
-    console.log('initCollectiveMap called');
     var map = L.map(el, {
       zoomControl: true,
       attributionControl: true,
@@ -477,15 +614,16 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
       doubleClickZoom: true
     });
 
-    // Base layers
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-      { subdomains:'abcd', maxZoom:19, attribution:'© Carto' }).addTo(map);
+    var osmLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { subdomains:'abcd', maxZoom:19, attribution:'© CartoDB' }).addTo(map);
+    
     L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow',
-      { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.75 }).addTo(map);
+      { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.8 }).addTo(map);
 
-    // Infrastructure layers
+    var kiutLayer = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu',
+      { layers:'przewod_elektroenergetyczny', format:'image/png', transparent:true, opacity:1.0 }).addTo(map);
+
     var powerLayer = L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png',
-      { maxZoom:19, opacity:0.8, attribution:'© OpenInfra' });
+      { maxZoom:19, opacity:1, attribution:'© OpenInfra' });
     var gasLayer = L.tileLayer('https://tiles.openinframap.org/gas/{z}/{x}/{y}.png',
       { maxZoom:19, opacity:0.7, attribution:'© OpenInfra' });
     var waterLayer = L.tileLayer('https://tiles.openinframap.org/water/{z}/{x}/{y}.png',
@@ -493,22 +631,19 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
     var sewerLayer = L.tileLayer('https://tiles.openinframap.org/sewer/{z}/{x}/{y}.png',
       { maxZoom:19, opacity:0.7, attribution:'© OpenInfra' });
 
-    powerLayer.addTo(map);
-
-    // Add all parcel boundaries to a FeatureGroup
     var parcelGroup = L.featureGroup();
     var allBounds = [];
 
     PARCEL_MAPS.forEach(function(parcel, i) {
       if (parcel.geojson && parcel.geojson.coordinates) {
-        var color = parcel.collision ? '#e53935' : '#1e88e5';
+        var color = parcel.collision ? '#e53935' : '#2196F3';
         var layer = L.geoJSON(parcel.geojson, {
           style: {
             color: color,
-            weight: 2,
+            weight: 4,
             fillColor: color,
             fillOpacity: 0.15,
-            dashArray: parcel.collision ? '5,5' : 'none'
+            dashArray: 'none'
           }
         });
         parcelGroup.addLayer(layer);
@@ -521,6 +656,10 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
 
     parcelGroup.addTo(map);
 
+    PARCEL_MAPS.forEach(function(parcel) {
+      addPowerLinesToMap(map, parcel.powerLinesGeojson, parcel.voltage);
+    });
+
     // Fit all parcels in view
     if (allBounds.length > 0) {
       var group = L.featureGroup(PARCEL_MAPS.filter(p => p.geojson).map(p =>
@@ -532,12 +671,11 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
       map.setView([52.069, 19.480], 8);
     }
 
-    // Layer controls
     L.control.layers(
-      { 'Mapa': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-        { subdomains:'abcd', maxZoom:19 }) },
+      { 'Mapa': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { subdomains:'abcd', maxZoom:19, attribution:'© CartoDB' }) },
       {
-        '⚡ Linie energetyczne (Power)': powerLayer,
+        '⚡ Raster z KIUT (GUGiK)': L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu', { layers:'przewod_elektroenergetyczny', format:'image/png', transparent:true, opacity:1.0 }),
+        '⚡ Vektory OSM (Power)': powerLayer,
         '🔥 Gaz (Gas)': gasLayer,
         '💧 Woda (Water)': waterLayer,
         '🚰 Kanalizacja (Sewer)': sewerLayer
@@ -545,27 +683,74 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
       { position: 'topright', collapsed: false }
     ).addTo(map);
 
-    // Legend
-    var legend = L.control({ position: 'bottomleft' });
-    legend.onAdd = function(map) {
-      var div = L.DomUtil.create('div', 'info');
-      div.style.backgroundColor = 'white';
-      div.style.padding = '10px';
-      div.style.borderRadius = '5px';
-      div.style.fontSize = '12px';
-      div.style.boxShadow = '0 0 15px rgba(0,0,0,0.2)';
-      div.innerHTML = '<strong>Legenda</strong><br>' +
-        '<span style="color:#e53935;font-weight:bold;">— — —</span> Z kolizją (collision)<br>' +
-        '<span style="color:#1e88e5;font-weight:bold;">———</span> Bez kolizji (no collision)';
-      return div;
-    };
-    legend.addTo(map);
-
-    console.log('Collective map initialized with', PARCEL_MAPS.length, 'parcels');
+    addMapLegend(map, true);
   }
 
-  if (document.readyState === 'complete') { initMaps(); initCollectiveMap(); }
-  else { window.addEventListener('load', function() { initMaps(); initCollectiveMap(); }); }
+  function wirePdfButtons() {
+    if (typeof RESULTS_FOR_PDF === 'undefined') return;
+    setTimeout(function() {
+      var btns = document.querySelectorAll('.btn-pdf');
+      btns.forEach(function(btn) {
+        if (btn._pdfWired) return;
+        btn._pdfWired = true;
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          var i = parseInt(this.getAttribute('data-parcel-index'), 10);
+          if (isNaN(i) || !RESULTS_FOR_PDF[i]) return;
+          var pData = RESULTS_FOR_PDF[i];
+          var structuredItem = {
+            parcel_id: pData.parcel_id,
+            full_master_record: pData.master_record || pData.data || {},
+            date: new Date().toLocaleString("pl-PL")
+          };
+          var singleHtml = buildSingleHtml(structuredItem);
+          var blob = new Blob([singleHtml], { type: 'text/html;charset=utf-8' });
+          var blobUrl = URL.createObjectURL(blob);
+          window.open(blobUrl, '_blank');
+        });
+      });
+    }, 300);
+  }
+
+  var buildSingleHtml = ${buildSingleHtml.toString()};
+
+  var CHART_DATA = { collision: ${collisionCount}, noCollision: ${results.length - collisionCount}, totalA: ${totalA}, totalB: ${totalB}, total: ${results.length} };
+
+  function initCharts() {
+    if (typeof Chart === 'undefined') return;
+    var fmt = function(n) { return (n || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 }); };
+    var c1 = document.getElementById('chart-collision');
+    if (c1) {
+      new Chart(c1, { type: 'doughnut', data: { labels: ['Z kolizją', 'Bez kolizji'], datasets: [{ data: [CHART_DATA.collision, CHART_DATA.noCollision], backgroundColor: ['#e53935', '#43a047'], borderWidth: 2 }] }, options: { responsive: true, plugins: { legend: { position: 'bottom' } } } });
+    }
+    var c2 = document.getElementById('chart-tracks');
+    if (c2) {
+      new Chart(c2, { type: 'bar', data: { labels: ['Track A (sąd)', 'Track B (negocjacje)'], datasets: [{ label: 'PLN', data: [CHART_DATA.totalA, CHART_DATA.totalB], backgroundColor: ['#27ae60', '#e67e22'] }] }, options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } } } } });
+    }
+    var c3 = document.getElementById('chart-counts');
+    if (c3) {
+      var sum = CHART_DATA.totalA + CHART_DATA.totalB || 1;
+      new Chart(c3, { type: 'doughnut', data: { labels: ['Track A (sąd)', 'Track B (negocjacje)'], datasets: [{ data: [CHART_DATA.totalA, CHART_DATA.totalB], backgroundColor: ['#27ae60', '#e67e22'], borderWidth: 2 }] }, options: { responsive: true, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: function(ctx) { var v = ctx.raw; return ctx.label + ': ' + fmt(v) + ' PLN (' + (sum ? Math.round(100 * v / sum) : 0) + '%)'; } } } } } });
+    }
+  }
+
+  function runInits() {
+    initMaps();
+    initCollectiveMap();
+    wirePdfButtons();
+    initCharts();
+  }
+
+  function loadLeafletThenRun() {
+    if (typeof L !== 'undefined') { runInits(); return; }
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    s.onload = function() { runInits(); };
+    s.onerror = function() { runInits(); };
+    document.head.appendChild(s);
+  }
+  if (document.readyState === 'complete') loadLeafletThenRun();
+  else window.addEventListener('load', loadLeafletThenRun);
 })();
 </script>
 </body>
@@ -582,62 +767,81 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
 
   return (
     <div className="batch-history-container">
-      <div className="history-header">
-        <h2>📁 Historia analiz zbiorczych</h2>
-        <p>Wcześniej wykonane analizy CSV — kliknij by załadować raport z mapami</p>
-      </div>
+      <header className="history-header">
+        <h1 className="history-header__title">Historia raportów</h1>
+        <p className="history-header__sub">Raporty zbiorcze z <strong>Analizy hurtowej</strong> (CSV). Otwórz raport, by zobaczyć mapy i zestawienie; możesz zapisać do druku w nowej karcie.</p>
+      </header>
 
-      {loading ? (
-        <div className="loading-container">
-          <Spinner color="primary" />
-          <p>Ładowanie historii...</p>
-        </div>
-      ) : history.length === 0 ? (
-        <div className="empty-state">
-          <p>📭 Brak historii analiz</p>
-          <p className="hint">Wykonaj nową analizę CSV w sekcji „Batch CSV"</p>
-        </div>
-      ) : (
-        <div className="history-table">
-          {history.map((item, idx) => (
-            <div key={item.batch_id} className="history-row">
-              <div className="row-number">{idx + 1}</div>
-              <div className="row-content">
-                <div className="row-header">
-                  <div className="timestamp">
-                    📅 {new Date(item.timestamp).toLocaleDateString("pl-PL", {
-                      year: "numeric",
-                      month: "2-digit",
-                      day: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+      <div className="history-content">
+        {loading ? (
+          <div className="history-loading" role="status" aria-label="Ładowanie">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="history-skeleton">
+                <div className="history-skeleton__icon" />
+                <div className="history-skeleton__body">
+                  <div className="history-skeleton__line history-skeleton__line--title" />
+                  <div className="history-skeleton__line history-skeleton__line--meta" />
+                  <div className="history-skeleton__chips">
+                    <div className="history-skeleton__chip" />
+                    <div className="history-skeleton__chip" />
                   </div>
-                  <div className="file-name">📄 {item.file_name}</div>
                 </div>
-                <div className="row-stats">
-                  <Badge color="info" pill>
-                    📦 {item.total} działek
-                  </Badge>
-                  <Badge color="success" pill>
-                    ✓ {item.successful} analizowanych
-                  </Badge>
-                </div>
+                <div className="history-skeleton__action" />
               </div>
-              <Button
-                color="primary"
-                size="sm"
-                onClick={() => loadBatchDetails(item.batch_id)}
-                className="view-button"
-                aria-label={`Otwórz raport: ${item.total} działek, ${item.file_name || item.batch_id}, ${new Date(item.timestamp).toLocaleDateString("pl-PL")}`}
-                title={`Otwórz raport z mapami (${item.total} działek)`}
-              >
-                📊 Otwórz raport
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        ) : history.length === 0 ? (
+          <div className="history-empty">
+            <div className="history-empty__icon">📋</div>
+            <h2 className="history-empty__title">Brak raportów</h2>
+            <p className="history-empty__hint">Wykonaj analizę w zakładce <strong>Analiza hurtowa</strong> — wyniki zapiszą się tutaj.</p>
+          </div>
+        ) : (
+          <ul className="history-list" role="list">
+            {history.map((item, idx) => (
+              <li key={item.batch_id} className="history-card history-row--replaceable" role="listitem" data-batch-id={item.batch_id}>
+                <article
+                  className="history-card__inner"
+                  onClick={() => loadBatchDetails(item.batch_id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); loadBatchDetails(item.batch_id); } }}
+                  aria-label={`Otwórz raport: ${item.client_name || item.file_name}, ${item.total} działek`}
+                >
+                  <div className="history-card__accent" aria-hidden><span>{idx + 1}</span></div>
+                  <div className="history-card__main">
+                    <div className="history-card__row">
+                      <h3 className={`history-card__title ${item.client_name ? "" : "history-card__title--missing"}`}>
+                        {item.client_name || "Brak nazwy klienta"}
+                      </h3>
+                      <button
+                        type="button"
+                        className={`history-card__crm ${!item.client_name ? "history-card__crm--assign" : ""}`}
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); navigate("/kalkulator/klienci", { state: { highlightClientId: item.client_id || null, assignBatchId: item.batch_id, assignBatchFileName: item.file_name } }); }}
+                      >
+                        {item.client_id ? "CRM" : "Przypisz do CRM"}
+                      </button>
+                    </div>
+                    <div className="history-card__meta">
+                      <span className="history-card__date">
+                        {new Date(item.timestamp).toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                      <span className="history-card__file" title={item.file_name}>{item.file_name}</span>
+                    </div>
+                    <div className="history-card__stats">
+                      <span className="history-card__stat history-card__stat--count">{item.total} działek</span>
+                      <span className="history-card__stat history-card__stat--ok">✓ {item.successful}</span>
+                    </div>
+                  </div>
+                  <div className="history-card__cta-wrap">
+                    <span className="history-card__cta">Otwórz raport</span>
+                  </div>
+                </article>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

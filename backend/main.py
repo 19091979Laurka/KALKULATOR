@@ -12,7 +12,7 @@ from io import StringIO
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -131,13 +131,24 @@ async def analyze(req: AnalyzeRequest):
     }
 
 @app.post("/api/analyze/batch")
-async def analyze_batch_csv(file: UploadFile = File(...)):
+async def analyze_batch_csv(
+    file: UploadFile = File(...),
+    client_name: Optional[str] = Form(None),
+    client_id: Optional[str] = Form(None),
+    is_farmer: Optional[bool] = Form(None),
+):
     """
     Batch analysis from CSV upload.
     CSV format: parcel_id,obreb,county,municipality
-
+    client_name (nazwa raportu) jest wymagane.
     Returns analysis for all parcels + saves to history.
     """
+    name = (client_name or "").strip()
+    if not name:
+        raise HTTPException(
+            status_code=400,
+            detail="Nazwa raportu / klienta jest wymagana. Uzupełnij pole przed analizą.",
+        )
     try:
         # Read CSV (obsługa BOM, różnych kodowań, separatorów)
         content = await file.read()
@@ -243,6 +254,8 @@ async def analyze_batch_csv(file: UploadFile = File(...)):
             logger.warning("BATCH: Regional OSM prefetch error: %s — parcels will use individual queries", e)
 
         # ====== KROK 1: Analiza wszystkich działek (z cache) ======
+        batch_is_farmer = is_farmer in (True, "true", "1", 1)
+
         async def analyze_single(row):
             try:
                 parcel_id = (row.get('parcel_id') or '').strip() or None
@@ -255,6 +268,7 @@ async def analyze_batch_csv(file: UploadFile = File(...)):
                     obreb=row.get('obreb'),
                     county=row.get('county'),
                     municipality=row.get('municipality'),
+                    is_farmer=batch_is_farmer,
                 )
 
                 return {
@@ -290,6 +304,9 @@ async def analyze_batch_csv(file: UploadFile = File(...)):
             "file_name": file.filename,
             "parcel_count": len(all_results),
             "successful": sum(1 for r in all_results if r["status"] != "ERROR"),
+            "client_name": name,
+            "client_id": (client_id or "").strip() or None,
+            "is_farmer": batch_is_farmer,
             "results": all_results
         }
 
@@ -331,7 +348,9 @@ async def get_analysis_history():
                     "timestamp": data["timestamp"],
                     "file_name": data["file_name"],
                     "total": data["parcel_count"],
-                    "successful": data["successful"]
+                    "successful": data["successful"],
+                    "client_name": data.get("client_name"),
+                    "client_id": data.get("client_id"),
                 })
 
         return {

@@ -1,0 +1,72 @@
+---
+description: Modern UI/UX — wizualna lekkość, white space, soft shadows, micro-interactions, typografia, mobile-first (SaaS 2026)
+globs: frontend-react/**/*.jsx, frontend-react/**/*.tsx, frontend-react/**/*.css, frontend-react/**/*.scss
+alwaysApply: false
+---
+
+# Modern UI/UX Transformation
+
+Aplikacja ma wyglądać jak **nowoczesny produkt SaaS z 2026 roku**. Przy każdej zmianie UI stosuj poniższe zasady.
+
+---
+
+## 1. Wizualna lekkość i przestrzeń (White Space)
+
+- **Gęstość:** Unikaj przeładowania. Stosuj **duże marginesy i paddingi** zgodnie z **siatką 8px** (8, 16, 24, 32, 40, 48 px).
+- **Karty:** Grupuj treść w **lekko zaokrąglone karty** — `border-radius: 12px` lub więcej (np. 16px).
+- **Cienie:** Zamiast ciężkich obramowań używaj **miękkich, wielowarstwowych cieni** (soft shadows), które nadają głębię (oś z):
+  - np. `box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);`
+- **Tła:** Bardzo jasne szarości dla tła strony (np. `#f4f6fb`, `#f8f9fa`), **czysta biel (#fff)** dla kart — kontrast warstwowy.
+
+---
+
+## 2. Dynamika i interakcja (Micro-interactions)
+
+- **Stany:** Każdy przycisk i element klikalny **musi** mieć zdefiniowany stan **hover** (delikatne podświetlenie lub minimalne powiększenie, np. `transform: scale(1.02)`).
+- **Przejścia:** Wszystkie zmiany stanów **płynnie** — `transition: all 0.3s ease` (lub `0.2s ease` dla drobnych elementów).
+- **Loading:** Przy pobieraniu danych preferuj **Skeleton Screens** zamiast samych kręcących się ikon (spinner tylko jako uzupełnienie, np. wewnątrz przycisku).
+
+---
+
+## 3. Typografia i kolor
+
+- **Hierarchia:** Czytelna **bezszeryfowa** czcionka (Inter, Roboto, system-ui). Nagłówki wyraźnie odróżnialne przez **wagę (Bold)** i **kolor** (głęboki ciemnoniebieski/szary, np. `#212529`, `#1a1a2e`).
+- **Paleta:** Jeden **kolor przewodni** (np. Royal Blue `#2563eb` lub fiolet `#5c3d8f`) — używaj go **tylko do akcji (CTA)**. Reszta stonowana (szarości, biel).
+- **Ikony:** Nowoczesne, **liniowe** zestawy (Lucide React, Phosphor Icons, Font Awesome 6 Light) — unikaj wypełnionych, „ciężkich” ikon.
+
+---
+
+## 4. Logika i komponenty (Pattern Thinking)
+
+- **Spójność:** Powiadomienia (Notification), toasty, modale — styl **zgodny z kartami** (te same radius, cienie, padding).
+- **Responsywność:** **Mobile-First.** Każdy komponent ma wyglądać poprawnie na małych ekranach (np. iPhone); dopiero potem rozbudowa na desktop.
+- **Przejrzystość:** Rzadziej używane akcje ukrywaj w **menu pod ikoną trzech kropek** (overflow menu), żeby nie zaśmiecać widoku głównego.
+
+---
+
+## Jak formułować prompt w Cursorze
+
+Gdy chcesz przebudować konkretny widok, użyj struktury:
+
+```
+Popraw wizualnie ten moduł, wzorując się na estetyce Tailwind/React lub innej nam przyjaznej.
+Aplikacja ma wyglądać jak nowoczesny produkt SaaS z 2026 roku.
+
+- Usuń ciężkie ramki, zastąp je miękkimi cieniami i dużym paddingiem.
+- Zastosuj dynamiczne przejścia (hover effects) dla wszystkich przycisków.
+- Uporządkuj hierarchię informacji — najważniejsze dane mają rzucać się w oczy jako pierwsze.
+- Upewnij się, że kod jest czysty, lekki i logicznie ustrukturyzowany.
+```
+
+---
+
+## Szybki checklist przy zmianach UI
+
+- [ ] Padding/margin w siatce 8px
+- [ ] Karty z `border-radius` ≥ 12px, bez grubych obramowań
+- [ ] Soft shadows zamiast `border: 2px solid`
+- [ ] Hover na przyciskach i klikalnych elementach
+- [ ] `transition` na zmianach stanów
+- [ ] Jedna wyraźna CTA (kolor przewodni), reszta stonowana
+- [ ] Nagłówki vs body — wyraźna hierarchia (waga + kolor)
+- [ ] Działanie na wąskim ekranie (mobile-first)

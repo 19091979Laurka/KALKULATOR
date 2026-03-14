@@ -1,16 +1,18 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import "./KalkulatorPage.css";
 
 /**
  * ════════════════════════════════════════════════════════════════
  * UNIFIED KALKULATOR LAYOUT - Purple sidebar on all pages
+ * Mobile: topbar + hamburger → drawer
  * ════════════════════════════════════════════════════════════════
  */
 
 const KalkulatorLayout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Kolejność: 1 Strona główna, 2 CRM, 3 Wzory, 4 Analiza działki, 5 Historia analiz, 6 Analiza hurtowa, 7 Historia raportów
   const getActiveNav = () => {
@@ -43,18 +45,61 @@ const KalkulatorLayout = ({ children }) => {
     { id: "historia",        label: "Historia raportów", icon: "🗂️",  path: "/kalkulator/historia", title: "Oferty Hurtowe — Historia CSV" },
   ];
 
+  const activeLabel = navItems.find((i) => i.id === activeNav)?.label || "Menu";
+  const closeMobileSidebar = () => setMobileSidebarOpen(false);
+  const goTo = (path) => {
+    navigate(path);
+    closeMobileSidebar();
+  };
+
   return (
     <div className="ksws-layout">
-      {/* ════════════ SIDEBAR ════════════ */}
-      <aside className="ksws-sidebar">
-        <div className="ksws-sidebar-logo">
-          <div className="ksws-sidebar-logo-symbol">§</div>
-          <div className="ksws-sidebar-logo-title">SZUWARA</div>
-          <div className="ksws-sidebar-logo-sub">Kancelaria Prawno-Podatkowa</div>
-          <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid rgba(184,150,62,0.2)", fontSize: "0.62rem", color: "rgba(255,255,255,0.35)", lineHeight: "1.7" }}>
-            <div style={{ color: "#b8963e", fontWeight: "700", fontSize: "0.72rem", letterSpacing: "0.5px" }}>KALKULATOR KSWS</div>
-            <div>Roszczenia przesyłowe · Track A/B</div>
+      {/* ════════════ MOBILE TOPBAR (hamburger + logo) ════════════ */}
+      <header className="ksws-mobile-topbar">
+        <div className="ksws-mobile-topbar-logo">
+          <img src="/logo_szuwara_baner.png" alt="SZUWARA" className="ksws-mobile-topbar-img" />
+          <div>
+            <div className="ksws-mobile-topbar-title">Kalkulator Roszczeń Przesyłowych</div>
+            <div className="ksws-mobile-topbar-active">{activeLabel}</div>
           </div>
+        </div>
+        <button
+          type="button"
+          className="ksws-hamburger"
+          onClick={() => setMobileSidebarOpen((v) => !v)}
+          aria-label="Otwórz menu"
+        >
+          <span className={`ksws-hamburger-line ${mobileSidebarOpen ? "open" : ""}`} />
+          <span className={`ksws-hamburger-line ${mobileSidebarOpen ? "open" : ""}`} />
+          <span className={`ksws-hamburger-line ${mobileSidebarOpen ? "open" : ""}`} />
+        </button>
+      </header>
+
+      {/* ════════════ OVERLAY (mobile, zamyka drawer) ════════════ */}
+      {mobileSidebarOpen && (
+        <div
+          className="ksws-mobile-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={closeMobileSidebar}
+          onKeyDown={(e) => e.key === "Escape" && closeMobileSidebar()}
+          aria-label="Zamknij menu"
+        />
+      )}
+
+      {/* ════════════ SIDEBAR ════════════ */}
+      <aside className={`ksws-sidebar ${mobileSidebarOpen ? "ksws-sidebar--open" : ""}`}>
+        <button
+          type="button"
+          className="ksws-sidebar-close"
+          onClick={closeMobileSidebar}
+          aria-label="Zamknij menu"
+        >
+          ✕
+        </button>
+        <div className="ksws-sidebar-logo">
+          <img src="/logo_szuwara_baner.png" alt="SZUWARA Kancelaria Prawno-Podatkowa" className="ksws-sidebar-logo-img" />
+          <div className="ksws-sidebar-app-title">Kalkulator Roszczeń Przesyłowych</div>
         </div>
 
         <nav className="ksws-sidebar-nav">
@@ -62,7 +107,7 @@ const KalkulatorLayout = ({ children }) => {
             <div
               key={item.id}
               className={`ksws-sidebar-nav-item${activeNav === item.id ? " active" : ""}`}
-              onClick={() => navigate(item.path)}
+              onClick={() => goTo(item.path)}
               style={{ cursor: "pointer" }}
               title={item.title || item.label}
             >
@@ -73,26 +118,10 @@ const KalkulatorLayout = ({ children }) => {
         </nav>
 
         <div className="ksws-sidebar-footer">
-          <div style={{ color: "#b8963e", fontWeight: "700", marginBottom: "4px", fontSize: "0.72rem" }}>
-            § SZUWARA
-          </div>
-          <a
-            href="https://www.kancelaria-szuwara.pl"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: "inherit", textDecoration: "none", fontSize: "0.75rem" }}
-          >
-            www.kancelaria-szuwara.pl
-          </a>
-          <br />
-          <a
-            href="tel:790411412"
-            style={{ color: "inherit", textDecoration: "none", fontSize: "0.75rem" }}
-          >
-            790 411 412
-          </a>
-          <br />
-          <div style={{ marginTop: "6px", opacity: 0.5, fontSize: "0.7rem" }}>KSWS v3.0 · Track A/B · GUGiK</div>
+          <div className="ksws-sidebar-footer-name">Kancelaria Prawno Podatkowa Rafał Szuwara</div>
+          <a href="https://www.kancelaria-szuwara.pl" target="_blank" rel="noopener noreferrer" className="ksws-sidebar-footer-link">www.kancelaria-szuwara.pl</a>
+          <a href="tel:500013269" className="ksws-sidebar-footer-link">500 013 269</a>
+          <div className="ksws-sidebar-footer-created">Created by Rafał Szuwara</div>
         </div>
       </aside>
 
