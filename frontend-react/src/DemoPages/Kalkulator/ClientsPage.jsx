@@ -59,6 +59,8 @@ export default function ClientsPage() {
   const [nbPodcastLoading, setNbPodcastLoading] = useState(false);
   const [nbPodcastStatus, setNbPodcastStatus]   = useState(null); // {audioOverviewId, status}
   const [nbPodcastPollTimer, setNbPodcastPollTimer] = useState(null);
+  const [nbIframeError, setNbIframeError]   = useState(false);
+  const [nbIframeLoading, setNbIframeLoading] = useState(true);
 
   // Check NotebookLM API status on mount
   useEffect(() => {
@@ -151,6 +153,8 @@ export default function ClientsPage() {
 
   useEffect(() => { saveClients(clients); }, [clients]);
   useEffect(() => { if (activeTab === "ai") aiChatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [clients, activeTab]);
+  // Reset iframe state when switching client
+  useEffect(() => { setNbIframeError(false); setNbIframeLoading(true); }, [selectedId]);
 
   const selectedClient = clients.find((c) => c.id === selectedId) || null;
   const filtered = clients.filter((c) => {
@@ -335,6 +339,7 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
                 { key: "dokumenty",     icon: "📁", label: `Dokumenty (${(selectedClient.files || []).length})` },
                 { key: "timeline",      icon: "📅", label: `Historia (${(selectedClient.timeline || []).length})` },
                 { key: "ai",            icon: "🤖", label: "AI Asystent" },
+                { key: "notebook",      icon: "📓", label: "NotebookLM" },
               ].map((t) => (
                 <button key={t.key} className={`cp-tab ${activeTab === t.key ? "active" : ""}`} onClick={() => setActiveTab(t.key)}>
                   <span className="cp-tab-icon">{t.icon}</span>
@@ -702,6 +707,110 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
                   <textarea className="cp-ai-input" placeholder="Zadaj pytanie o sprawę klienta…" value={aiInput} onChange={(e) => setAiInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAiMessage(); } }} rows={2} />
                   <button className="cp-btn cp-btn-primary cp-ai-send" onClick={sendAiMessage} disabled={aiLoading || !aiInput.trim()}>{aiLoading ? "⏳" : "➤"}</button>
                 </div>
+              </div>
+            )}
+
+            {/* NOTEBOOKLM — osadzony widok */}
+            {activeTab === "notebook" && (
+              <div className="cp-section cp-nb-tab">
+                <div className="cp-nb-tab-header">
+                  <div className="cp-nb-tab-title">
+                    <span className="cp-nb-tab-icon">📓</span>
+                    <div>
+                      <div className="cp-nb-tab-name">NotebookLM Enterprise</div>
+                      <div className="cp-nb-tab-sub">
+                        {selectedClient.notebookLmId
+                          ? `Notebook: ${selectedClient.notebookLmId}`
+                          : "Brak przypisanego notebooka"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="cp-nb-tab-actions">
+                    {selectedClient.notebookLmUrl && (
+                      <a
+                        href={selectedClient.notebookLmUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="cp-btn cp-btn-nb-open"
+                      >
+                        🔗 Otwórz w nowej karcie ↗
+                      </a>
+                    )}
+                    {nbApiStatus?.configured && !selectedClient.notebookLmId && (
+                      <button
+                        className="cp-btn cp-btn-nb-create"
+                        onClick={createNotebookForClient}
+                        disabled={nbCreating}
+                      >
+                        {nbCreating ? "⏳ Tworzę…" : "✨ Utwórz notebook automatycznie"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {!selectedClient.notebookLmUrl && (
+                  <div className="cp-nb-tab-empty">
+                    <div className="cp-nb-tab-empty-icon">📓</div>
+                    <div className="cp-nb-tab-empty-title">Brak notebooka dla tej sprawy</div>
+                    <div className="cp-nb-tab-empty-text">
+                      {nbApiStatus?.configured
+                        ? "Kliknij ✨ Utwórz notebook automatycznie — system stworzy notebook i doda streszczenie sprawy."
+                        : "Przejdź do zakładki AI Asystent i dodaj link do notebooka ręcznie."}
+                    </div>
+                  </div>
+                )}
+
+                {selectedClient.notebookLmUrl && (
+                  <div className="cp-nb-embed-wrap">
+                    {nbIframeError ? (
+                      <div className="cp-nb-embed-blocked">
+                        <div className="cp-nb-embed-blocked-icon">🚫</div>
+                        <div className="cp-nb-embed-blocked-title">Osadzanie zablokowane przez Google</div>
+                        <div className="cp-nb-embed-blocked-text">
+                          NotebookLM nie pozwala na osadzenie w ramce (X-Frame-Options).
+                          Użyj przycisku poniżej, aby otworzyć w nowej karcie.
+                        </div>
+                        <a
+                          href={selectedClient.notebookLmUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="cp-btn cp-btn-nb-open cp-btn-lg"
+                        >
+                          🔗 Otwórz NotebookLM ↗
+                        </a>
+                        <div className="cp-nb-embed-blocked-hint">
+                          Aby włączyć osadzanie, dodaj domenę aplikacji w Google Cloud Console
+                          → OAuth 2.0 → Authorized JavaScript origins.
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="cp-nb-embed">
+                        {nbIframeLoading && (
+                          <div className="cp-nb-embed-loading">
+                            <div className="cp-nb-embed-loading-spinner"></div>
+                            <span>Ładowanie NotebookLM…</span>
+                          </div>
+                        )}
+                        <iframe
+                          key={selectedClient.notebookLmUrl}
+                          src={selectedClient.notebookLmUrl}
+                          title="NotebookLM — sprawa klienta"
+                          width="100%"
+                          height="100%"
+                          style={{
+                            border: "none",
+                            borderRadius: 8,
+                            display: nbIframeLoading ? "none" : "block",
+                          }}
+                          allow="clipboard-read; clipboard-write; microphone"
+                          loading="lazy"
+                          onLoad={() => setNbIframeLoading(false)}
+                          onError={() => { setNbIframeError(true); setNbIframeLoading(false); }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

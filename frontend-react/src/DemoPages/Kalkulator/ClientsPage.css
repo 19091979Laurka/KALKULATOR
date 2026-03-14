@@ -338,3 +338,149 @@
   gap: 10px;
   flex-wrap: wrap;
 }
+
+/* ─── NOTEBOOKLM TAB — osadzony widok ───────────────────────────────── */
+.cp-nb-tab {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+}
+
+.cp-nb-tab-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 20px;
+  background: #fff;
+  border-bottom: 1.5px solid #e0e4f0;
+  flex-shrink: 0;
+}
+
+.cp-nb-tab-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cp-nb-tab-icon { font-size: 2rem; }
+
+.cp-nb-tab-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #2d2d3e;
+}
+
+.cp-nb-tab-sub {
+  font-size: 0.78rem;
+  color: #888;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.cp-nb-tab-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Empty state */
+.cp-nb-tab-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  text-align: center;
+}
+
+.cp-nb-tab-empty-icon { font-size: 3rem; margin-bottom: 14px; opacity: 0.45; }
+.cp-nb-tab-empty-title { font-size: 1.05rem; font-weight: 700; color: #2d2d3e; margin-bottom: 8px; }
+.cp-nb-tab-empty-text { font-size: 0.88rem; color: #888; max-width: 420px; line-height: 1.5; }
+
+/* Embed wrapper — fills remaining height */
+.cp-nb-embed-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px 20px 20px;
+}
+
+/* The actual iframe container */
+.cp-nb-embed {
+  position: relative;
+  flex: 1;
+  min-height: 700px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1.5px solid #e0e4f0;
+  background: #f9f9fb;
+}
+
+.cp-nb-embed iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 8px;
+}
+
+/* Loading overlay */
+.cp-nb-embed-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: #f9f9fb;
+  color: #888;
+  font-size: 0.9rem;
+  z-index: 2;
+}
+
+.cp-nb-embed-loading-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e0e4f0;
+  border-top-color: #6a4c93;
+  border-radius: 50%;
+  animation: nb-spin 0.8s linear infinite;
+}
+
+@keyframes nb-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Blocked / X-Frame-Options fallback */
+.cp-nb-embed-blocked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  background: #fff8f0;
+  border: 1.5px solid #ffe0b2;
+  border-radius: 12px;
+  gap: 12px;
+}
+
+.cp-nb-embed-blocked-icon { font-size: 2.8rem; }
+.cp-nb-embed-blocked-title { font-size: 1rem; font-weight: 700; color: #bf360c; }
+.cp-nb-embed-blocked-text { font-size: 0.88rem; color: #6d4c41; max-width: 440px; line-height: 1.55; }
+.cp-nb-embed-blocked-hint { font-size: 0.78rem; color: #aaa; max-width: 440px; line-height: 1.5; margin-top: 4px; }
+
+.cp-btn-lg { padding: 11px 26px; font-size: 0.95rem; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .cp-nb-embed { min-height: 420px; }
+  .cp-nb-tab-header { padding: 12px 14px; }
+  .cp-nb-embed-wrap { padding: 10px 14px 14px; }
+}
