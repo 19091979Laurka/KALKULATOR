@@ -25,13 +25,13 @@ const EMPTY_CLIENT = {
 };
 
 const EVENT_TYPES = [
-  { value: "pismo_wyslane",   label: "📤 Pismo wysłane",       color: "#6a4c93" },
-  { value: "wniosek_zlozony", label: "📋 Wniosek złożony",     color: "#3a86ff" },
-  { value: "odpowiedz",       label: "📩 Odpowiedź otrzymana", color: "#06d6a0" },
-  { value: "spotkanie",       label: "🤝 Spotkanie",           color: "#ffd166" },
-  { value: "platnosc",        label: "💰 Płatność",            color: "#06d6a0" },
-  { value: "notatka",         label: "📝 Notatka",             color: "#9b9faa" },
-  { value: "inne",            label: "📌 Inne",                color: "#ff6b6b" },
+  { value: "pismo_wyslane",   label: "Pismo wysłane",       icon: "pe-7s-paper-plane", color: "#6a4c93" },
+  { value: "wniosek_zlozony", label: "Wniosek złożony",     icon: "pe-7s-note2",        color: "#3a86ff" },
+  { value: "odpowiedz",       label: "Odpowiedź",           icon: "pe-7s-mail-open",    color: "#06d6a0" },
+  { value: "spotkanie",       label: "Spotkanie",           icon: "pe-7s-users",        color: "#ffd166" },
+  { value: "platnosc",        label: "Płatność",            icon: "pe-7s-cash",         color: "#3ac47d" },
+  { value: "notatka",         label: "Notatka",             icon: "pe-7s-pen",          color: "#9b9faa" },
+  { value: "inne",            label: "Inne",                icon: "pe-7s-star",         color: "#ff6b6b" },
 ];
 function eventColor(type) { return EVENT_TYPES.find((e) => e.value === type)?.color || "#9b9faa"; }
 function eventLabel(type) { return EVENT_TYPES.find((e) => e.value === type)?.label || type; }
@@ -247,11 +247,6 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
 
   return (
     <div className="cp-root">
-      <header className="ksws-page-header">
-        <h1 className="ksws-page-header-title">👥 CRM — Klienci</h1>
-        <p className="ksws-page-header-sub">Lista klientów · karta sprawy · analizy działek, dokumenty, historia i asystent AI</p>
-      </header>
-      <div className="cp-body">
       {/* LEFT SIDEBAR */}
       <aside className="cp-sidebar">
         <div className="cp-sidebar-top">
@@ -265,18 +260,12 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
           {filtered.length === 0 && <div className="cp-list-empty">Brak klientów</div>}
           {filtered.map((c) => (
             <div key={c.id} className={`cp-client-item ${selectedId === c.id ? "active" : ""}`} onClick={() => { setSelectedId(c.id); setActiveTab("dashboard"); }}>
-              <div className="cp-client-avatar">
-                {selectedId === c.id ? <i className="pe-7s-user"></i> : (c.firstName?.[0] || "") + (c.lastName?.[0] || "")}
-              </div>
+              <div className="cp-client-avatar">{c.firstName?.[0]}{c.lastName?.[0]}</div>
               <div className="cp-client-info">
                 <div className="cp-client-name">{c.firstName} {c.lastName}</div>
                 <div className="cp-client-sub">{c.caseNumber ? `#${c.caseNumber}` : c.email || "—"}</div>
               </div>
-              <div className="cp-client-meta">
-                 <div className={`badge badge-pill badge-${c.status === 'aktywna' ? 'primary' : 'secondary'}`} style={{fontSize: '0.65rem'}}>
-                   {c.status}
-                 </div>
-              </div>
+              <div className="cp-client-meta">{statusBadge(c.status)}</div>
             </div>
           ))}
         </div>
@@ -324,42 +313,46 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
 
         {selectedClient && !showForm && (
           <div className="cp-detail">
-            {/* Header */}
-            <div className="card mb-4" style={{ backgroundColor: "#fff" }}>
+            {/* Header / Top Profile Card */}
+            <div className="card mb-4 mt-2">
               <div className="card-body d-flex align-items-center justify-content-between p-4">
                 <div className="d-flex align-items-center">
-                  <div className="cp-detail-avatar me-4" style={{ width: '80px', height: '80px', fontSize: '2rem', backgroundColor: '#e0f3ff', color: '#3f6ad8', borderRadius: '50%' }}>
+                  <div className="cp-detail-avatar me-4" style={{ width: '70px', height: '70px', fontSize: '1.8rem', background: 'linear-gradient(135deg, #6a4c93, #a288d9)' }}>
                     {selectedClient.firstName?.[0]}{selectedClient.lastName?.[0]}
                   </div>
                   <div>
-                    <h2 className="mb-2" style={{ fontWeight: 600, color: '#495057' }}>{selectedClient.firstName} {selectedClient.lastName}</h2>
-                    <div className="d-flex align-items-center gap-2">
-                       {statusBadge(selectedClient.status)}
-                       {selectedClient.caseNumber && <span className="badge bg-light text-dark border">#{selectedClient.caseNumber}</span>}
-                       <span className="text-muted small">Dodano: {fmtDate(selectedClient.createdAt)}</span>
+                    <h2 className="mb-2" style={{ fontWeight: 700, color: '#3f4254', fontSize: '1.4rem' }}>{selectedClient.firstName} {selectedClient.lastName}</h2>
+                    <div className="d-flex align-items-center gap-3">
+                       <span className={`badge badge-${selectedClient.status === 'aktywna' ? 'success' : 'warning'}`}>{selectedClient.status}</span>
+                       {selectedClient.caseNumber && <span className="text-muted font-weight-bold" style={{fontSize: '0.9rem'}}>#{selectedClient.caseNumber}</span>}
+                       <span className="text-secondary small font-italic">Dodano: {fmtDate(selectedClient.createdAt)}</span>
                     </div>
                   </div>
                 </div>
                 <div className="d-flex gap-2">
-                  <button className="btn btn-outline-primary" onClick={() => openEdit(selectedClient)}>✏️ Edytuj</button>
-                  <button className="btn btn-danger" onClick={() => deleteClient(selectedClient.id)}>🗑</button>
+                  <button className="btn btn-outline-primary btn-sm" onClick={() => openEdit(selectedClient)}><i className="pe-7s-config"></i> Edytuj</button>
+                  <button className="btn btn-outline-danger btn-sm" onClick={() => deleteClient(selectedClient.id)}><i className="pe-7s-trash"></i> Usuń</button>
                 </div>
               </div>
             </div>
 
-            {/* Tabs matching ArchitectUI Nav */}
+            {/* Tabs — ArchitectUI Native Style */}
             <ul className="nav nav-tabs nav-fill mb-4">
               {[
-                { key: "dashboard",     icon: "pe-7s-graph2", label: "Dashboard" },
-                { key: "dane",          icon: "pe-7s-id", label: "Dane" },
-                { key: "wynagrodzenie", icon: "pe-7s-cash", label: "Finanse" },
-                { key: "analizy",       icon: "pe-7s-display1", label: `Analizy (${(selectedClient.analyses || []).length})` },
-                { key: "dokumenty",     icon: "pe-7s-folder", label: "Dokumenty" },
-                { key: "timeline",      icon: "pe-7s-timer", label: "Historia" },
-                { key: "ai",            icon: "pe-7s-magic-wand", label: "AI Asystent" },
+                { key: "dashboard",     icon: "pe-7s-graph2",    label: "Dashboard" },
+                { key: "dane",          icon: "pe-7s-id",        label: "Dane" },
+                { key: "wynagrodzenie", icon: "pe-7s-cash",      label: "Finanse" },
+                { key: "analizy",       icon: "pe-7s-display1",  label: `Analizy (${(selectedClient.analyses || []).length})` },
+                { key: "dokumenty",     icon: "pe-7s-folder",    label: "Dokumenty" },
+                { key: "timeline",      icon: "pe-7s-timer",     label: "Historia" },
+                { key: "ai_full",       icon: "pe-7s-magic-wand", label: "AI & Notebook" },
               ].map((t) => (
                 <li key={t.key} className="nav-item">
-                  <button className={`nav-link ${activeTab === t.key ? "active" : ""}`} onClick={() => setActiveTab(t.key)} style={{ border: 'none', background: 'transparent', width: '100%', padding: '12px' }}>
+                  <button 
+                    className={`nav-link ${activeTab === t.key || (t.key === 'ai_full' && activeTab === 'ai') || (t.key === 'ai_full' && activeTab === 'notebook') ? "active" : ""}`} 
+                    onClick={() => setActiveTab(t.key)}
+                    style={{ border: 'none', background: 'transparent', width: '100%', padding: '15px' }}
+                  >
                     <i className={`nav-link-icon ${t.icon} me-2`}></i>
                     {t.label}
                   </button>
@@ -367,251 +360,159 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
               ))}
             </ul>
 
+            {/* TABS CONTENT */}
+            
             {/* DASHBOARD */}
             {activeTab === "dashboard" && (() => {
               const stats = getDashboardStats(selectedClient);
               return (
                 <div className="cp-section cp-dashboard">
-                  <div className="row mb-3">
-                    <div className="col-md-4">
-                      <div className="card widget-content mt-3">
-                        <div className="widget-content-outer">
-                          <div className="widget-content-wrapper">
-                            <div className="widget-content-left">
-                              <div className="widget-heading">Analizy Działek</div>
-                              <div className="widget-subheading">Ilość wykonanych ocen</div>
-                            </div>
-                            <div className="widget-content-right">
-                              <div className="widget-numbers text-primary">{stats.totalAnalyses}</div>
-                            </div>
+                  <div className="row mb-4">
+                    <div className="col-md-3">
+                      <div className="card widget-content bg-midnight-bloom">
+                        <div className="widget-content-wrapper text-white">
+                          <div className="widget-content-left">
+                            <div className="widget-heading">Analizy</div>
+                            <div className="widget-subheading">Suma ocen</div>
+                          </div>
+                          <div className="widget-content-right">
+                            <div className="widget-numbers text-white">{stats.totalAnalyses}</div>
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div className="col-md-4">
-                      <div className="card widget-content mt-3">
-                        <div className="widget-content-outer">
-                          <div className="widget-content-wrapper">
-                            <div className="widget-content-left">
-                              <div className="widget-heading">Wynagrodzenie</div>
-                              <div className="widget-subheading">Całkowita szacowana kwota</div>
-                            </div>
-                            <div className="widget-content-right">
-                              <div className="widget-numbers text-success">{stats.totalComp > 0 ? stats.totalComp.toLocaleString("pl-PL") + " zł" : "—"}</div>
-                            </div>
+                    <div className="col-md-3">
+                      <div className="card widget-content bg-arielle-smile">
+                        <div className="widget-content-wrapper text-white">
+                          <div className="widget-content-left">
+                            <div className="widget-heading">Dokumenty</div>
+                            <div className="widget-subheading">Ilość plików</div>
+                          </div>
+                          <div className="widget-content-right">
+                            <div className="widget-numbers text-white">{stats.totalFiles}</div>
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div className="col-md-4">
-                      <div className="card widget-content mt-3">
-                        <div className="widget-content-outer">
-                          <div className="widget-content-wrapper">
-                            <div className="widget-content-left">
-                              <div className="widget-heading">Dokumenty</div>
-                              <div className="widget-subheading">Zgromadzone akta</div>
-                            </div>
-                            <div className="widget-content-right">
-                              <div className="widget-numbers text-danger">{stats.totalFiles}</div>
-                            </div>
+                    <div className="col-md-3">
+                      <div className="card widget-content bg-grow-early">
+                        <div className="widget-content-wrapper text-white">
+                          <div className="widget-content-left">
+                            <div className="widget-heading">Wynagrodzenie</div>
+                            <div className="widget-subheading">Kwota szacowana</div>
+                          </div>
+                          <div className="widget-content-right">
+                            <div className="widget-numbers text-white">{stats.totalComp > 0 ? stats.totalComp.toLocaleString("pl-PL") + " zł" : "—"}</div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="row mb-3">
-                    <div className="col-md-4">
-                      <div className="card widget-content mt-3">
-                        <div className="widget-content-outer">
-                          <div className="widget-content-wrapper">
-                            <div className="widget-content-left">
-                              <div className="widget-heading">Szanse na Ugodę</div>
-                              <div className="widget-subheading">Statystyka dla track B</div>
-                            </div>
-                            <div className="widget-content-right">
-                              <div className="widget-numbers text-danger">71%</div>
-                            </div>
+                    <div className="col-md-3">
+                      <div className="card widget-content bg-plum-plate">
+                        <div className="widget-content-wrapper text-white">
+                          <div className="widget-content-left">
+                            <div className="widget-heading">Historia</div>
+                            <div className="widget-subheading">Wpisy akcji</div>
                           </div>
-                          <div className="widget-progress-wrapper">
-                            <div className="progress progress-bar-sm progress-bar-animated-alt">
-                              <div className="progress-bar bg-danger" role="progressbar" aria-valuenow="71" aria-valuemin="0" aria-valuemax="100" style={{ width: "71%" }}></div>
-                            </div>
-                            <div className="progress-sub-label">
-                              <div className="sub-label-left">Prawdopodobieństwo</div>
-                              <div className="sub-label-right">Wysokie</div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="card widget-content mt-3">
-                        <div className="widget-content-outer">
-                          <div className="widget-content-wrapper">
-                            <div className="widget-content-left">
-                              <div className="widget-heading">Kompletność</div>
-                              <div className="widget-subheading">Wymagane dokumenty</div>
-                            </div>
-                            <div className="widget-content-right">
-                              <div className="widget-numbers text-success">54%</div>
-                            </div>
-                          </div>
-                          <div className="widget-progress-wrapper">
-                            <div className="progress progress-bar-sm progress-bar-animated-alt">
-                              <div className="progress-bar bg-success" role="progressbar" aria-valuenow="54" aria-valuemin="0" aria-valuemax="100" style={{ width: "54%" }}></div>
-                            </div>
-                            <div className="progress-sub-label">
-                              <div className="sub-label-left">Zdobyte odpisy</div>
-                              <div className="sub-label-right">Średnie</div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="card widget-content mt-3">
-                        <div className="widget-content-outer">
-                          <div className="widget-content-wrapper">
-                            <div className="widget-content-left">
-                              <div className="widget-heading">Postęp Etapowy</div>
-                              <div className="widget-subheading">Postępowanie starostwo</div>
-                            </div>
-                            <div className="widget-content-right">
-                              <div className="widget-numbers text-warning">32%</div>
-                            </div>
-                          </div>
-                          <div className="widget-progress-wrapper">
-                            <div className="progress progress-bar-sm progress-bar-animated-alt">
-                              <div className="progress-bar bg-warning" role="progressbar" aria-valuenow="32" aria-valuemin="0" aria-valuemax="100" style={{ width: "32%" }}></div>
-                            </div>
-                            <div className="progress-sub-label">
-                              <div className="sub-label-left">Faza proceduralna</div>
-                              <div className="sub-label-right">Wczesna</div>
-                            </div>
+                          <div className="widget-content-right">
+                            <div className="widget-numbers text-white">{stats.totalEvents}</div>
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="row mb-3">
-                    <div className="col-md-6 mb-3">
-                      <div className="card h-100">
-                        <div className="card-header"><i className="header-icon pe-7s-info icon-gradient bg-malibu-beach"></i> Dane kontaktowe</div>
-                        <div className="card-body">
-                          <ul className="list-group list-group-flush">
-                            <li className="list-group-item">
-                              <div className="widget-content p-0">
-                                <div className="widget-content-wrapper">
-                                  <div className="widget-content-left"><div className="widget-heading">Email</div></div>
-                                  <div className="widget-content-right"><b className="text-secondary">{selectedClient.email || "—"}</b></div>
-                                </div>
-                              </div>
-                            </li>
-                            <li className="list-group-item">
-                              <div className="widget-content p-0">
-                                <div className="widget-content-wrapper">
-                                  <div className="widget-content-left"><div className="widget-heading">Telefon</div></div>
-                                  <div className="widget-content-right"><b className="text-secondary">{selectedClient.phone || "—"}</b></div>
-                                </div>
-                              </div>
-                            </li>
-                            <li className="list-group-item">
-                              <div className="widget-content p-0">
-                                <div className="widget-content-wrapper">
-                                  <div className="widget-content-left"><div className="widget-heading">Adres</div></div>
-                                  <div className="widget-content-right"><b className="text-secondary">{selectedClient.address || "—"}</b></div>
-                                </div>
-                              </div>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-6 mb-3">
-                      <div className="card h-100">
-                        <div className="card-header"><i className="header-icon pe-7s-notebook icon-gradient bg-arielle-smile"></i> Przebieg Sprawy</div>
-                        <div className="card-body">
-                          <div className="vertical-timeline vertical-timeline--animate vertical-timeline--one-column">
-                        {[
-                          { label: "Wniosek do starostwa", date: selectedClient.dateWniosekStarostwo },
-                          { label: "Wysłane do operatora", date: selectedClient.dateWyslanieDoOperatora },
-                          { label: "Odpowiedź od operatora", date: selectedClient.datePismoOperatora },
-                          { label: "Wynagrodzenie zapłacone", date: selectedClient.compensationPaid ? selectedClient.compensationDate : null, pending: !selectedClient.compensationPaid },
-                        ].map((step, i) => (
-                           <div key={i} className="vertical-timeline-item vertical-timeline-element">
-                            <div>
-                               <span className="vertical-timeline-element-icon bounce-in">
-                                  <i className={`badge badge-dot badge-dot-xl badge-${step.date ? 'success' : 'warning'}`}> </i>
-                               </span>
-                               <div className="vertical-timeline-element-content bounce-in">
-                                  <h4 className="timeline-title">{step.label}</h4>
-                                  <span className="vertical-timeline-element-date text-muted">{step.date ? fmtDate(step.date) : step.pending ? "oczekuje" : "—"}</span>
-                               </div>
-                            </div>
-                           </div>
-                        ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="row mb-3">
-                    <div className="col-md-12">
+                  <div className="row">
+                    <div className="col-md-4">
                       <div className="card mb-3">
-                        <div className="card-header"><i className="header-icon pe-7s-graph icon-gradient bg-happy-green"></i> Najlepsza analiza</div>
+                        <div className="card-header">📋 Dane kontaktowe</div>
+                        <div className="card-body">
+                          <div className="cp-dash-info-item mb-2"><span className="text-secondary small d-block">Email</span><strong>{selectedClient.email || "—"}</strong></div>
+                          <div className="cp-dash-info-item mb-2"><span className="text-secondary small d-block">Telefon</span><strong>{selectedClient.phone || "—"}</strong></div>
+                          <div className="cp-dash-info-item"><span className="text-secondary small d-block">Adres</span><strong>{selectedClient.address || "—"}</strong></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-4">
+                      <div className="card mb-3">
+                        <div className="card-header">⚖️ Przebieg sprawy</div>
+                        <div className="card-body">
+                          <div className="cp-case-steps">
+                            {[
+                              { label: "Wniosek do starostwa", date: selectedClient.dateWniosekStarostwo },
+                              { label: "Wysłane do operatora", date: selectedClient.dateWyslanieDoOperatora },
+                              { label: "Odpowiedź od operatora", date: selectedClient.datePismoOperatora },
+                            ].map((step, i) => (
+                              <div key={i} className={`cp-case-step d-flex align-items-center mb-2 ${step.date ? "text-success" : "text-muted"}`}>
+                                <i className={`pe-7s-${step.date ? 'check' : 'attention'} me-2`} style={{fontSize: '1.2rem'}}></i>
+                                <div>
+                                  <div className="small">{step.label}</div>
+                                  <div className="font-weight-bold">{step.date ? fmtDate(step.date) : "—"}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-4">
+                      <div className="card mb-3">
+                        <div className="card-header">📊 Najlepsza analiza</div>
                         <div className="card-body">
                           {stats.bestAnalysis ? (
-                            <table className="mb-0 table table-hover">
-                              <thead><tr><th>Działka</th><th>Track A</th><th>Track B</th><th>Razem</th></tr></thead>
-                              <tbody>
-                                <tr>
-                                  <td><code>{stats.bestAnalysis.parcelId}</code></td>
-                                  <td>{stats.bestAnalysis.trackA ? Number(stats.bestAnalysis.trackA).toLocaleString("pl-PL") + " zł" : "—"}</td>
-                                  <td>{stats.bestAnalysis.trackB ? Number(stats.bestAnalysis.trackB).toLocaleString("pl-PL") + " zł" : "—"}</td>
-                                  <td className="text-primary fw-bold">{stats.bestAnalysis.total ? Number(stats.bestAnalysis.total).toLocaleString("pl-PL") + " zł" : "—"}</td>
-                                </tr>
-                              </tbody>
-                            </table>
-                          ) : <div className="text-center text-muted py-3">Brak analiz</div>}
+                            <div className="text-center">
+                              <code className="d-block mb-2" style={{fontSize: '1.1rem'}}>{stats.bestAnalysis.parcelId}</code>
+                              <div className="h4 text-success font-weight-bold">{stats.bestAnalysis.total ? Number(stats.bestAnalysis.total).toLocaleString("pl-PL") + " zł" : "—"}</div>
+                            </div>
+                          ) : <div className="text-muted text-center py-3">Brak analiz</div>}
                         </div>
                       </div>
                     </div>
                   </div>
-                  
-                  {stats.lastEvent && (
-                    <div className="card mb-3">
-                      <div className="card-header"><i className="header-icon pe-7s-clock icon-gradient bg-arielle-smile"></i> Ostatnia aktywność</div>
-                      <div className="card-body">
-                        <div className="vertical-timeline vertical-timeline--animate vertical-timeline--one-column">
-                          <div className="vertical-timeline-item vertical-timeline-element">
-                            <div><span className="vertical-timeline-element-icon bounce-in">
-                              <i className="badge badge-dot badge-dot-xl badge-primary"> </i>
-                            </span>
-                            <div className="vertical-timeline-element-content bounce-in">
-                              <h4 className="timeline-title">{eventLabel(stats.lastEvent.type)}</h4>
-                              <p>{stats.lastEvent.text}</p><span className="vertical-timeline-element-date">{fmtDate(stats.lastEvent.date)}</span>
-                            </div></div>
+
+                  <div className="row mt-2">
+                    <div className="col-md-12">
+                      {stats.lastEvent && (
+                        <div className="card mb-3">
+                          <div className="card-header">🕐 Ostatnia aktywność</div>
+                          <div className="card-body p-3">
+                            <div className="d-flex align-items-start">
+                              <div className="badge badge-dot badge-dot-lg me-3" style={{ backgroundColor: eventColor(stats.lastEvent.type) }}> </div>
+                              <div>
+                                <h5 className="mb-1 font-weight-bold">{eventLabel(stats.lastEvent.type)}</h5>
+                                <p className="mb-1 text-secondary">{stats.lastEvent.text}</p>
+                                <span className="small text-muted">{fmtDate(stats.lastEvent.date)}</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
+                      {selectedClient.notes && (
+                        <div className="card">
+                          <div className="card-header">📝 Notatki ogólne</div>
+                          <div className="card-body">
+                            <p style={{whiteSpace: 'pre-wrap', color: '#555'}}>{selectedClient.notes}</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {selectedClient.notes && <div className="card border-info mb-3"><div className="card-header bg-info text-white">📝 Notatki</div><div className="card-body"><p className="mb-0">{selectedClient.notes}</p></div></div>}
+                  </div>
                 </div>
               );
             })()}
 
-            {/* DANE */}
+            {/* OTHER TABS */}
             {activeTab === "dane" && (
               <div className="cp-section">
-                <div className="cp-section-title">Dane kontaktowe</div>
-                <div className="cp-data-grid">
-                  {[["Imię i nazwisko", `${selectedClient.firstName} ${selectedClient.lastName}`], ["E-mail", selectedClient.email || "—"], ["Telefon", selectedClient.phone || "—"], ["Adres", selectedClient.address || "—"], ["Nr sprawy", selectedClient.caseNumber || "—"], ["Data dodania", fmtDate(selectedClient.createdAt)]].map(([label, value]) => (
-                    <div key={label} className="cp-data-item"><span className="cp-data-label">{label}</span><span className="cp-data-value">{value}</span></div>
-                  ))}
+                <div className="card">
+                   <div className="card-header">Dane kontaktowe</div>
+                   <div className="card-body">
+                    <div className="cp-data-grid">
+                      {[["Imię i nazwisko", `${selectedClient.firstName} ${selectedClient.lastName}`], ["E-mail", selectedClient.email || "—"], ["Telefon", selectedClient.phone || "—"], ["Adres", selectedClient.address || "—"], ["Nr sprawy", selectedClient.caseNumber || "—"], ["Data dodania", fmtDate(selectedClient.createdAt)]].map(([label, value]) => (
+                        <div key={label} className="cp-data-item"><span className="cp-data-label">{label}</span><span className="cp-data-value">{value}</span></div>
+                      ))}
+                    </div>
+                   </div>
                 </div>
                 <div className="cp-section-title" style={{ marginTop: 24 }}>Przebieg sprawy</div>
                 <div className="cp-data-grid">
@@ -624,21 +525,21 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
               </div>
             )}
 
-            {/* WYNAGRODZENIE */}
             {activeTab === "wynagrodzenie" && (
               <div className="cp-section">
-                <div className="cp-comp-hero">
-                  <div className="cp-comp-hero-left">
-                    <div className="cp-comp-hero-label">Ustalone wynagrodzenie</div>
-                    <div className="cp-comp-hero-amount">{selectedClient.compensation ? Number(selectedClient.compensation).toLocaleString("pl-PL", { minimumFractionDigits: 2 }) + " zł" : "Nie ustalono"}</div>
-                    {selectedClient.compensationDate && <div className="cp-comp-hero-date">Data płatności: {fmtDate(selectedClient.compensationDate)}</div>}
-                  </div>
-                  <div className="cp-comp-hero-right">
-                    <label className={`cp-paid-toggle ${selectedClient.compensationPaid ? "paid" : "unpaid"}`}>
-                      <input type="checkbox" checked={!!selectedClient.compensationPaid} onChange={(e) => setClients((prev) => prev.map((c) => c.id === selectedClient.id ? { ...c, compensationPaid: e.target.checked } : c))} />
-                      <span className="cp-paid-toggle-icon">{selectedClient.compensationPaid ? "✅" : "⏳"}</span>
-                      <span className="cp-paid-toggle-label">{selectedClient.compensationPaid ? "ZAPŁACONE" : "OCZEKUJE"}</span>
-                    </label>
+                <div className="card">
+                  <div className="card-body">
+                    <div className="cp-comp-hero">
+                      <div className="cp-comp-hero-left">
+                        <div className="cp-comp-hero-label text-muted small uppercase">Ustalone wynagrodzenie</div>
+                        <div className="cp-comp-hero-amount h2 font-weight-bold text-primary">{selectedClient.compensation ? Number(selectedClient.compensation).toLocaleString("pl-PL", { minimumFractionDigits: 2 }) + " zł" : "Nie ustalono"}</div>
+                      </div>
+                      <div className="cp-comp-hero-right">
+                        <button className={`btn btn-${selectedClient.compensationPaid ? 'success' : 'outline-warning'}`} onClick={() => setClients(prev => prev.map(c => c.id === selectedId ? {...c, compensationPaid: !c.compensationPaid} : c))}>
+                           {selectedClient.compensationPaid ? "✅ Zapłacone" : "⏳ Oczekuje"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 {(selectedClient.analyses || []).length > 0 && (
@@ -650,99 +551,87 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
               </div>
             )}
 
-            {/* ANALIZY */}
             {activeTab === "analizy" && (
               <div className="cp-section">
-                {(selectedClient.analyses || []).length === 0 ? (
-                  <div className="cp-tab-empty"><div style={{ fontSize: "2.5rem", marginBottom: 12 }}>📊</div><p>Brak przypisanych analiz.</p><p style={{ fontSize: "0.85em", color: "#9b9faa" }}>Po wykonaniu analizy działki użyj przycisku „Przypisz do klienta".</p></div>
-                ) : (
-                  <><div className="cp-section-title">Analizy działek ({(selectedClient.analyses || []).length})</div>
-                  <div className="cp-analyses-cards">{(selectedClient.analyses || []).map((a, i) => (
-                    <div key={i} className="cp-analysis-card">
-                      <div className="cp-analysis-card-header"><code className="cp-analysis-parcel">{a.parcelId || "Działka"}</code><span className="cp-analysis-date">{fmtDate(a.date)}</span></div>
-                      <div className="cp-analysis-amounts">
-                        <div className="cp-analysis-amount"><span>Track A</span><strong>{a.trackA ? Number(a.trackA).toLocaleString("pl-PL") + " zł" : "—"}</strong></div>
-                        <div className="cp-analysis-amount"><span>Track B</span><strong>{a.trackB ? Number(a.trackB).toLocaleString("pl-PL") + " zł" : "—"}</strong></div>
-                        <div className="cp-analysis-amount cp-analysis-total"><span>Razem</span><strong>{a.total ? Number(a.total).toLocaleString("pl-PL") + " zł" : "—"}</strong></div>
-                      </div>
-                    </div>
-                  ))}</div></>
-                )}
+                 <div className="cp-analyses-cards">
+                    {(selectedClient.analyses || []).length === 0 ? (
+                      <div className="cp-tab-empty"><div style={{ fontSize: "2.5rem", marginBottom: 12 }}>📊</div><p>Brak przypisanych analiz.</p><p style={{ fontSize: "0.85em", color: "#9b9faa" }}>Po wykonaniu analizy działki użyj przycisku „Przypisz do klienta".</p></div>
+                    ) : (
+                      (selectedClient.analyses || []).map((a, i) => (
+                        <div key={i} className="card mb-3 p-3">
+                          <div className="d-flex justify-content-between align-items-center">
+                            <strong><code>{a.parcelId}</code></strong>
+                            <span className="text-muted small">{fmtDate(a.date)}</span>
+                          </div>
+                          <hr className="my-2" />
+                          <div className="d-flex justify-content-between">
+                            <span>Suma:</span>
+                            <strong className="text-success">{a.total ? Number(a.total).toLocaleString("pl-PL") + " zł" : "—"}</strong>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                 </div>
               </div>
             )}
 
-            {/* DOKUMENTY */}
             {activeTab === "dokumenty" && (
               <div className="cp-section">
-                <div className="cp-upload-area" onClick={() => fileInputRef.current?.click()}>
-                  <input ref={fileInputRef} type="file" style={{ display: "none" }} accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt" onChange={handleFileUpload} />
-                  <div className="cp-upload-icon">📎</div>
-                  <div className="cp-upload-label">Kliknij lub przeciągnij plik</div>
-                  <div className="cp-upload-hint">PDF · DOC · XLS · JPG · PNG (maks. 4 MB)</div>
+                <div className="card p-4 text-center border-dashed" onClick={() => fileInputRef.current?.click()} style={{ border: '2px dashed #ddd', cursor: 'pointer' }}>
+                   <i className="pe-7s-cloud-upload display-4 text-muted"></i>
+                   <p className="mt-2 font-weight-bold">Prześlij dokumenty</p>
+                   <input ref={fileInputRef} type="file" className="d-none" onChange={handleFileUpload} />
                 </div>
-                <div className="cp-upload-controls">
-                  <input className="cp-note-input" placeholder="Opis pliku (np. Wniosek do starostwa)…" value={fileNote} onChange={(e) => setFileNote(e.target.value)} />
-                  <button className="cp-btn cp-btn-outline" onClick={() => fileInputRef.current?.click()}>+ Dodaj plik</button>
-                </div>
-                {(selectedClient.files || []).length === 0 && <div className="cp-tab-empty">Brak plików — dodaj pierwsze</div>}
-                <div className="cp-file-list">
-                  {(selectedClient.files || []).map((f) => (
-                    <div key={f.id} className="cp-file-item">
-                      <span className="cp-file-icon">{fileIcon(f.type)}</span>
-                      <div className="cp-file-info">
-                        <div className="cp-file-name">{f.name}</div>
-                        <div className="cp-file-meta">{fmtDate(f.date)}{f.size ? ` · ${fmtSize(f.size)}` : ""}{f.note ? ` · ${f.note}` : ""}{f.tooLarge && <span className="cp-file-toolarge"> ⚠ Za duży</span>}</div>
-                      </div>
-                      <div className="cp-file-actions">
-                        {f.data && <button className="cp-icon-btn cp-icon-btn-green" title="Pobierz" onClick={() => downloadFile(f)}>⬇</button>}
-                        <button className="cp-icon-btn cp-icon-btn-red" title="Usuń" onClick={() => removeFile(f.id)}>✕</button>
-                      </div>
-                    </div>
-                  ))}
+                <div className="mt-4">
+                   {(selectedClient.files || []).map(f => (
+                     <div key={f.id} className="card mb-2 p-2 px-3 d-flex flex-row align-items-center justify-content-between">
+                        <div className="d-flex align-items-center">
+                          <i className="pe-7s-file me-3 h4 mb-0 text-primary"></i>
+                          <div>
+                            <div className="font-weight-bold small">{f.name}</div>
+                            <div className="text-muted tiny">{fmtSize(f.size)}</div>
+                          </div>
+                        </div>
+                        <button className="btn btn-link text-danger" onClick={() => removeFile(f.id)}><i className="pe-7s-trash"></i></button>
+                     </div>
+                   ))}
                 </div>
               </div>
             )}
 
-            {/* TIMELINE */}
             {activeTab === "timeline" && (
-              <div className="cp-section">
-                <div className="cp-timeline-add">
-                  <div className="cp-timeline-add-title">➕ Dodaj wpis do historii</div>
-                  <div className="cp-timeline-add-row">
-                    <select className="cp-input cp-timeline-type-select" value={newEventType} onChange={(e) => setNewEventType(e.target.value)}>
-                      {EVENT_TYPES.map((et) => <option key={et.value} value={et.value}>{et.label}</option>)}
-                    </select>
-                    <input className="cp-input" type="date" value={newEventDate} onChange={(e) => setNewEventDate(e.target.value)} style={{ maxWidth: 160 }} />
-                  </div>
-                  <div className="cp-timeline-add-row">
-                    <input className="cp-input cp-timeline-text-input" placeholder="Opis zdarzenia (np. Pismo wysłane do PGE Dystrybucja)…" value={newEventText} onChange={(e) => setNewEventText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTimelineEvent()} />
-                    <button className="cp-btn cp-btn-primary" onClick={addTimelineEvent}>Dodaj</button>
-                  </div>
-                </div>
-                {(selectedClient.timeline || []).length === 0 ? (
-                  <div className="cp-tab-empty"><div style={{ fontSize: "2.5rem", marginBottom: 12 }}>📅</div><p>Brak wpisów w historii sprawy.</p></div>
-                ) : (
-                  <div className="cp-timeline-list">
-                    {(selectedClient.timeline || []).map((event) => (
-                      <div key={event.id} className="cp-timeline-item" style={{ borderLeftColor: eventColor(event.type) }}>
-                        <div className="cp-timeline-dot" style={{ background: eventColor(event.type) }}></div>
-                        <div className="cp-timeline-content">
-                          <div className="cp-timeline-header">
-                            <span className="cp-timeline-type">{eventLabel(event.type)}</span>
-                            <span className="cp-timeline-date">{fmtDate(event.date)}</span>
-                            <button className="cp-icon-btn cp-icon-btn-red cp-timeline-delete" onClick={() => removeTimelineEvent(event.id)} title="Usuń wpis">✕</button>
-                          </div>
-                          <div className="cp-timeline-text">{event.text}</div>
-                        </div>
+               <div className="cp-section">
+                 <div className="card mb-4 p-3">
+                   <h6>Dodaj wpis</h6>
+                   <div className="d-flex gap-2">
+                     <select className="form-control" value={newEventType} onChange={e => setNewEventType(e.target.value)}>
+                       {EVENT_TYPES.map(et => <option key={et.value} value={et.value}>{et.label}</option>)}
+                     </select>
+                     <input className="form-control" placeholder="Opis..." value={newEventText} onChange={e => setNewEventText(e.target.value)} />
+                     <button className="btn btn-primary" onClick={addTimelineEvent}>Dodaj</button>
+                   </div>
+                 </div>
+                 <div className="vertical-timeline vertical-timeline--animate vertical-timeline--one-column">
+                    {(selectedClient.timeline || []).map(e => (
+                      <div key={e.id} className="vertical-timeline-item vertical-timeline-element">
+                         <div>
+                            <span className="vertical-timeline-element-icon bounce-in">
+                               <i className="badge badge-dot badge-dot-xl" style={{ backgroundColor: eventColor(e.type) }}> </i>
+                            </span>
+                            <div className="vertical-timeline-element-content bounce-in">
+                               <h4 className="timeline-title">{eventLabel(e.type)}</h4>
+                               <p>{e.text}</p>
+                               <span className="vertical-timeline-element-date">{fmtDate(e.date)}</span>
+                            </div>
+                         </div>
                       </div>
                     ))}
-                  </div>
-                )}
-              </div>
+                 </div>
+               </div>
             )}
 
-            {/* AI ASYSTENT — using separate NotebookPanel component from GitHub */}
-            {activeTab === "ai" && (
+            {/* AI & NOTEBOOK — Unified Panel using the good GitHub component */}
+            {(activeTab === "ai_full" || activeTab === "ai" || activeTab === "notebook") && (
               <NotebookPanel
                 selectedClient={selectedClient}
                 nbApiStatus={nbApiStatus}
@@ -759,11 +648,9 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
                 eventLabel={eventLabel}
               />
             )}
-
           </div>
         )}
       </main>
-      </div>
     </div>
   );
 }
