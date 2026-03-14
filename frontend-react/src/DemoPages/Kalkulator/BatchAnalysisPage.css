@@ -82,6 +82,13 @@
   padding: calc(var(--batch-space) * 4) calc(var(--batch-space) * 5) calc(var(--batch-space) * 6);
 }
 
+/* Wyniki analizy — szerszy kontener, żeby tabela działek miała miejsce */
+.batch-page__content:has(.batch-results) {
+  max-width: 100%;
+  padding-left: calc(var(--batch-space) * 3);
+  padding-right: calc(var(--batch-space) * 3);
+}
+
 /* ── Cards (DashCode: bordered, section style) ────────────────────────── */
 .batch-card {
   background: var(--batch-card);
@@ -675,6 +682,12 @@
   margin-top: 0;
 }
 
+.batch-tab-panel--table {
+  width: 100%;
+  max-width: 100%;
+  overflow: visible;
+}
+
 .batch-tab-panel--raport {
   display: grid;
   gap: calc(var(--batch-space) * 3);
@@ -711,11 +724,14 @@
 }
 
 .batch-table-wrap {
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   border-radius: var(--batch-radius-lg);
   border: 1px solid var(--dash-border);
   background: var(--batch-card);
   box-shadow: var(--dash-shadow);
+  -webkit-overflow-scrolling: touch;
 }
 
 .batch-table-skeleton {
@@ -724,9 +740,11 @@
 
 .results-table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
-  min-width: 720px;
+  min-width: 800px;
+  table-layout: auto;
 }
 
 .results-table__th {

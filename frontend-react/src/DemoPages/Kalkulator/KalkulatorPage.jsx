@@ -7,6 +7,7 @@ import { toast } from "react-toastify";
 import CountUp from "react-countup";
 import { Spinner, Badge, Table, Progress } from "reactstrap";
 import ReportGenerator from "../../components/ReportGenerator";
+import { BASE_LAYERS, GUGIK_WMS, OIM_TILES } from "./mapSources";
 import "./KalkulatorPage.css";
 
 // ── Leaflet default icon fix ──────────────────────────────────────────────────
@@ -77,25 +78,23 @@ function ParcelMiniMap({ geojson, centroid, collision, height = 260 }) {
     });
 
     // ── 1. CartoDB Positron — czysty biały podkład mapowy (jak Mapbox Light) ──
-    L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-      { subdomains: "abcd", maxZoom: 19, attribution: "© OSM © CARTO" }
-    ).addTo(map);
+    L.tileLayer(BASE_LAYERS.cartoLight.url, BASE_LAYERS.cartoLight.options).addTo(map);
 
     // ── 2. GUGIK EGiB — siatka katastralna (niebieskie linie działek + numery) ──
-    L.tileLayer.wms(
-      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow",
-      { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.9 }
-    ).addTo(map);
+    L.tileLayer.wms(GUGIK_WMS.KIEG.baseUrl, {
+      layers: GUGIK_WMS.KIEG.layers,
+      format: "image/png",
+      transparent: true,
+      opacity: 0.9,
+    }).addTo(map);
 
     // ── 3. GESUT — uzbrojenie terenu (linie energetyczne, gaz, woda, kanalizacja) ──
-    L.tileLayer.wms(
-      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
-      {
-        layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny,przewod_cieplowniczy",
-        format: "image/png", transparent: true, opacity: 0.9,
-      }
-    ).addTo(map);
+    L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, {
+      layers: `${GUGIK_WMS.KIUT.layers.uzbrojenie},${GUGIK_WMS.KIUT.layers.cieplo}`,
+      format: "image/png",
+      transparent: true,
+      opacity: 0.9,
+    }).addTo(map);
 
     // ── 4. Obrys działki — TYLKO OBRYS, bez zielonego filla ──
     if (geojson?.coordinates) {
@@ -149,34 +148,32 @@ function ParcelMiniMap({ geojson, centroid, collision, height = 260 }) {
 }
 
 // ── GeoJSON działki + GESUT WMS overlay ──────────────────────────────────────
-function GeoJSONLayers({ parcelGeojson }) {
+function GeoJSONLayers({ parcelGeojson, collision }) {
   const map = useMap();
 
   useEffect(() => {
     if (!parcelGeojson) return;
 
-    // Granica działki
+    // Granica działki — cyan (bez kolizji) / magenta (z kolizją), jak w commicie feat(maps)
+    const parcelColor = collision ? "#ff0055" : "#00ffff";
     const parcelLayer = L.geoJSON(parcelGeojson, {
       style: {
-        color: "#a91079",
-        weight: 3,
-        fillColor: "#a91079",
-        fillOpacity: 0.18,
+        color: parcelColor,
+        weight: 4,
+        fillColor: parcelColor,
+        fillOpacity: 0.15,
       },
     });
     parcelLayer.addTo(map);
 
-    // GESUT WMS — uzbrojenie terenu (niewidoczne na geoportal orto, ale dane są)
-    const gesutLayer = L.tileLayer.wms(
-      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
-      {
-        layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy",
-        format: "image/png",
-        transparent: true,
-        opacity: 0.7,
-        attribution: "GESUT GUGiK",
-      }
-    );
+    // KIUT GUGiK WMS — uzbrojenie terenu, opacity 100% (czytelne linie)
+    const gesutLayer = L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, {
+      layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy",
+      format: "image/png",
+      transparent: true,
+      opacity: 1.0,
+      attribution: GUGIK_WMS.KIUT.attribution,
+    });
     gesutLayer.addTo(map);
 
     let bufferCircle = null;
@@ -186,8 +183,8 @@ function GeoJSONLayers({ parcelGeojson }) {
         map.fitBounds(bounds, { padding: [40, 40] });
         const center = bounds.getCenter();
         bufferCircle = L.circle(center, {
-          radius: 200, color: '#e74c3c', fillColor: 'transparent', weight: 1.5, dashArray: '5, 5'
-        }).addTo(map).bindTooltip("Zasięg analizy promieniowej (200m)", { sticky: true, className: 'no-bg-tooltip', direction: 'top' });
+          radius: 200, color: "#ffffff", fillColor: "transparent", weight: 1.5, dashArray: "5, 5"
+        }).addTo(map).bindTooltip("Zasięg analizy promieniowej (200m)", { sticky: true, className: "no-bg-tooltip", direction: "top" });
       }
     } catch (_) {}
 
@@ -196,7 +193,7 @@ function GeoJSONLayers({ parcelGeojson }) {
       map.removeLayer(gesutLayer);
       if (bufferCircle) map.removeLayer(bufferCircle);
     };
-  }, [map, parcelGeojson]);
+  }, [map, parcelGeojson, collision]);
 
   return null;
 }
@@ -212,7 +209,6 @@ const INFRA_LEGEND = [
 ];
 
 // ── Overpass API — linie i słupy energetyczne z OSM ──────────────────────────
-const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 
 const VOLTAGE_COLOR = (v) => {
   const n = parseInt(v) || 0;
@@ -520,35 +516,30 @@ function InfrastructureLayer() {
   useEffect(() => {
     // ── Open Infrastructure Map — kafelki linii energetycznych (ZAWSZE WIDOCZNE) ──
     // Darmowe, publiczne, bazują na OSM. Pokrycie: globalne, w tym PL.
-    const oimPower = L.tileLayer(
-      "https://tiles.openinframap.org/power/{z}/{x}/{y}.png",
-      {
-        attribution: '⚡ <a href="https://openinframap.org" target="_blank">Open Infrastructure Map</a>',
-        opacity: 0.9,
-        maxZoom: 19,
-        zIndex: 6,
-      }
-    );
+    const oimPower = L.tileLayer(OIM_TILES.power, {
+      attribution: '⚡ <a href="https://openinframap.org" target="_blank">Open Infrastructure Map</a>',
+      opacity: 1.0,
+      maxZoom: 19,
+      zIndex: 6,
+    });
 
     // ── KIUT GUGiK WMS — linie energetyczne PL (oficjalne dane PL) ──
-    const KIUT_URL = "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu";
-    const KIEG_URL = "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow";
     const wmsBase = { format: "image/png", transparent: true, opacity: 1.0, zIndex: 5 };
-    const kiutElektro = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny", attribution: "KIUT GUGiK" });
-    const kiutGaz     = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_gazowy" });
-    const kiutWoda    = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_wodociagowy" });
-    const kiutKanal   = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_kanalizacyjny" });
-    const kiutCieplo  = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_cieplowniczy" });
-    const kiutTelekom = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_telekomunikacyjny" });
+    const kiutElektro = L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, { ...wmsBase, layers: GUGIK_WMS.KIUT.layers.uzbrojenie, attribution: GUGIK_WMS.KIUT.attribution });
+    const kiutGaz     = L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, { ...wmsBase, layers: GUGIK_WMS.KIUT.layers.gaz });
+    const kiutWoda    = L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, { ...wmsBase, layers: GUGIK_WMS.KIUT.layers.woda });
+    const kiutKanal   = L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, { ...wmsBase, layers: GUGIK_WMS.KIUT.layers.kanal });
+    const kiutCieplo  = L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, { ...wmsBase, layers: GUGIK_WMS.KIUT.layers.cieplo });
+    const kiutTelekom = L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, { ...wmsBase, layers: GUGIK_WMS.KIUT.layers.telekom });
 
     // ── KIEG GUGiK WMS — siatka działek (działki + numery) ──
-    const kiegParcels = L.tileLayer.wms(KIEG_URL, {
+    const kiegParcels = L.tileLayer.wms(GUGIK_WMS.KIEG.baseUrl, {
       format: "image/png",
       transparent: true,
       opacity: 0.8,
       zIndex: 4,
-      layers: "dzialki,numery_dzialek",
-      attribution: "KIEG GUGiK",
+      layers: GUGIK_WMS.KIEG.layers,
+      attribution: GUGIK_WMS.KIEG.attribution,
     });
 
     // Domyślnie włączone: OIM (zawsze widoczna) + KIUT elektro + siatka działek KIEG
@@ -585,29 +576,30 @@ function BatchMapLayerControl() {
   useEffect(() => {
     // Base layers
     // Base layers
-    const topo = L.tileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
-      { maxZoom: 18, attribution: "© Esri" }
-    );
-    const satellite = L.tileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      { maxZoom: 19 }
-    );
+    const topo = L.tileLayer(BASE_LAYERS.esriTopo.url, {
+      maxZoom: BASE_LAYERS.esriTopo.maxZoom,
+      attribution: BASE_LAYERS.esriTopo.attribution,
+    });
+    const satellite = L.tileLayer(BASE_LAYERS.esriSatellite.url, {
+      maxZoom: BASE_LAYERS.esriSatellite.maxZoom,
+      attribution: BASE_LAYERS.esriSatellite.attribution,
+    });
     satellite.addTo(map); // ── SATELITA domyślnie ──
 
     // Overlays — wszystkie 3 włączone od razu
-    const oimPower = L.tileLayer(
-      "https://tiles.openinframap.org/power/{z}/{x}/{y}.png",
-      { opacity: 1.0, maxZoom: 19 }
-    );
-    const gugikEw = L.tileLayer.wms(
-      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow",
-      { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.8 }
-    );
-    const kiutElektro = L.tileLayer.wms(
-      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
-      { layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny", format: "image/png", transparent: true, opacity: 1.0 }
-    );
+    const oimPower = L.tileLayer(OIM_TILES.power, { opacity: 1.0, maxZoom: 19 });
+    const gugikEw = L.tileLayer.wms(GUGIK_WMS.KIEG.baseUrl, {
+      layers: GUGIK_WMS.KIEG.layers,
+      format: "image/png",
+      transparent: true,
+      opacity: 0.8,
+    });
+    const kiutElektro = L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, {
+      layers: GUGIK_WMS.KIUT.layers.uzbrojenie,
+      format: "image/png",
+      transparent: true,
+      opacity: 1.0,
+    });
     // Wszystkie 3 nakładki domyślnie włączone
     oimPower.addTo(map);
     gugikEw.addTo(map);
@@ -1120,10 +1112,10 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
         } catch(e) {}
       }
       var map = L.map(el, { zoomControl: true, attributionControl: false, scrollWheelZoom: true, dragging: true, doubleClickZoom: true });
-      var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '© Esri' }).addTo(map);
-      var egibLayer = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.8 }).addTo(map);
-      var kiutLayer = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu', { layers:'przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy', format:'image/png', transparent:true, opacity:1.0 }).addTo(map);
-      var powerLayer = L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png', { maxZoom:19, opacity:1.0, attribution:'© OpenStreetMap contributors' }).addTo(map);
+      var satLayer = L.tileLayer('${BASE_LAYERS.esriSatellite.url}', { maxZoom: ${BASE_LAYERS.esriSatellite.maxZoom}, attribution: '${BASE_LAYERS.esriSatellite.attribution}' }).addTo(map);
+      var egibLayer = L.tileLayer.wms('${GUGIK_WMS.KIEG.baseUrl}', { layers: '${GUGIK_WMS.KIEG.layers}', format: 'image/png', transparent: true, opacity: 0.8 }).addTo(map);
+      var kiutLayer = L.tileLayer.wms('${GUGIK_WMS.KIUT.baseUrl}', { layers: '${GUGIK_WMS.KIUT.layers.uzbrojenie}', format: 'image/png', transparent: true, opacity: 1.0 }).addTo(map);
+      var powerLayer = L.tileLayer('${OIM_TILES.power}', { maxZoom: 19, opacity: 1.0, attribution: '© OpenInfraMap' }).addTo(map);
       
       L.control.layers(
         { 'Satelita (Esri)': satLayer },
@@ -1164,20 +1156,20 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
     });
 
     // Base layers
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-      { subdomains:'abcd', maxZoom:19, attribution:'© Carto' }).addTo(map);
-    L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow',
-      { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.75 }).addTo(map);
+    L.tileLayer('${BASE_LAYERS.cartoLight.url}',
+      { subdomains: 'abcd', maxZoom: ${BASE_LAYERS.cartoLight.options.maxZoom}, attribution: '${BASE_LAYERS.cartoLight.options.attribution}' }).addTo(map);
+    L.tileLayer.wms('${GUGIK_WMS.KIEG.baseUrl}',
+      { layers: '${GUGIK_WMS.KIEG.layers}', format: 'image/png', transparent: true, opacity: 0.75 }).addTo(map);
 
     // Infrastructure layers
-    var powerLayer = L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png',
-      { maxZoom:19, opacity:0.8, attribution:'© OpenInfra' });
-    var gasLayer = L.tileLayer('https://tiles.openinframap.org/gas/{z}/{x}/{y}.png',
-      { maxZoom:19, opacity:0.7, attribution:'© OpenInfra' });
-    var waterLayer = L.tileLayer('https://tiles.openinframap.org/water/{z}/{x}/{y}.png',
-      { maxZoom:19, opacity:0.7, attribution:'© OpenInfra' });
-    var sewerLayer = L.tileLayer('https://tiles.openinframap.org/sewer/{z}/{x}/{y}.png',
-      { maxZoom:19, opacity:0.7, attribution:'© OpenInfra' });
+    var powerLayer = L.tileLayer('${OIM_TILES.power}',
+      { maxZoom: 19, opacity: 0.8, attribution: '© OpenInfra' });
+    var gasLayer = L.tileLayer('${OIM_TILES.gas}',
+      { maxZoom: 19, opacity: 0.7, attribution: '© OpenInfra' });
+    var waterLayer = L.tileLayer('${OIM_TILES.water}',
+      { maxZoom: 19, opacity: 0.7, attribution: '© OpenInfra' });
+    var sewerLayer = L.tileLayer('${OIM_TILES.sewer}',
+      { maxZoom: 19, opacity: 0.7, attribution: '© OpenInfra' });
 
     powerLayer.addTo(map);
 
@@ -1220,8 +1212,8 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
 
     // Layer controls
     L.control.layers(
-      { 'Mapa': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-        { subdomains:'abcd', maxZoom:19 }) },
+      { 'Mapa': L.tileLayer('${BASE_LAYERS.cartoLight.url}',
+        { subdomains: 'abcd', maxZoom: ${BASE_LAYERS.cartoLight.options.maxZoom} }) },
       {
         '⚡ Linie energetyczne (Power)': powerLayer,
         '🔥 Gaz (Gas)': gasLayer,
@@ -3175,9 +3167,10 @@ export default function KalkulatorPage() {
                           {/* Overpass OSM — linie i słupy energetyczne (pre-loaded) */}
                           <PreloadedPowerLayer geoJSON={powerGeoJSON} />
 
-                          {/* Granica działki (GeoJSON) */}
+                          {/* Granica działki (GeoJSON), kolor wg kolizji — cyan/magenta */}
                           <GeoJSONLayers
                             parcelGeojson={geom.geojson_ll || geom.geojson}
+                            collision={result?.data?.infrastructure?.power_lines?.detected}
                           />
                         </MapContainer>
 
@@ -3243,9 +3236,10 @@ export default function KalkulatorPage() {
                             attribution='© <a href="https://opentopomap.org">OpenTopoMap</a> · <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
                             maxZoom={17}
                           />
-                          {/* Granica działki */}
+                          {/* Granica działki (cyan/magenta wg kolizji) */}
                           <GeoJSONLayers
                             parcelGeojson={geom.geojson_ll || geom.geojson}
+                            collision={result?.data?.infrastructure?.power_lines?.detected}
                           />
                         </MapContainer>
                         {/* Przycisk Mapy.cz */}
@@ -3667,12 +3661,15 @@ export default function KalkulatorPage() {
                             </tr>
                           ))}
 
-                          {/* R5 — tylko dla rolników */}
-                          {R5.active && (
+                          {/* R5 — szkoda rolna: tylko przy zaznaczeniu „Rolnik” */}
+                          {R5.active ? (
                             <>
                               <tr style={{ background: "#eafaf1" }}>
                                 <td style={{ padding: "6px 10px" }}>
                                   <span style={{ fontWeight: 600, color: "#1a7a2e" }}>🌾 R5 — Szkoda rolna</span>
+                                  <div style={{ fontSize: "0.7rem", color: "#1a7a2e", marginTop: "2px" }}>
+                                    Wyliczona wyłącznie przy zaznaczeniu opcji «Rolnik» w formularzu.
+                                  </div>
                                   <div style={{ fontSize: "0.75rem", color: "#555", marginTop: "2px" }}>
                                     {R5.detail?.pole_count} słupów · fundamenty + wyspy niedostępne sprzętowi
                                   </div>
@@ -3706,6 +3703,17 @@ export default function KalkulatorPage() {
                                 </tr>
                               )}
                             </>
+                          ) : (
+                            <tr style={{ opacity: 0.7 }}>
+                              <td style={{ padding: "6px 10px" }}>
+                                <span style={{ fontWeight: 500, color: "#555" }}>R5 — Szkoda rolna</span>
+                                <div style={{ fontSize: "0.7rem", color: "#e74c3c", marginTop: "2px" }}>
+                                  Nie dotyczy — nie zaznaczono opcji «Rolnik» w formularzu.
+                                </div>
+                              </td>
+                              <td style={{ padding: "6px 10px", fontSize: "0.8rem", color: "#555" }}>art. 361 §1–2 KC</td>
+                              <td style={{ padding: "6px 10px", textAlign: "right", color: "#999" }}>n.d.</td>
+                            </tr>
                           )}
                         </tbody>
                         {total > 0 && (

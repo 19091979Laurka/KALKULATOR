@@ -763,7 +763,12 @@ def generate_pdf(
         area  = f"{(geom.get('area_m2') or 0):,.0f}"
         klasa = egib.get("primary_class","—")
         typ   = "Bud." if egib.get("land_type") == "building" else "Rolny"
-        cena  = f"{(md.get('average_price_m2') or 0):.2f}"
+        price_val = md.get("average_price_m2")
+        price_status = md.get("status") or ""
+        if (price_val is None or price_val == 0) and price_status != "Korekta ręczna":
+            cena = "bł. integracji"
+        else:
+            cena = f"{(price_val or 0):.2f}"
         id_rows.append([teryt, gmina, area, klasa, typ, cena])
     cw_id = [W_txt*0.25, W_txt*0.30, W_txt*0.12, W_txt*0.09, W_txt*0.10, W_txt*0.14]
     story.append(std_table(id_rows, cw_id, C_PRIMARY))
@@ -830,9 +835,25 @@ def generate_pdf(
     story.append(Paragraph("IV. WYCENA ODSZKODOWANIA — KSWS TRACK A/B", S["h2"]))
     story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceAfter=6))
 
+    story.append(Paragraph(
+        "<b>Metodologia wyliczania roszczeń.</b> Wszystkie dane w raporcie są pobierane z integracji (API): "
+        "geometria i powierzchnia — ULDK/EGiB, cena gruntu — GUS BDL, długość linii i kolizja — KIUT/Overpass, "
+        "współczynniki KSWS według typu infrastruktury. Gdy dane nie zostały pobrane, w tabelach oznaczane jest "
+        "„bł. integracji” zamiast wartości domyślnych. <b>Track A (TK P 10/16):</b> WSP + WBK + OBN "
+        "(WSP = wartość × S × k × % pasa; WBK = wartość × R × k × % pasa × lata; OBN = wartość × impact). "
+        "<b>Track B:</b> Track A × mnożnik. R1–R5: R1=WSP, R2=WBK, R3=OBN, R4=blokada WZ, R5=szkoda rolna (przy opcji Rolnik).",
+        S["body"]))
+    story.append(Spacer(1, 4*mm))
+
     # Parametry KSWS
     basis = (parcels_data[0].get("compensation") or {}).get("basis") or {}
     ksws0 = parcels_data[0].get("ksws") or {}
+    md0 = parcels_data[0].get("market_data") or {}
+    price_pm2 = ksws0.get("price_per_m2")
+    price_ok = price_pm2 is not None and price_pm2 != 0
+    price_manual = (md0.get("status") or "") == "Korekta ręczna"
+    cena_gruntu_val = "bł. integracji (GUS)" if (not price_ok and not price_manual) else f"{(price_pm2 or 0):.2f} zł/m²"
+    cena_gruntu_src = "Dane nie pobrane — błąd integracji" if (not price_ok and not price_manual) else ("Źródło: " + (md0.get("price_source") or "GUS"))
     story.append(Paragraph("Parametry KSWS:", S["h3"]))
     ksws_rows = [
         [Paragraph("Wsp.", S["th"]), Paragraph("Wartość", S["th"]), Paragraph("Opis", S["th"])],
@@ -842,8 +863,7 @@ def generate_pdf(
         ["impact", str(basis.get("impact_judicial","0,073")), "Wskaźnik wpływu OBN"],
         ["Mnożnik B", f"×{basis.get('track_b_multiplier',1.80)}", "Track B = Track A × mnożnik"],
         ["Pas ochronny", f"{ksws0.get('band_width_m',30)} m", "Szerokość strefy ochronnej"],
-        ["Cena gruntu", f"{ksws0.get('price_per_m2',6.50):.2f} zł/m²",
-         "Źródło: " + (parcels_data[0].get("market_data") or {}).get("price_source","GUS")],
+        ["Cena gruntu", cena_gruntu_val, cena_gruntu_src],
     ]
     story.append(std_table(ksws_rows,
                            [W_txt*0.14, W_txt*0.16, W_txt*0.70], C_GREEN))
@@ -998,6 +1018,15 @@ def generate_pdf(
             r52 = r5d.get("r52") or {}
             prod_gus = r5d.get("prod_per_ha_year_gus", 0)
             cq_rows.append([
+                Paragraph(
+                    "<b>R5 — Szkoda rolna</b><br/>"
+                    "<font size='8' color='#1a7a2e'>Wyliczona wyłącznie przy zaznaczeniu opcji «Rolnik» w formularzu analizy.</font>",
+                    S["body"]),
+                Paragraph("art. 361 §1–2 KC", S["small"]),
+                Paragraph("—", S["small"]),
+                Paragraph(fmt_pln(r5.get("value")), S["small"]),
+            ])
+            cq_rows.append([
                 Paragraph("<b>R5.1 — Fundamenty słupów</b><br/>Damnum emergens", S["body"]),
                 Paragraph("art. 361 §1 KC", S["small"]),
                 Paragraph(r51.get("formula", "—"), S["small"]),
@@ -1011,6 +1040,16 @@ def generate_pdf(
                     f"<font size='8'>GUS prod. globalna: {prod_gus:,.0f} zł/ha/rok</font>",
                     S["small"]),
                 Paragraph(fmt_pln(r52.get("value")), S["small"]),
+            ])
+        else:
+            cq_rows.append([
+                Paragraph(
+                    "<b>R5 — Szkoda rolna</b><br/>"
+                    "<font size='8' color='#e74c3c'>Nie dotyczy — opcja «Rolnik» nie była zaznaczona w formularzu analizy.</font>",
+                    S["body"]),
+                Paragraph("art. 361 §1–2 KC", S["small"]),
+                Paragraph("—", S["small"]),
+                Paragraph("n.d.", S["small"]),
             ])
 
         story.append(std_table(cq_rows, [W_txt*0.27, W_txt*0.18, W_txt*0.34, W_txt*0.21], C_PRIMARY))

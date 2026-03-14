@@ -4,6 +4,16 @@ Przegląd wszystkich miejsc, gdzie powstają raporty z danymi działek, oraz wzo
 
 ---
 
+## Metodologia i źródła danych (zasady raportów)
+
+- **Opis metodologii** — we wszystkich analizach i raportach (pojedyncza działka, zbiorczy HTML, PDF) musi być **jasno opisana metodologia wyliczania roszczeń**: Track A = WSP + WBK + OBN (TK P 10/16), Track B = Track A × mnożnik, R1–R5 (WSP, WBK, OBN, blokada WZ, szkoda rolna przy opcji Rolnik). Wzory i źródła współczynników (KSWS) są podane w bloku „Metodologia wyliczania roszczeń” w raporcie.
+- **Dane tylko z integracji** — wszystkie dane zbierane w raportach są **pobierane z API/integracji** (ULDK/EGiB — geometria, powierzchnia; GUS BDL — cena gruntu; KIUT/Overpass — długość linii, kolizja). Nie stosuje się wartości „na sztywno” w miejsce brakujących danych.
+- **Brak danych = błąd integracji** — gdy dane nie zostały pobrane (np. brak ceny z GUS, błąd ULDK), w raporcie i w UI wyświetlane jest **„Błąd integracji”** (np. „Błąd integracji (GUS)”, „bł. integracji” w PDF) zamiast domyślnych liczb. Dzięki temu wiadomo, że problem leży po stronie integracji, a nie w domyślnych założeniach systemu.
+
+**Miejsca bloku metodologii:** `HistoriaAnalizPage.jsx` (buildSingleHtml — tabela „Podstawa wyceny KSWS”), `BatchHistoryPage.jsx` (displayBatchReport — przed listą działek), `backend/modules/pdf_report.py` (sekcja IV. WYCENA).
+
+---
+
 ## 1. Raport pojedynczej działki — główny widok i PDF
 
 **Decyzja:** Głównym raportem do eksportu PDF jest **ten sam widok**, co w zakładce **Analiza działki**: karty (boxy), mapa, Track A/B, R1–R5, metryki. Użytkownik widzi na ekranie dokładnie to, co może zapisać do PDF (np. przez „Drukuj” → „Zapisz jako PDF” z przeglądarki, po ustawieniu druku tylko na sekcję `#raport-do-pdf`).

@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import "./KalkulatorPage.css";
+import { BASE_LAYERS, GUGIK_WMS, OIM_TILES } from "./mapSources";
 
 const HISTORY_KEY = "ksws_history";
 
@@ -20,9 +21,14 @@ export function buildSingleHtml(item) {
   const total = trackA + trackB;
   const collision = !!pl.detected;
   const dateStr = item.date || new Date().toLocaleString("pl-PL");
+  const cq = mr.claims_qualification || {};
+  const totalActive = cq.total_active_claims ?? total;
+  const priceStatus = market.status || "";
+  const integrationErrorPrice = (price == null || price === 0) && priceStatus !== "Korekta ręczna";
 
   const fmtI = (v) => Math.round(v || 0).toLocaleString("pl-PL");
   const fmtN = (v) => (v || 0).toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const priceSub = integrationErrorPrice ? "Cena nie została pobrana z GUS BDL — sprawdź połączenie z API." : ("GUS BDL · " + (market.price_source || "GUS"));
 
   const parcelGeo = geom.geojson_ll || geom.geojson || null;
   const centroid = geom.centroid_ll || null;
@@ -171,8 +177,8 @@ export function buildSingleHtml(item) {
       </div>
       <div class="t-card gold">
         <div class="t-card-title">Cena Rynkowa</div>
-        <div class="t-card-val">${fmtN(price)} zł/m²</div>
-        <div class="t-card-sub">GUS BDL<br>GUS: ${fmtN(price)} zł/m²</div>
+        <div class="t-card-val">${integrationErrorPrice ? "—" : fmtN(price) + " zł/m²"}</div>
+        <div class="t-card-sub">${priceSub}</div>
       </div>
     </div>
     
@@ -219,8 +225,8 @@ export function buildSingleHtml(item) {
           <div class="i-icon gold">💰</div>
           <div class="i-content">
             <div class="i-title">Cena Rynkowa</div>
-            <div class="i-val">${fmtN(price)} zł/m²</div>
-            <div class="i-sub">Źródło: GUS BDL - GUS: ${fmtN(price)} zł/m²</div>
+            <div class="i-val">${integrationErrorPrice ? "Błąd integracji (GUS)" : fmtN(price) + " zł/m²"}</div>
+            <div class="i-sub">${priceSub}</div>
           </div>
         </div>
       </div>
@@ -271,14 +277,14 @@ export function buildSingleHtml(item) {
     
     <div class="table-card">
       <div class="table-header">📊 Podstawa wyceny KSWS</div>
-      <table>
+      <table style="table-layout:fixed;width:100%;">
         <thead>
           <tr>
-            <th>Parametr</th>
-            <th>Wartość</th>
-            <th class="td-center">Wsp.</th>
-            <th class="td-center">Wartość</th>
-            <th>Opis</th>
+            <th style="width:22%;">Parametr</th>
+            <th style="width:18%;">Wartość</th>
+            <th class="td-center" style="width:10%;">Wsp.</th>
+            <th class="td-center" style="width:12%;">Wartość</th>
+            <th style="width:38%;">Opis</th>
           </tr>
         </thead>
         <tbody>
@@ -286,45 +292,52 @@ export function buildSingleHtml(item) {
             <td>Typ infrastruktury</td>
             <td class="td-val">Linie ${pl.voltage || "—"}</td>
             <td class="td-center" style="color:#e74c3c;">S</td>
-            <td class="td-center">0.2</td>
+            <td class="td-center">${(comp.basis && comp.basis.S != null) ? comp.basis.S : "0,2"}</td>
             <td>obniżenie wartości pasa</td>
           </tr>
           <tr>
             <td>Szerokość pasa ochronnego</td>
             <td class="td-val">${mr.ksws?.band_width_m || "—"} m</td>
             <td class="td-center" style="color:#e74c3c;">k</td>
-            <td class="td-center">0.5</td>
+            <td class="td-center">${(comp.basis && comp.basis.k != null) ? comp.basis.k : "0,5"}</td>
             <td>współczynnik korzystania</td>
           </tr>
           <tr>
             <td>Powierzchnia pasa</td>
             <td class="td-val">${fmtI(mr.ksws?.band_area_m2 || 0)} m²</td>
             <td class="td-center" style="color:#e74c3c;">R</td>
-            <td class="td-center">0.06</td>
+            <td class="td-center">${(comp.basis && comp.basis.R != null) ? comp.basis.R : "0,06"}</td>
             <td>stopa kapitalizacji</td>
           </tr>
           <tr>
             <td>Wartość nieruchomości</td>
             <td class="td-val">${fmtN(area * price)} PLN</td>
             <td class="td-center" style="color:#e74c3c;">impact</td>
-            <td class="td-center">0.05</td>
+            <td class="td-center">${(comp.basis && comp.basis.impact_judicial != null) ? comp.basis.impact_judicial : "0,05"}</td>
             <td>wpływ sądowy (OBN)</td>
           </tr>
           <tr>
             <td>Cena bazowa</td>
-            <td class="td-val">${fmtN(price)} zł/m²</td>
-            <td class="td-center" style="color:#e74c3c;">x B</td>
-            <td class="td-center">${comp.track_b?.multiplier || 1.56}</td>
+            <td class="td-val">${integrationErrorPrice ? "Błąd integracji (GUS)" : fmtN(price) + " zł/m²"}</td>
+            <td class="td-center" style="color:#e74c3c;">×&nbsp;B</td>
+            <td class="td-center">${(function(){ const m = comp.basis?.track_b_multiplier ?? comp.track_b?.multiplier ?? 1.56; return typeof m === "number" ? m.toString().replace(".", ",") : m; })()}</td>
             <td>mnożnik Track B</td>
           </tr>
         </tbody>
       </table>
+      <div style="margin-top:14px;padding:12px;background:#f8f9fc;border-radius:8px;border-left:4px solid #3498db;font-size:12px;color:#2c3e50;line-height:1.5;">
+        <strong>Metodologia wyliczania roszczeń</strong><br/>
+        Wszystkie wartości w niniejszym raporcie pochodzą z API (backend) — z integracji: ULDK/EGiB (geometria, powierzchnia), GUS BDL (cena gruntu), KIUT/Overpass (długość linii, kolizja), współczynniki KSWS według typu infrastruktury. Gdy dane nie zostały pobrane, raport wskazuje „Błąd integracji” zamiast wartości domyślnych.<br/>
+        <strong>Track A (ścieżka sądowa, TK P 10/16):</strong> WSP (służebność przesyłu) + WBK (bezumowne korzystanie, 6 lat) + OBN (obniżenie wartości nieruchomości). Wzory: WSP = wartość nier. × S × k × (pow. pasa / pow. działki); WBK = wartość × R × k × % pasa × lata; OBN = wartość × impact_judicial.<br/>
+        <strong>Track B (ścieżka negocjacyjna):</strong> Track A × mnożnik (benchmark rynkowy dla danego typu linii).<br/>
+        <strong>R1–R5:</strong> R1 = WSP; R2 = WBK; R3 = OBN; R4 = blokada zabudowy (WZ/MPZP); R5 = szkoda rolna (tylko przy opcji „Rolnik”).
+      </div>
     </div>
     
     <div class="table-card">
       <div class="table-header">
         ⚖️ Kwalifikacja roszczeń R1–R5
-        <div class="table-header-right">Łącznie: ${fmtN(trackB)} PLN</div>
+        <div class="table-header-right">Łącznie: ${fmtN(totalActive)} PLN</div>
       </div>
       <table>
         <thead>
@@ -335,66 +348,79 @@ export function buildSingleHtml(item) {
           </tr>
         </thead>
         <tbody>
-          <tr>
+          <tr style="opacity: ${(cq.R1 && cq.R1.active) ? 1 : 0.5};">
             <td>
               <strong>R1 — Służebność przesyłu (WSP)</strong>
-              <div class="t-row-sub">Aktywne</div>
+              ${(cq.R1 && cq.R1.note) ? `<div class="t-row-sub">${cq.R1.note}</div>` : ""}
             </td>
             <td>art. 305¹–305⁴ KC</td>
-            <td class="td-right td-val">${fmtN(comp.track_a?.wsp || 0)} PLN</td>
+            <td class="td-right td-val">${(cq.R1 && cq.R1.active) ? fmtN(cq.R1.value) + " PLN" : "n.d."}</td>
           </tr>
-          <tr>
+          <tr style="opacity: ${(cq.R2 && cq.R2.active) ? 1 : 0.5};">
             <td>
-              <strong>R2 — Bezumowne korzystanie (WBK 10 lat)</strong>
-              <div class="t-row-sub">10 lat wstecz (art. 118 KC — przedawnienie od 2018)</div>
+              <strong>R2 — Bezumowne korzystanie (WBK ${(cq.R2 && cq.R2.years) || 6} lat)</strong>
+              ${(cq.R2 && cq.R2.note) ? `<div class="t-row-sub">${cq.R2.note}</div>` : ""}
             </td>
             <td>art. 224–225 KC</td>
-            <td class="td-right td-val">${fmtN(comp.track_a?.wbk || 0)} PLN</td>
+            <td class="td-right td-val">${(cq.R2 && cq.R2.active) ? fmtN(cq.R2.value) + " PLN" : "n.d."}</td>
           </tr>
-          <tr>
+          <tr style="opacity: ${(cq.R3 && cq.R3.active) ? 1 : 0.5};">
             <td>
               <strong>R3 — Obniżenie wartości (OBN)</strong>
-              <div class="t-row-sub">Linia przez centrum działki</div>
+              ${(cq.R3 && cq.R3.note) ? `<div class="t-row-sub">${cq.R3.note}</div>` : ""}
             </td>
-            <td>art. 305¹ KC</td>
-            <td class="td-right td-val">${fmtN(comp.track_a?.obn || 0)} PLN</td>
+            <td>art. 305² KC</td>
+            <td class="td-right td-val">${(cq.R3 && cq.R3.active) ? fmtN(cq.R3.value) + " PLN" : "n.d."}</td>
           </tr>
-          <tr style="opacity: 0.5;">
+          <tr style="opacity: ${(cq.R4 && cq.R4.active) ? 1 : 0.5};">
             <td>
               <strong>R4 — Blokada zabudowy</strong>
-              <div class="t-row-sub">Grunt rolny bez planów zabudowy</div>
+              ${(cq.R4 && cq.R4.note) ? `<div class="t-row-sub">${cq.R4.note}</div>` : ""}
             </td>
             <td>art. 140 KC + WZ/MPZP</td>
-            <td class="td-right td-val">n.d.</td>
+            <td class="td-right td-val">${(cq.R4 && cq.R4.active) ? fmtN(cq.R4.value) + " PLN" : "n.d."}</td>
           </tr>
+          ${(cq.R5 && cq.R5.active) ? `
           <tr class="t-row-green">
             <td>
-              <strong>R5 — Szkoda rolna</strong>
-              <div class="t-row-sub">1 słupów - fundamenty + wyspy niedostępne sprzętowi</div>
+              <strong>🌾 R5 — Szkoda rolna</strong>
+              <div class="t-row-sub" style="color:#1a7a2e; margin-top:4px;">Szkoda rolna (R5) — wyliczona wyłącznie przy zaznaczeniu opcji «Rolnik» w formularzu analizy.</div>
+              ${(cq.R5.detail && (cq.R5.detail.pole_count > 0)) ? `
               <div style="margin-left: 10px; margin-top: 4px;">
-                <div>└ R5.1 Fundamenty (1 st. × 2.0 m²/st)</div>
-                <div>└ R5.2 Wyspy/kliny (100 m² × 2.1419 zł/m²/rok × 10 lat)</div>
+                ${(cq.R5.detail.r51 && cq.R5.detail.r51.formula) ? `<div>└ R5.1 Fundamenty (${cq.R5.detail.r51.formula})</div>` : ""}
+                ${(cq.R5.detail.r52 && cq.R5.detail.r52.formula) ? `<div>└ R5.2 Wyspy/kliny (${cq.R5.detail.r52.formula})</div>` : ""}
               </div>
-              <div class="t-row-sub" style="margin-top: 4px;">Prod. globalna GUS 2023: 21.419 zł/ha/rok (mazowieckie). Belka 24-35m -> 100 m²/słup niedostępnych.</div>
+              ${(cq.R5.detail.r52 && cq.R5.detail.r52.note) ? `<div class="t-row-sub" style="margin-top: 4px;">${cq.R5.detail.r52.note}</div>` : ""}
+              ` : ""}
             </td>
             <td>
-              <br><br>
+              ${(cq.R5.detail && (cq.R5.detail.r51 || cq.R5.detail.r52)) ? `
               <div>art. 361 §1–2 KC</div>
-              <br>
-              <div>damnum emergens</div>
-              <div>lucrum cessans - GUS 21.419 zł/ha/rok</div>
+              ${cq.R5.detail.r51 ? "<div>damnum emergens</div>" : ""}
+              ${cq.R5.detail.r52 ? "<div>lucrum cessans - GUS zł/ha/rok</div>" : ""}
+              ` : "art. 361 §1–2 KC"}
             </td>
             <td class="td-right td-val">
-              <br><br>
-              <div>1299,94 PLN</div>
-              <br>
-              <div>14,80 PLN</div>
-              <div>1285,14 PLN</div>
+              ${(cq.R5.detail && (cq.R5.detail.r51 || cq.R5.detail.r52)) ? `
+              ${cq.R5.detail.r51 ? `<div>${fmtN(cq.R5.detail.r51.value)} PLN</div>` : ""}
+              ${cq.R5.detail.r52 ? `<div>${fmtN(cq.R5.detail.r52.value)} PLN</div>` : ""}
+              ` : ""}
+              <div style="font-weight:700;">${fmtN(cq.R5.value)} PLN</div>
             </td>
           </tr>
+          ` : `
+          <tr style="opacity: 0.6;">
+            <td>
+              <strong>R5 — Szkoda rolna</strong>
+              <div class="t-row-sub" style="color:#e74c3c;">Nie dotyczy — nie zaznaczono opcji «Rolnik» w formularzu analizy.</div>
+            </td>
+            <td>art. 361 §1–2 KC</td>
+            <td class="td-right td-val">n.d.</td>
+          </tr>
+          `}
           <tr style="background: #f8f9fc;">
             <td colspan="2" style="font-weight: 700; color: #2c3e50; padding: 16px 12px;">ŁĄCZNIE AKTYWNE ROSZCZENIA</td>
-            <td class="td-right td-val" style="font-size: 16px; padding: 16px 12px;">${fmtN(trackB)} PLN</td>
+            <td class="td-right td-val" style="font-size: 16px; padding: 16px 12px;">${fmtN(totalActive)} PLN</td>
           </tr>
         </tbody>
       </table>
@@ -446,10 +472,10 @@ export function buildSingleHtml(item) {
         }
         var map = L.map(el, { zoomControl: true, attributionControl: false, scrollWheelZoom: true, dragging: true, doubleClickZoom: true });
         
-        var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '© Esri' }).addTo(map);
-        var kiutLayer = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu', { layers:'przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy', format:'image/png', transparent:true, opacity:1.0 }).addTo(map);
-        var egibLayer = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.8 }).addTo(map);
-        var powerLayer = L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png', { maxZoom:19, opacity:1.0, attribution:'© OpenInfra' }).addTo(map);
+        var satLayer = L.tileLayer('${BASE_LAYERS.esriSatellite.url}', { maxZoom: ${BASE_LAYERS.esriSatellite.maxZoom}, attribution: '${BASE_LAYERS.esriSatellite.attribution}' }).addTo(map);
+        var kiutLayer = L.tileLayer.wms('${GUGIK_WMS.KIUT.baseUrl}', { layers:'${GUGIK_WMS.KIUT.layers.uzbrojenie}', format:'image/png', transparent:true, opacity:1.0 }).addTo(map);
+        var egibLayer = L.tileLayer.wms('${GUGIK_WMS.KIEG.baseUrl}', { layers:'${GUGIK_WMS.KIEG.layers}', format:'image/png', transparent:true, opacity:0.8 }).addTo(map);
+        var powerLayer = L.tileLayer('${OIM_TILES.power}', { maxZoom:19, opacity:1.0, attribution:'© OpenInfra' }).addTo(map);
 
         L.control.layers(
           { 'Satelita (Esri)': satLayer },

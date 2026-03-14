@@ -106,8 +106,8 @@ function buildParcelHtml(parcel, editedLen) {
   </div>
 
   <div class="total-box">
-    <div class="tl">💰 ŁĄCZNE ROSZCZENIE (Track A + Track B)</div>
-    <div class="tv">${(ta + tb).toLocaleString("pl-PL")} PLN</div>
+    <div class="tl">💰 Przedział roszczenia (wybór Track A lub B — nie sumować)</div>
+    <div class="tv">${ta.toLocaleString("pl-PL")} – ${tb.toLocaleString("pl-PL")} PLN</div>
   </div>
 
   <div class="track-grid" style="margin-bottom:18px">
@@ -495,10 +495,11 @@ const BatchAnalysisPage = () => {
                     placeholder="opcjonalnie"
                   />
                 </div>
-                <label className="batch-checkbox">
+                <label className="batch-checkbox" title="Włącza roszczenie R5 (szkoda rolna) dla działek z kolizją; kwoty w analizie mogą zawierać R5.">
                   <input type="checkbox" checked={batchIsFarmer} onChange={e => setBatchIsFarmer(e.target.checked)} className="batch-checkbox__input" />
                   <span className="batch-checkbox__label">Gospodarstwo rolne (R5)</span>
                 </label>
+                <p className="batch-field-hint" style={{ marginTop: 4, marginBottom: 0, fontSize: "0.8rem", color: "var(--batch-text-muted)" }}>Włącza szkodę rolną (R5) w wyliczeniach dla działek z kolizją.</p>
               </div>
               {error && <div className="batch-alert batch-alert--error" role="alert">{error}</div>}
               <button
@@ -563,7 +564,7 @@ const BatchAnalysisPage = () => {
           <section className="batch-results" aria-label="Wyniki analizy">
             <div className="batch-summary-card">
               <div className="batch-summary-card__total">
-                <span className="batch-summary-card__label">Łączne roszczenie (Track A + B){hasEditedLengths ? " — po korekcie" : ""}</span>
+                <span className="batch-summary-card__label">Przedział roszczenia (wybór Track A lub B){hasEditedLengths ? " — po korekcie" : ""}</span>
                 <span className="batch-summary-card__value">{Math.round(displayTrackA + displayTrackB).toLocaleString("pl-PL")} zł</span>
               </div>
               <div className="batch-summary-card__tracks">
@@ -659,10 +660,10 @@ const BatchAnalysisPage = () => {
                   </div>
                 </div>
                 <div style={{ background: "white", borderRadius: 12, padding: 20, boxShadow: "0 1px 6px rgba(0,0,0,0.06)", minWidth: 220 }}>
-                  <div style={{ fontSize: "0.75em", fontWeight: 700, color: "#3d2319", marginBottom: 16 }}>💰 Łączne roszczenie</div>
+                  <div style={{ fontSize: "0.75em", fontWeight: 700, color: "#3d2319", marginBottom: 16 }}>💰 Przedział roszczenia</div>
                   <div style={{ marginBottom: 20 }}>
-                    <div style={{ fontSize: "0.62em", textTransform: "uppercase", letterSpacing: 1, color: "#95a5a6", fontWeight: 700 }}>Razem (A+B)</div>
-                    <div style={{ fontSize: "1.65em", fontWeight: 900, color: "#3d2319" }}>{fmtPLN(displayTrackA + displayTrackB)}</div>
+                    <div style={{ fontSize: "0.62em", textTransform: "uppercase", letterSpacing: 1, color: "#95a5a6", fontWeight: 700 }}>Wybór Track A lub B (nie sumować)</div>
+                    <div style={{ fontSize: "1.1em", fontWeight: 800, color: "#3d2319" }}>{fmtPLN(displayTrackA)} – {fmtPLN(displayTrackB)}</div>
                   </div>
                   <div style={{ borderTop: "1px solid #f0f2f5", paddingTop: 14 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
@@ -715,7 +716,7 @@ const BatchAnalysisPage = () => {
                       );
                     }
 
-                    const mr = p.data || {};
+                    const mr = p.data || p.master_record || {};
                     const geom = mr.geometry || {};
                     const mkt = mr.market_data || {};
                     const infra = mr.infrastructure || {};
@@ -727,12 +728,19 @@ const BatchAnalysisPage = () => {
                     const area = geom.area_m2 || 0;
                     const price = mkt.average_price_m2 || 0;
 
+                    const comp = mr.compensation || {};
                     const editedLen = editedLengths[p.parcel_id];
-                    const autoLen = pwr.line_length_m || 0;
+                    const autoLen = pwr.line_length_m ?? ksws.line_length_m ?? 0;
                     const lineLen = editedLen !== undefined && editedLen !== null ? editedLen : autoLen;
                     const calc = recalcKSWS(area, price, lineLen, infra_type);
                     const collision = pl.detected || lineLen > 0;
                     const needsInput = pl.detected && autoLen <= 0 && (editedLen === undefined || editedLen === null);
+                    // Zgodność z PDF: używaj danych z API (jak w raporcie zbiorczym), recalc tylko gdy użytkownik edytował długość
+                    const useApi = (editedLen === undefined || editedLen === null);
+                    const apiBandWidth = ksws.band_width_m ?? calc.band_width;
+                    const apiBandArea = (useApi && (ksws.band_area_m2 != null)) ? ksws.band_area_m2 : calc.band_area;
+                    const apiTrackA = useApi ? (comp.track_a?.total ?? calc.track_a) : calc.track_a;
+                    const apiTrackB = useApi ? (comp.track_b?.total ?? calc.track_b) : calc.track_b;
 
                     return (
                       <tr key={i} className={`results-table__row ${collision ? "results-table__row--collision" : ""}`}>
@@ -761,25 +769,25 @@ const BatchAnalysisPage = () => {
                             onChange={e => handleLengthChange(p.parcel_id, e.target.value)}
                           />
                         </td>
-                        <td className="results-table__cell results-table__cell--right results-table__cell--num">{calc.band_width}</td>
+                        <td className="results-table__cell results-table__cell--right results-table__cell--num">{apiBandWidth != null ? apiBandWidth : "—"}</td>
                         <td className="results-table__cell results-table__cell--right results-table__cell--num">
-                          {calc.band_area > 0 ? calc.band_area.toLocaleString("pl-PL") : "—"}
+                          {(apiBandArea != null && apiBandArea > 0) ? Math.round(apiBandArea).toLocaleString("pl-PL") : "—"}
                         </td>
                         <td className="results-table__cell results-table__cell--right results-table__cell--num results-table__cell--track-a">
-                          {calc.track_a > 0 ? calc.track_a.toLocaleString("pl-PL") : "—"}
+                          {apiTrackA > 0 ? Math.round(apiTrackA).toLocaleString("pl-PL") : "—"}
                         </td>
                         <td className="results-table__cell results-table__cell--right results-table__cell--num results-table__cell--track-b">
-                          {calc.track_b > 0 ? calc.track_b.toLocaleString("pl-PL") : "—"}
+                          {apiTrackB > 0 ? Math.round(apiTrackB).toLocaleString("pl-PL") : "—"}
                         </td>
                         <td className="results-table__cell results-table__cell--right results-table__cell--num results-table__cell--total">
-                          {(calc.track_a + calc.track_b) > 0 ? (calc.track_a + calc.track_b).toLocaleString("pl-PL") : "—"}
+                          {(apiTrackA + apiTrackB) > 0 ? Math.round(apiTrackA + apiTrackB).toLocaleString("pl-PL") : "—"}
                         </td>
                         <td className="results-table__cell results-table__cell--center">
                           <button
                             type="button"
                             className="table-btn table-btn--primary"
                             onClick={() => downloadParcelHtml(p, lineLen > 0 ? lineLen : null)}
-                            title="Pobierz raport HTML"
+                            title="Prosty raport HTML (z Twoją edycją dł. linii). Pełny raport z mapą i R1–R5: Historia raportów → Otwórz Raport przy działce."
                           >
                             Pobierz HTML
                           </button>
@@ -813,12 +821,19 @@ const BatchAnalysisPage = () => {
                 <li><strong>Współczynniki KSWS:</strong> Standard KSWS-V.5 (wbudowane)</li>
               </ul>
               <hr style={{ margin: "16px 0", border: "0", borderTop: "1px solid #ede8e3" }} />
+              <h3>📄 Różne formy raportów</h3>
+              <ul style={{ fontSize: "0.88em", lineHeight: 1.7, paddingLeft: 20, marginTop: 8 }}>
+                <li><strong>Pobierz HTML</strong> (Tabela działek) — prosty raport jednej działki, uwzględnia Twoją edycję długości linii.</li>
+                <li><strong>Historia raportów → Otwórz Raport</strong> przy karcie działki — pełny raport z mapą i R1–R5 (ten sam szablon co w Ostatnich analizach).</li>
+                <li>Track A i Track B <strong>nie sumują się</strong> — wybiera się jedną ścieżkę (albo A, albo B).</li>
+              </ul>
+              <hr style={{ margin: "16px 0", border: "0", borderTop: "1px solid #ede8e3" }} />
               <h3>✏️ Edycja długości linii</h3>
               <p style={{ fontSize: "0.88em", lineHeight: 1.6, marginTop: 8 }}>
                 Gdy detekcja automatyczna (OSM) nie wykryje linii lub jej długość wynosi 0,
                 należy wpisać długość ręcznie na podstawie geoportalu lub dokumentacji inwestora.
                 Po wpisaniu wartości Track A/B przeliczają się automatycznie w tabeli.
-                Użyj przycisku <strong>"⬇ HTML"</strong> by pobrać raport z zaktualizowanymi wartościami.
+                Użyj przycisku <strong>Pobierz HTML</strong> by zapisać raport z zaktualizowanymi wartościami.
               </p>
             </div>
           )}

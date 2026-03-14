@@ -248,8 +248,8 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
   return (
     <div className="cp-root">
       <header className="ksws-page-header">
-        <h1 className="ksws-page-header-title">👥 Klienci</h1>
-        <p className="ksws-page-header-sub">Baza klientów i spraw · przypisuj analizy działek i dokumenty · powiązanie z Historii raportów</p>
+        <h1 className="ksws-page-header-title">👥 CRM — Klienci</h1>
+        <p className="ksws-page-header-sub">Lista klientów · karta sprawy · analizy działek, dokumenty, historia i asystent AI</p>
       </header>
       <div className="cp-body">
       {/* LEFT SIDEBAR */}
@@ -265,12 +265,18 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
           {filtered.length === 0 && <div className="cp-list-empty">Brak klientów</div>}
           {filtered.map((c) => (
             <div key={c.id} className={`cp-client-item ${selectedId === c.id ? "active" : ""}`} onClick={() => { setSelectedId(c.id); setActiveTab("dashboard"); }}>
-              <div className="cp-client-avatar">{c.firstName?.[0]}{c.lastName?.[0]}</div>
+              <div className="cp-client-avatar">
+                {selectedId === c.id ? <i className="pe-7s-user"></i> : (c.firstName?.[0] || "") + (c.lastName?.[0] || "")}
+              </div>
               <div className="cp-client-info">
                 <div className="cp-client-name">{c.firstName} {c.lastName}</div>
                 <div className="cp-client-sub">{c.caseNumber ? `#${c.caseNumber}` : c.email || "—"}</div>
               </div>
-              <div className="cp-client-meta">{statusBadge(c.status)}</div>
+              <div className="cp-client-meta">
+                 <div className={`badge badge-pill badge-${c.status === 'aktywna' ? 'primary' : 'secondary'}`} style={{fontSize: '0.65rem'}}>
+                   {c.status}
+                 </div>
+              </div>
             </div>
           ))}
         </div>
@@ -319,108 +325,281 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
         {selectedClient && !showForm && (
           <div className="cp-detail">
             {/* Header */}
-            <div className="cp-detail-header">
-              <div className="cp-detail-avatar">{selectedClient.firstName?.[0]}{selectedClient.lastName?.[0]}</div>
-              <div className="cp-detail-title-wrap">
-                <h2 className="cp-detail-name">{selectedClient.firstName} {selectedClient.lastName}</h2>
-                <div className="cp-detail-meta-row">
-                  {statusBadge(selectedClient.status)}
-                  {selectedClient.caseNumber && <span className="cp-detail-case">#{selectedClient.caseNumber}</span>}
-                  <span className="cp-detail-date">Dodano: {fmtDate(selectedClient.createdAt)}</span>
+            <div className="card mb-4" style={{ backgroundColor: "#fff" }}>
+              <div className="card-body d-flex align-items-center justify-content-between p-4">
+                <div className="d-flex align-items-center">
+                  <div className="cp-detail-avatar me-4" style={{ width: '80px', height: '80px', fontSize: '2rem', backgroundColor: '#e0f3ff', color: '#3f6ad8', borderRadius: '50%' }}>
+                    {selectedClient.firstName?.[0]}{selectedClient.lastName?.[0]}
+                  </div>
+                  <div>
+                    <h2 className="mb-2" style={{ fontWeight: 600, color: '#495057' }}>{selectedClient.firstName} {selectedClient.lastName}</h2>
+                    <div className="d-flex align-items-center gap-2">
+                       {statusBadge(selectedClient.status)}
+                       {selectedClient.caseNumber && <span className="badge bg-light text-dark border">#{selectedClient.caseNumber}</span>}
+                       <span className="text-muted small">Dodano: {fmtDate(selectedClient.createdAt)}</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="cp-detail-header-actions">
-                <button className="cp-btn cp-btn-outline" onClick={() => openEdit(selectedClient)}>✏️ Edytuj</button>
-                <button className="cp-btn cp-btn-danger" onClick={() => deleteClient(selectedClient.id)}>🗑</button>
+                <div className="d-flex gap-2">
+                  <button className="btn btn-outline-primary" onClick={() => openEdit(selectedClient)}>✏️ Edytuj</button>
+                  <button className="btn btn-danger" onClick={() => deleteClient(selectedClient.id)}>🗑</button>
+                </div>
               </div>
             </div>
 
-            {/* Tabs */}
-            <div className="cp-tabs">
+            {/* Tabs matching ArchitectUI Nav */}
+            <ul className="nav nav-tabs nav-fill mb-4">
               {[
-                { key: "dashboard",     icon: "🏠", label: "Dashboard" },
-                { key: "dane",          icon: "👤", label: "Dane" },
-                { key: "wynagrodzenie", icon: "💰", label: "Wynagrodzenie" },
-                { key: "analizy",       icon: "📊", label: `Analizy (${(selectedClient.analyses || []).length})` },
-                { key: "dokumenty",     icon: "📁", label: `Dokumenty (${(selectedClient.files || []).length})` },
-                { key: "timeline",      icon: "📅", label: `Historia (${(selectedClient.timeline || []).length})` },
-                { key: "ai",            icon: "🤖", label: "AI Asystent" },
-                { key: "notebook",      icon: "📓", label: "NotebookLM" },
+                { key: "dashboard",     icon: "pe-7s-graph2", label: "Dashboard" },
+                { key: "dane",          icon: "pe-7s-id", label: "Dane" },
+                { key: "wynagrodzenie", icon: "pe-7s-cash", label: "Finanse" },
+                { key: "analizy",       icon: "pe-7s-display1", label: `Analizy (${(selectedClient.analyses || []).length})` },
+                { key: "dokumenty",     icon: "pe-7s-folder", label: "Dokumenty" },
+                { key: "timeline",      icon: "pe-7s-timer", label: "Historia" },
+                { key: "ai",            icon: "pe-7s-magic-wand", label: "AI Asystent" },
               ].map((t) => (
-                <button key={t.key} className={`cp-tab ${activeTab === t.key ? "active" : ""}`} onClick={() => setActiveTab(t.key)}>
-                  <span className="cp-tab-icon">{t.icon}</span>
-                  <span className="cp-tab-label">{t.label}</span>
-                </button>
+                <li key={t.key} className="nav-item">
+                  <button className={`nav-link ${activeTab === t.key ? "active" : ""}`} onClick={() => setActiveTab(t.key)} style={{ border: 'none', background: 'transparent', width: '100%', padding: '12px' }}>
+                    <i className={`nav-link-icon ${t.icon} me-2`}></i>
+                    {t.label}
+                  </button>
+                </li>
               ))}
-            </div>
+            </ul>
 
             {/* DASHBOARD */}
             {activeTab === "dashboard" && (() => {
               const stats = getDashboardStats(selectedClient);
               return (
                 <div className="cp-section cp-dashboard">
-                  <div className="cp-stats-grid">
-                    <div className="cp-stat-card cp-stat-purple"><div className="cp-stat-icon">📊</div><div className="cp-stat-value">{stats.totalAnalyses}</div><div className="cp-stat-label">Analizy działek</div></div>
-                    <div className="cp-stat-card cp-stat-blue"><div className="cp-stat-icon">📁</div><div className="cp-stat-value">{stats.totalFiles}</div><div className="cp-stat-label">Dokumenty</div></div>
-                    <div className="cp-stat-card cp-stat-green"><div className="cp-stat-icon">💰</div><div className="cp-stat-value">{stats.totalComp > 0 ? stats.totalComp.toLocaleString("pl-PL") + " zł" : "—"}</div><div className="cp-stat-label">Wynagrodzenie</div></div>
-                    <div className="cp-stat-card cp-stat-orange"><div className="cp-stat-icon">📅</div><div className="cp-stat-value">{stats.totalEvents}</div><div className="cp-stat-label">Wpisy historii</div></div>
-                  </div>
-                  <div className="cp-dashboard-row">
-                    <div className="cp-dash-card">
-                      <div className="cp-dash-card-title">📋 Dane kontaktowe</div>
-                      <div className="cp-dash-info-list">
-                        <div className="cp-dash-info-item"><span className="cp-dash-info-label">Email</span><span className="cp-dash-info-value">{selectedClient.email || "—"}</span></div>
-                        <div className="cp-dash-info-item"><span className="cp-dash-info-label">Telefon</span><span className="cp-dash-info-value">{selectedClient.phone || "—"}</span></div>
-                        <div className="cp-dash-info-item"><span className="cp-dash-info-label">Adres</span><span className="cp-dash-info-value">{selectedClient.address || "—"}</span></div>
+                  <div className="row mb-3">
+                    <div className="col-md-4">
+                      <div className="card widget-content mt-3">
+                        <div className="widget-content-outer">
+                          <div className="widget-content-wrapper">
+                            <div className="widget-content-left">
+                              <div className="widget-heading">Analizy Działek</div>
+                              <div className="widget-subheading">Ilość wykonanych ocen</div>
+                            </div>
+                            <div className="widget-content-right">
+                              <div className="widget-numbers text-primary">{stats.totalAnalyses}</div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div className="cp-dash-card">
-                      <div className="cp-dash-card-title">⚖️ Przebieg sprawy</div>
-                      <div className="cp-case-steps">
+                    <div className="col-md-4">
+                      <div className="card widget-content mt-3">
+                        <div className="widget-content-outer">
+                          <div className="widget-content-wrapper">
+                            <div className="widget-content-left">
+                              <div className="widget-heading">Wynagrodzenie</div>
+                              <div className="widget-subheading">Całkowita szacowana kwota</div>
+                            </div>
+                            <div className="widget-content-right">
+                              <div className="widget-numbers text-success">{stats.totalComp > 0 ? stats.totalComp.toLocaleString("pl-PL") + " zł" : "—"}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-4">
+                      <div className="card widget-content mt-3">
+                        <div className="widget-content-outer">
+                          <div className="widget-content-wrapper">
+                            <div className="widget-content-left">
+                              <div className="widget-heading">Dokumenty</div>
+                              <div className="widget-subheading">Zgromadzone akta</div>
+                            </div>
+                            <div className="widget-content-right">
+                              <div className="widget-numbers text-danger">{stats.totalFiles}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="row mb-3">
+                    <div className="col-md-4">
+                      <div className="card widget-content mt-3">
+                        <div className="widget-content-outer">
+                          <div className="widget-content-wrapper">
+                            <div className="widget-content-left">
+                              <div className="widget-heading">Szanse na Ugodę</div>
+                              <div className="widget-subheading">Statystyka dla track B</div>
+                            </div>
+                            <div className="widget-content-right">
+                              <div className="widget-numbers text-danger">71%</div>
+                            </div>
+                          </div>
+                          <div className="widget-progress-wrapper">
+                            <div className="progress progress-bar-sm progress-bar-animated-alt">
+                              <div className="progress-bar bg-danger" role="progressbar" aria-valuenow="71" aria-valuemin="0" aria-valuemax="100" style={{ width: "71%" }}></div>
+                            </div>
+                            <div className="progress-sub-label">
+                              <div className="sub-label-left">Prawdopodobieństwo</div>
+                              <div className="sub-label-right">Wysokie</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-4">
+                      <div className="card widget-content mt-3">
+                        <div className="widget-content-outer">
+                          <div className="widget-content-wrapper">
+                            <div className="widget-content-left">
+                              <div className="widget-heading">Kompletność</div>
+                              <div className="widget-subheading">Wymagane dokumenty</div>
+                            </div>
+                            <div className="widget-content-right">
+                              <div className="widget-numbers text-success">54%</div>
+                            </div>
+                          </div>
+                          <div className="widget-progress-wrapper">
+                            <div className="progress progress-bar-sm progress-bar-animated-alt">
+                              <div className="progress-bar bg-success" role="progressbar" aria-valuenow="54" aria-valuemin="0" aria-valuemax="100" style={{ width: "54%" }}></div>
+                            </div>
+                            <div className="progress-sub-label">
+                              <div className="sub-label-left">Zdobyte odpisy</div>
+                              <div className="sub-label-right">Średnie</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-4">
+                      <div className="card widget-content mt-3">
+                        <div className="widget-content-outer">
+                          <div className="widget-content-wrapper">
+                            <div className="widget-content-left">
+                              <div className="widget-heading">Postęp Etapowy</div>
+                              <div className="widget-subheading">Postępowanie starostwo</div>
+                            </div>
+                            <div className="widget-content-right">
+                              <div className="widget-numbers text-warning">32%</div>
+                            </div>
+                          </div>
+                          <div className="widget-progress-wrapper">
+                            <div className="progress progress-bar-sm progress-bar-animated-alt">
+                              <div className="progress-bar bg-warning" role="progressbar" aria-valuenow="32" aria-valuemin="0" aria-valuemax="100" style={{ width: "32%" }}></div>
+                            </div>
+                            <div className="progress-sub-label">
+                              <div className="sub-label-left">Faza proceduralna</div>
+                              <div className="sub-label-right">Wczesna</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="row mb-3">
+                    <div className="col-md-6 mb-3">
+                      <div className="card h-100">
+                        <div className="card-header"><i className="header-icon pe-7s-info icon-gradient bg-malibu-beach"></i> Dane kontaktowe</div>
+                        <div className="card-body">
+                          <ul className="list-group list-group-flush">
+                            <li className="list-group-item">
+                              <div className="widget-content p-0">
+                                <div className="widget-content-wrapper">
+                                  <div className="widget-content-left"><div className="widget-heading">Email</div></div>
+                                  <div className="widget-content-right"><b className="text-secondary">{selectedClient.email || "—"}</b></div>
+                                </div>
+                              </div>
+                            </li>
+                            <li className="list-group-item">
+                              <div className="widget-content p-0">
+                                <div className="widget-content-wrapper">
+                                  <div className="widget-content-left"><div className="widget-heading">Telefon</div></div>
+                                  <div className="widget-content-right"><b className="text-secondary">{selectedClient.phone || "—"}</b></div>
+                                </div>
+                              </div>
+                            </li>
+                            <li className="list-group-item">
+                              <div className="widget-content p-0">
+                                <div className="widget-content-wrapper">
+                                  <div className="widget-content-left"><div className="widget-heading">Adres</div></div>
+                                  <div className="widget-content-right"><b className="text-secondary">{selectedClient.address || "—"}</b></div>
+                                </div>
+                              </div>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-6 mb-3">
+                      <div className="card h-100">
+                        <div className="card-header"><i className="header-icon pe-7s-notebook icon-gradient bg-arielle-smile"></i> Przebieg Sprawy</div>
+                        <div className="card-body">
+                          <div className="vertical-timeline vertical-timeline--animate vertical-timeline--one-column">
                         {[
                           { label: "Wniosek do starostwa", date: selectedClient.dateWniosekStarostwo },
                           { label: "Wysłane do operatora", date: selectedClient.dateWyslanieDoOperatora },
                           { label: "Odpowiedź od operatora", date: selectedClient.datePismoOperatora },
                           { label: "Wynagrodzenie zapłacone", date: selectedClient.compensationPaid ? selectedClient.compensationDate : null, pending: !selectedClient.compensationPaid },
                         ].map((step, i) => (
-                          <div key={i} className={`cp-case-step ${step.date ? "done" : ""}`}>
-                            <div className="cp-case-step-dot"></div>
-                            <div className="cp-case-step-info">
-                              <div className="cp-case-step-label">{step.label}</div>
-                              <div className="cp-case-step-date">{step.date ? fmtDate(step.date) : step.pending ? "oczekuje" : "—"}</div>
+                           <div key={i} className="vertical-timeline-item vertical-timeline-element">
+                            <div>
+                               <span className="vertical-timeline-element-icon bounce-in">
+                                  <i className={`badge badge-dot badge-dot-xl badge-${step.date ? 'success' : 'warning'}`}> </i>
+                               </span>
+                               <div className="vertical-timeline-element-content bounce-in">
+                                  <h4 className="timeline-title">{step.label}</h4>
+                                  <span className="vertical-timeline-element-date text-muted">{step.date ? fmtDate(step.date) : step.pending ? "oczekuje" : "—"}</span>
+                               </div>
                             </div>
-                          </div>
+                           </div>
                         ))}
-                      </div>
-                    </div>
-                    <div className="cp-dash-card">
-                      <div className="cp-dash-card-title">📊 Najlepsza analiza</div>
-                      {stats.bestAnalysis ? (
-                        <div className="cp-dash-analysis">
-                          <div className="cp-dash-analysis-parcel"><code>{stats.bestAnalysis.parcelId}</code></div>
-                          <div className="cp-dash-analysis-amounts">
-                            <div className="cp-dash-amount-row"><span>Track A</span><strong>{stats.bestAnalysis.trackA ? Number(stats.bestAnalysis.trackA).toLocaleString("pl-PL") + " zł" : "—"}</strong></div>
-                            <div className="cp-dash-amount-row"><span>Track B</span><strong>{stats.bestAnalysis.trackB ? Number(stats.bestAnalysis.trackB).toLocaleString("pl-PL") + " zł" : "—"}</strong></div>
-                            <div className="cp-dash-amount-row cp-dash-total"><span>Razem</span><strong>{stats.bestAnalysis.total ? Number(stats.bestAnalysis.total).toLocaleString("pl-PL") + " zł" : "—"}</strong></div>
                           </div>
                         </div>
-                      ) : <div className="cp-dash-empty">Brak analiz</div>}
+                      </div>
                     </div>
                   </div>
+
+                  <div className="row mb-3">
+                    <div className="col-md-12">
+                      <div className="card mb-3">
+                        <div className="card-header"><i className="header-icon pe-7s-graph icon-gradient bg-happy-green"></i> Najlepsza analiza</div>
+                        <div className="card-body">
+                          {stats.bestAnalysis ? (
+                            <table className="mb-0 table table-hover">
+                              <thead><tr><th>Działka</th><th>Track A</th><th>Track B</th><th>Razem</th></tr></thead>
+                              <tbody>
+                                <tr>
+                                  <td><code>{stats.bestAnalysis.parcelId}</code></td>
+                                  <td>{stats.bestAnalysis.trackA ? Number(stats.bestAnalysis.trackA).toLocaleString("pl-PL") + " zł" : "—"}</td>
+                                  <td>{stats.bestAnalysis.trackB ? Number(stats.bestAnalysis.trackB).toLocaleString("pl-PL") + " zł" : "—"}</td>
+                                  <td className="text-primary fw-bold">{stats.bestAnalysis.total ? Number(stats.bestAnalysis.total).toLocaleString("pl-PL") + " zł" : "—"}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          ) : <div className="text-center text-muted py-3">Brak analiz</div>}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
                   {stats.lastEvent && (
-                    <div className="cp-dash-last-event">
-                      <div className="cp-dash-card-title">🕐 Ostatnia aktywność</div>
-                      <div className="cp-timeline-item" style={{ borderLeftColor: eventColor(stats.lastEvent.type) }}>
-                        <div className="cp-timeline-dot" style={{ background: eventColor(stats.lastEvent.type) }}></div>
-                        <div className="cp-timeline-content">
-                          <div className="cp-timeline-type">{eventLabel(stats.lastEvent.type)}</div>
-                          <div className="cp-timeline-text">{stats.lastEvent.text}</div>
-                          <div className="cp-timeline-date">{fmtDate(stats.lastEvent.date)}</div>
+                    <div className="card mb-3">
+                      <div className="card-header"><i className="header-icon pe-7s-clock icon-gradient bg-arielle-smile"></i> Ostatnia aktywność</div>
+                      <div className="card-body">
+                        <div className="vertical-timeline vertical-timeline--animate vertical-timeline--one-column">
+                          <div className="vertical-timeline-item vertical-timeline-element">
+                            <div><span className="vertical-timeline-element-icon bounce-in">
+                              <i className="badge badge-dot badge-dot-xl badge-primary"> </i>
+                            </span>
+                            <div className="vertical-timeline-element-content bounce-in">
+                              <h4 className="timeline-title">{eventLabel(stats.lastEvent.type)}</h4>
+                              <p>{stats.lastEvent.text}</p><span className="vertical-timeline-element-date">{fmtDate(stats.lastEvent.date)}</span>
+                            </div></div>
+                          </div>
                         </div>
                       </div>
                     </div>
                   )}
-                  {selectedClient.notes && <div className="cp-dash-notes"><div className="cp-dash-card-title">📝 Notatki</div><p>{selectedClient.notes}</p></div>}
+                  {selectedClient.notes && <div className="card border-info mb-3"><div className="card-header bg-info text-white">📝 Notatki</div><div className="card-body"><p className="mb-0">{selectedClient.notes}</p></div></div>}
                 </div>
               );
             })()}
@@ -562,162 +741,8 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
               </div>
             )}
 
-            {/* AI ASYSTENT */}
+            {/* AI ASYSTENT — using separate NotebookPanel component from GitHub */}
             {activeTab === "ai" && (
-              <div className="cp-section cp-ai-section">
-
-                {/* ─── NOTEBOOKLM PANEL ─── */}
-                <div className="cp-nb-panel">
-                  <div className="cp-nb-header">
-                    <div className="cp-nb-logo">
-                      <span className="cp-nb-logo-icon">📓</span>
-                      <div>
-                        <div className="cp-nb-title">NotebookLM Enterprise</div>
-                        <div className="cp-nb-subtitle">Notebook AI dla tej sprawy • {nbApiStatus ? (nbApiStatus.configured ? <span style={{color:"#2e7d32",fontWeight:700}}>✅ API aktywne</span> : <span style={{color:"#c62828"}}>⚠️ {nbApiStatus.message}</span>) : <span style={{color:"#888"}}>sprawdzam…</span>}</div>
-                      </div>
-                    </div>
-                    <div className="cp-nb-actions">
-                      {selectedClient.notebookLmUrl && (
-                        <a href={selectedClient.notebookLmUrl} target="_blank" rel="noopener noreferrer" className="cp-btn cp-btn-nb-open">🔗 Otwórz NotebookLM ↗</a>
-                      )}
-                      {nbApiStatus?.configured && !selectedClient.notebookLmId && (
-                        <button className="cp-btn cp-btn-nb-create" onClick={createNotebookForClient} disabled={nbCreating}>
-                          {nbCreating ? "⏳ Tworzę…" : "✨ Utwórz notebook automatycznie"}
-                        </button>
-                      )}
-                      <button className="cp-btn cp-btn-ghost" onClick={() => { setNbEditMode(!nbEditMode); setNbEditUrl(selectedClient.notebookLmUrl || ""); }}>
-                        {nbEditMode ? "✕ Anuluj" : (selectedClient.notebookLmUrl ? "✏️ Zmień link" : "+ Dodaj link ręcznie")}
-                      </button>
-                    </div>
-                  </div>
-
-                  {nbEditMode && (
-                    <div className="cp-nb-edit-row">
-                      <input
-                        className="cp-input cp-nb-input"
-                        placeholder="https://notebooklm.cloud.google.com/... lub https://notebooklm.google.com/notebook/..."
-                        value={nbEditUrl}
-                        onChange={(e) => setNbEditUrl(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") saveNotebookUrl(); }}
-                        autoFocus
-                      />
-                      <button className="cp-btn cp-btn-primary" onClick={saveNotebookUrl}>Zapisz</button>
-                    </div>
-                  )}
-
-                  {!selectedClient.notebookLmUrl && !nbEditMode && (
-                    <div className="cp-nb-empty">
-                      <div className="cp-nb-empty-icon">📓</div>
-                      <div className="cp-nb-empty-title">Brak notebooka dla tej sprawy</div>
-                      {nbApiStatus?.configured ? (
-                        <div className="cp-nb-empty-text">Kliknij <strong>✨ Utwórz notebook automatycznie</strong> — system stworzy notebook w NotebookLM Enterprise i automatycznie doda streszczenie sprawy jako pierwsze źródło.</div>
-                      ) : (
-                        <>
-                          <div className="cp-nb-empty-text">Utwórz notebook ręcznie w NotebookLM, wklej dokumenty klienta, a link zapisz tutaj.</div>
-                          <div className="cp-nb-steps">
-                            <div className="cp-nb-step"><span className="cp-nb-step-num">1</span><span>Wejdź na <a href="https://notebooklm.google.com" target="_blank" rel="noopener noreferrer">notebooklm.google.com</a></span></div>
-                            <div className="cp-nb-step"><span className="cp-nb-step-num">2</span><span>Utwórz nowy notebook → nazwa: <strong>{selectedClient.firstName} {selectedClient.lastName} — sprawa {selectedClient.caseNumber || 'nr'}</strong></span></div>
-                            <div className="cp-nb-step"><span className="cp-nb-step-num">3</span><span>Dodaj dokumenty klienta jako źródła (PDF, Word)</span></div>
-                            <div className="cp-nb-step"><span className="cp-nb-step-num">4</span><span>Skopiuj URL i kliknij <em>+ Dodaj link ręcznie</em></span></div>
-                          </div>
-                        </>
-                      )}
-                      <button className="cp-btn cp-btn-nb-prompt" onClick={copyPrompt}>
-                        {nbCopied ? "✅ Skopiowano!" : "📋 Kopiuj prompt startowy dla NotebookLM"}
-                      </button>
-                    </div>
-                  )}
-
-                  {selectedClient.notebookLmUrl && !nbEditMode && (
-                    <div className="cp-nb-linked">
-                      <div className="cp-nb-linked-info">
-                        <span className="cp-nb-linked-icon">✅</span>
-                        <span className="cp-nb-linked-url">{selectedClient.notebookLmUrl}</span>
-                      </div>
-                      <div className="cp-nb-linked-actions">
-                        <button className="cp-btn cp-btn-ghost cp-btn-sm" onClick={copyPrompt}>
-                          {nbCopied ? "✅ Skopiowano!" : "📋 Kopiuj prompt"}
-                        </button>
-                        {nbApiStatus?.configured && selectedClient.notebookLmId && (
-                          <button
-                            className="cp-btn cp-btn-podcast"
-                            onClick={generatePodcast}
-                            disabled={nbPodcastLoading}
-                            title="Wygeneruj 10-minutowy audio-brief sprawy"
-                          >
-                            {nbPodcastLoading ? "⏳ Generuję audio…" : "🎧 Generuj Audio-Brief"}
-                          </button>
-                        )}
-                        <span className="cp-nb-linked-hint">Wklej prompt jako pierwszą wiadomość w NotebookLM — AI pozna dane sprawy</span>
-                      </div>
-                      {nbPodcastStatus && (
-                        <div className="cp-nb-podcast-status">
-                          {nbPodcastStatus.status === "AUDIO_OVERVIEW_STATUS_IN_PROGRESS" && <span>⏳ Generowanie audio-briefu w toku… (może potrwać 1–2 min)</span>}
-                          {nbPodcastStatus.status === "AUDIO_OVERVIEW_STATUS_COMPLETE" && <span>✅ Audio-brief gotowy! <a href={nbPodcastStatus.data?.name} target="_blank" rel="noopener noreferrer">Otwórz w NotebookLM ↗</a></span>}
-                          {nbPodcastStatus.status === "AUDIO_OVERVIEW_STATUS_FAILED" && <span>❌ Błąd generowania audio. Spróbuj ponownie.</span>}
-                        </div>
-                      )}
-                      {nbApiStatus?.configured && selectedClient.notebookLmId && (
-                        <div className="cp-nb-sync-row">
-                          <button
-                            className="cp-btn cp-btn-ghost cp-btn-sm"
-                            onClick={() => addCaseSummarySource(selectedClient.notebookLmId)}
-                            disabled={nbAddingSource}
-                          >
-                            {nbAddingSource ? "⏳ Dodaję…" : "🔄 Aktualizuj streszczenie sprawy w NotebookLM"}
-                          </button>
-                          <span className="cp-nb-linked-hint">Synchronizuje dane klienta, analizy i historię z notebookiem</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="cp-nb-divider"><span>lub użyj wbudowanego asystenta AI</span></div>
-                <div className="cp-ai-header">
-                  <div className="cp-ai-title">🤖 AI Asystent sprawy</div>
-                  <div className="cp-ai-subtitle">Asystent zna dane klienta, analizy i historię sprawy</div>
-                  {(selectedClient.aiChat || []).length > 0 && <button className="cp-btn cp-btn-ghost" onClick={clearAiChat} style={{ marginLeft: "auto" }}>🗑 Wyczyść</button>}
-                </div>
-                <div className="cp-ai-chat">
-                  {(selectedClient.aiChat || []).length === 0 && (
-                    <div className="cp-ai-welcome">
-                      <div className="cp-ai-welcome-icon">🤖</div>
-                      <div className="cp-ai-welcome-title">Asystent gotowy</div>
-                      <div className="cp-ai-welcome-text">Zadaj pytanie o sprawę klienta, poproś o redakcję pisma,<br />lub zapytaj o kolejne kroki w postępowaniu.</div>
-                      <div className="cp-ai-suggestions">
-                        {["Jakie są kolejne kroki w tej sprawie?", "Napisz pismo do operatora sieci", "Podsumuj stan sprawy", "Jak obliczyć wynagrodzenie za służebność?"].map((s) => (
-                          <button key={s} className="cp-ai-suggestion" onClick={() => setAiInput(s)}>{s}</button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {(selectedClient.aiChat || []).map((msg, i) => (
-                    <div key={i} className={`cp-ai-msg cp-ai-msg-${msg.role}`}>
-                      <div className="cp-ai-msg-avatar">{msg.role === "user" ? "👤" : "🤖"}</div>
-                      <div className="cp-ai-msg-bubble">
-                        <div className="cp-ai-msg-content">{msg.content}</div>
-                        <div className="cp-ai-msg-time">{fmtDateTime(msg.ts)}</div>
-                      </div>
-                    </div>
-                  ))}
-                  {aiLoading && (
-                    <div className="cp-ai-msg cp-ai-msg-assistant">
-                      <div className="cp-ai-msg-avatar">🤖</div>
-                      <div className="cp-ai-msg-bubble cp-ai-loading"><span></span><span></span><span></span></div>
-                    </div>
-                  )}
-                  <div ref={aiChatEndRef} />
-                </div>
-                <div className="cp-ai-input-row">
-                  <textarea className="cp-ai-input" placeholder="Zadaj pytanie o sprawę klienta…" value={aiInput} onChange={(e) => setAiInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAiMessage(); } }} rows={2} />
-                  <button className="cp-btn cp-btn-primary cp-ai-send" onClick={sendAiMessage} disabled={aiLoading || !aiInput.trim()}>{aiLoading ? "⏳" : "➤"}</button>
-                </div>
-              </div>
-            )}
-
-            {/* NOTEBOOKLM — natywny panel 3-kolumnowy */}
-            {activeTab === "notebook" && (
               <NotebookPanel
                 selectedClient={selectedClient}
                 nbApiStatus={nbApiStatus}
@@ -734,6 +759,7 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
                 eventLabel={eventLabel}
               />
             )}
+
           </div>
         )}
       </main>

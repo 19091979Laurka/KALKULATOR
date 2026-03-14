@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import "./BatchHistoryPage.css";
 import { buildSingleHtml } from "./HistoriaAnalizPage";
+import { BASE_LAYERS, GUGIK_WMS, OIM_TILES } from "./mapSources";
 
 /* Pasek listy: history-row--replaceable — Manus może podmienić na własny komponent (zachowaj: duża nazwa klienta, PRZYPISZ DO CRM, Otwórz raport). */
 
@@ -11,6 +12,7 @@ export default function BatchHistoryPage() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedBatch, setSelectedBatch] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Load batch history from backend
   useEffect(() => {
@@ -123,6 +125,7 @@ export default function BatchHistoryPage() {
       const price = md.average_price_m2 || 0;
       const trackA = ta.total || 0;
       const trackB = tb.total || 0;
+      const priceErr = (price == null || price === 0) && (md.status || "") !== "Korekta ręczna";
 
       return `
       <div class="parcel-card page-break" style="page-break-inside:avoid;break-inside:avoid; background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #eee; margin-bottom: 30px;">
@@ -154,7 +157,8 @@ export default function BatchHistoryPage() {
           </div>
           <div style="background: white; border-radius: 8px; padding: 12px; border: 1px solid #eee; border-top: 3px solid #f1c40f;">
             <div style="font-size: 9px; text-transform: uppercase; color: #7f8c8d; font-weight: 600; margin-bottom: 4px;">Cena Rynkowa</div>
-            <div style="font-size: 18px; font-weight: 800; color: #2c3e50;">${fmtN(price)} zł/m²</div>
+            <div style="font-size: 18px; font-weight: 800; color: #2c3e50;">${priceErr ? "Błąd integracji (GUS)" : fmtN(price) + " zł/m²"}</div>
+            ${priceErr ? '<div style="font-size:10px;color:#c62828;margin-top:4px;">Dane nie pobrane z GUS BDL</div>' : ""}
           </div>
         </div>
 
@@ -225,31 +229,73 @@ export default function BatchHistoryPage() {
       </div>`;
     }).join("\n");
 
+    // Dane do wykresów kwotowych (działki z kwotą Track B > 0, posortowane malejąco)
+    const parcelsForChart = results
+      .filter((p) => {
+        const d = p.master_record || p.data || {};
+        return d.status !== "ERROR" && p.status !== "ERROR" && (d.compensation?.track_b?.total || 0) > 0;
+      })
+      .map((p) => {
+        const d = p.master_record || p.data || {};
+        const tb = d.compensation?.track_b?.total || 0;
+        const shortId = (p.parcel_id || "").split(/[._]/).slice(-2).join(".") || p.parcel_id || "—";
+        return { shortId: shortId.length > 14 ? shortId.slice(0, 12) + "…" : shortId, trackB: tb };
+      })
+      .sort((a, b) => b.trackB - a.trackB)
+      .slice(0, 12);
+
+    // Zestawienie zbiorcze — kolumny jak w „Tabela działek”: Kolizja, Napięcie, Pow., Cena, Dł. linii, Pas [m], Pas [m²], Track A, Track B, Razem, Status
     const summaryRows = results.map((p, i) => {
       const d = p.master_record || p.data || {};
       const isError = d.status === "ERROR" || p.status === "ERROR";
+      const pl = d.infrastructure?.power_lines || {};
+      const power = d.infrastructure?.power || {};
+      const ksws = d.ksws || {};
+      const geom = d.geometry || {};
+      const md = d.market_data || {};
+      const collision = !!(pl.detected || power.exists);
+      const volt = VOLT_LABEL[pl.voltage] || pl.voltage || "—";
+      const area = geom?.area_m2 ?? 0;
+      const price = md?.average_price_m2;
+      const priceStr = (price != null && price !== 0) ? fmtN(price) : "—";
+      const lineLen = ksws?.line_length_m ?? pl?.length_m ?? 0;
+      const bandM = ksws?.band_width_m ?? "—";
+      const bandM2 = ksws?.band_area_m2 ?? 0;
+      const ta = d.compensation?.track_a?.total ?? 0;
+      const tb = d.compensation?.track_b?.total ?? 0;
+      const razem = ta + tb;
+
       if (isError) {
-        const errShort = (d.message || p.error || "Błąd").replace(/<[^>]+>/g, "").slice(0, 40);
         return `<tr style="border-bottom:1px solid #f0f0f0;background:#fff8f8;">
-        <td style="padding:8px 12px;font-weight:600;">#${i+1} ${p.parcel_id || ""}</td>
-        <td style="padding:8px 12px;text-align:center;">
-          <span style="padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;background:#c62828;color:white;">BŁĄD</span>
-        </td>
-        <td colspan="2" style="padding:8px 12px;font-size:12px;color:#c62828;" title="${(d.message || p.error || "").replace(/"/g, "&quot;")}">— ${errShort}${(d.message || p.error || "").length > 40 ? "…" : ""}</td>
+        <td style="padding:8px 10px;font-weight:600;">${i + 1}</td>
+        <td style="padding:8px 10px;font-weight:600;">${(p.parcel_id || "—").replace(/</g, "&lt;")}</td>
+        <td style="padding:8px 10px;text-align:center;">—</td>
+        <td style="padding:8px 10px;text-align:center;">—</td>
+        <td style="padding:8px 10px;text-align:right;">—</td>
+        <td style="padding:8px 10px;text-align:right;">—</td>
+        <td style="padding:8px 10px;text-align:right;">—</td>
+        <td style="padding:8px 10px;text-align:right;">—</td>
+        <td style="padding:8px 10px;text-align:right;">—</td>
+        <td style="padding:8px 10px;text-align:right;">—</td>
+        <td style="padding:8px 10px;text-align:right;">—</td>
+        <td style="padding:8px 10px;text-align:right;">—</td>
+        <td style="padding:8px 10px;text-align:center;"><span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#c62828;color:white;">BŁĄD</span></td>
       </tr>`;
       }
-      const ta = d.compensation?.track_a?.total || 0;
-      const tb = d.compensation?.track_b?.total || 0;
-      const collision = !!(d.infrastructure?.power_lines?.detected || d.infrastructure?.power?.exists);
       return `<tr style="border-bottom:1px solid #f0f0f0;">
-        <td style="padding:8px 12px;font-weight:600;">#${i+1} ${p.parcel_id || ""}</td>
-        <td style="padding:8px 12px;text-align:center;">
-          <span style="padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;background:${collision?"#e74c3c":"#27ae60"};color:white;">
-            ${collision ? "KOLIZJA" : "OK"}
-          </span>
-        </td>
-        <td style="padding:8px 12px;text-align:right;color:#27ae60;font-weight:700;">${fmtN(ta)} PLN</td>
-        <td style="padding:8px 12px;text-align:right;color:#e67e22;font-weight:700;">${fmtN(tb)} PLN</td>
+        <td style="padding:8px 10px;font-weight:600;">${i + 1}</td>
+        <td style="padding:8px 10px;font-weight:600;">${(p.parcel_id || "—").replace(/</g, "&lt;")}</td>
+        <td style="padding:8px 10px;text-align:center;">${collision ? "TAK" : "NIE"}</td>
+        <td style="padding:8px 10px;text-align:center;">${volt}</td>
+        <td style="padding:8px 10px;text-align:right;">${fmtI(area)}</td>
+        <td style="padding:8px 10px;text-align:right;">${priceStr}</td>
+        <td style="padding:8px 10px;text-align:right;">${typeof lineLen === "number" ? (lineLen % 1 ? lineLen.toFixed(1) : lineLen) : lineLen}</td>
+        <td style="padding:8px 10px;text-align:right;">${bandM}</td>
+        <td style="padding:8px 10px;text-align:right;">${fmtI(bandM2)}</td>
+        <td style="padding:8px 10px;text-align:right;color:#27ae60;font-weight:600;">${fmtN(ta)}</td>
+        <td style="padding:8px 10px;text-align:right;color:#e67e22;font-weight:600;">${fmtN(tb)}</td>
+        <td style="padding:8px 10px;text-align:right;font-weight:700;">${fmtN(razem)}</td>
+        <td style="padding:8px 10px;text-align:center;"><span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#27ae60;color:white;">OK</span></td>
       </tr>`;
     }).join("\n");
 
@@ -333,6 +379,8 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#fff;color:#3d23
 .summary-table thead th{padding:11px 12px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px}
 .summary-table tfoot tr{background:#fff;border-top:2px solid #3d2319}
 .summary-table tfoot td{padding:12px;font-weight:800;font-size:14px}
+.summary-table-full-wrap{overflow-x:auto;margin-bottom:24px}
+.summary-table-full{min-width:900px}
 .report-footer{text-align:center;margin-top:40px;font-size:11px;color:#95a5a6;padding:20px;border-top:1px solid #e8ecf0}
 @media (max-width:640px){.track-explanation-grid{grid-template-columns:1fr!important}}
 .no-bg-tooltip { background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; }
@@ -390,35 +438,44 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#fff;color:#3d23
     <div class="kpi-card purple"><div><div class="kpi-label">Track B · Neg.</div><div class="kpi-value sm">${fmtN(totalB)} PLN</div><div class="kpi-sub">negocjacje</div></div><div class="kpi-icon">🤝</div></div>
   </div>
   <div class="track-explanation" style="background:#f8f9fc;border:1px solid #e0e0e0;border-radius:12px;padding:20px 24px;margin-bottom:24px;">
-    <div style="font-size:14px;font-weight:800;color:#3d2319;margin-bottom:12px;">⚖️ Track A i Track B — o co chodzi?</div>
+    <div style="font-size:14px;font-weight:800;color:#3d2319;margin-bottom:12px;">⚖️ Track A i Track B — nie sumuje się</div>
     <div class="track-explanation-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;font-size:13px;line-height:1.5;">
       <div style="padding:14px;background:#e8f5e9;border-radius:10px;border-left:4px solid #27ae60;">
         <strong style="color:#1b5e20;">Track A — ścieżka sądowa</strong><br>
-        Szacunek odszkodowania w razie dochodzenia roszczeń na drodze sądowej (art. 124, 305² KC, 225 KC). Stosuje się <strong>albo</strong> tę ścieżkę <strong>albo</strong> Track B — nie sumuje się obu.
-        <div style="margin-top:10px;font-weight:800;color:#27ae60;">Łącznie Track A: ${fmtN(totalA)} PLN</div>
+        Szacunek przy dochodzeniu roszczeń na drodze sądowej. Stosuje się <strong>albo</strong> Track A <strong>albo</strong> Track B — <strong>nie sumuje się A+B</strong>.
+        <div style="margin-top:10px;font-weight:800;color:#27ae60;">Suma Track A: ${fmtN(totalA)} PLN</div>
       </div>
       <div style="padding:14px;background:#fff3e0;border-radius:10px;border-left:4px solid #e67e22;">
         <strong style="color:#e65100;">Track B — negocjacje</strong><br>
-        Szacunek kwoty do negocjacji z operatorem (ugoda, wykup, odszkodowanie poza sądem). Stosuje się <strong>albo</strong> tę ścieżkę <strong>albo</strong> Track A — nie sumuje się obu.
-        <div style="margin-top:10px;font-weight:800;color:#e67e22;">Łącznie Track B: ${fmtN(totalB)} PLN</div>
+        Szacunek do negocjacji z operatorem (ugoda, wykup). Stosuje się <strong>albo</strong> Track A <strong>albo</strong> Track B — <strong>nie sumuje się A+B</strong>.
+        <div style="margin-top:10px;font-weight:800;color:#e67e22;">Suma Track B: ${fmtN(totalB)} PLN</div>
       </div>
     </div>
-    <p style="font-size:12px;color:#7f8c8d;margin:12px 0 0 0;">W zestawieniu zbiorczym poniżej podane są obie kwoty dla każdej działki; w praktyce wybiera się jedną ze ścieżek.</p>
+    <p style="font-size:12px;color:#7f8c8d;margin:12px 0 0 0;">W zestawieniu na dole raportu podane są obie kwoty per działka; wybiera się jedną ścieżkę (A lub B), nie sumę.</p>
+    ${isFarmerReport ? '<p style="font-size:12px;color:#2e7d32;margin:10px 0 0 0;font-weight:600;">🌾 <strong>Gospodarstwo rolne</strong> — w analizie włączone jest roszczenie R5 (szkoda rolna) dla działek z kolizją; kwoty w zestawieniu mogą zawierać R5.</p>' : ''}
   </div>
 
-  <div class="charts-row section-title">📈 Podsumowanie — wykresy</div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-bottom:28px;">
+  <div style="background:#e8f4fd;border:1px solid #90caf9;border-radius:12px;padding:20px 24px;margin-bottom:24px;">
+    <div style="font-size:14px;font-weight:800;color:#1565c0;margin-bottom:10px;">📐 Metodologia wyliczania roszczeń</div>
+    <p style="font-size:12px;line-height:1.55;color:#2c3e50;margin:0;">
+      Wszystkie dane w raporcie są <strong>pobierane z integracji</strong> (API): geometria i powierzchnia — ULDK/EGiB, cena gruntu — GUS BDL, długość linii i kolizja — KIUT/Overpass, współczynniki KSWS według typu infrastruktury. Gdy dane nie zostały pobrane, raport wskazuje <strong>„Błąd integracji”</strong> zamiast wartości domyślnych; brak wartości oznacza problem z danym źródłem (np. GUS, ULDK).<br/>
+      <strong>Track A (TK P 10/16):</strong> WSP + WBK + OBN (WSP = wartość × S × k × % pasa; WBK = wartość × R × k × % pasa × lata; OBN = wartość × impact). <strong>Track B:</strong> Track A × mnożnik. <strong>R1–R5:</strong> R1=WSP, R2=WBK, R3=OBN, R4=blokada WZ, R5=szkoda rolna (przy opcji „Gospodarstwo rolne”).
+    </p>
+  </div>
+
+  <div class="charts-row section-title">📈 Podsumowanie — wykresy kwotowe</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;margin-bottom:28px;">
     <div style="background:#fff;border-radius:12px;padding:16px;border:1px solid #e8eaf0;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-      <div style="font-size:12px;font-weight:700;color:#3d2319;margin-bottom:12px;">Kolizja vs brak kolizji</div>
-      <canvas id="chart-collision" width="260" height="200" style="max-width:100%;height:auto;"></canvas>
+      <div style="font-size:12px;font-weight:700;color:#3d2319;margin-bottom:12px;">Suma Track A vs Track B (PLN)</div>
+      <canvas id="chart-tracks-sum" width="280" height="200" style="max-width:100%;height:auto;"></canvas>
     </div>
     <div style="background:#fff;border-radius:12px;padding:16px;border:1px solid #e8eaf0;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-      <div style="font-size:12px;font-weight:700;color:#3d2319;margin-bottom:12px;">Track A vs Track B (sumy)</div>
-      <canvas id="chart-tracks" width="260" height="200" style="max-width:100%;height:auto;"></canvas>
+      <div style="font-size:12px;font-weight:700;color:#3d2319;margin-bottom:12px;">Kwoty Track B wg działek (PLN)</div>
+      <canvas id="chart-parcels-amounts" width="280" height="200" style="max-width:100%;height:auto;"></canvas>
     </div>
     <div style="background:#fff;border-radius:12px;padding:16px;border:1px solid #e8eaf0;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-      <div style="font-size:12px;font-weight:700;color:#3d2319;margin-bottom:12px;">Proporcja Track A / Track B</div>
-      <canvas id="chart-counts" width="260" height="200" style="max-width:100%;height:auto;"></canvas>
+      <div style="font-size:12px;font-weight:700;color:#3d2319;margin-bottom:12px;">Kolizja: z / bez</div>
+      <canvas id="chart-collision" width="280" height="200" style="max-width:100%;height:auto;"></canvas>
     </div>
   </div>
 
@@ -431,27 +488,42 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#fff;color:#3d23
   <div class="section-title">📋 Analiza poszczególnych działek</div>
   ${parcelCards}
 
-  <!-- SUMMARY TABLE (jedno zestawienie zbiorcze) -->
-  <div class="section-title page-break">📊 Zestawienie zbiorcze</div>
-  <p style="font-size:12px;color:#7f8c8d;margin-bottom:12px;">Track A = ścieżka sądowa, Track B = negocjacje — stosuje się jedną z opcji (albo/albo), nie sumę.</p>
-  <table class="summary-table">
+  <!-- SUMMARY TABLE (jedyna tabela działek w raporcie — pełne zestawienie) -->
+  <div class="section-title page-break">📊 Zestawienie zbiorcze działek</div>
+  <p style="font-size:12px;color:#7f8c8d;margin-bottom:12px;">Kolumny: kolizja, napięcie, powierzchnia, cena, długość linii, pas, Track A, Track B. Kolumna „Razem” to A+B (przedział) — w praktyce wybiera się <strong>albo</strong> Track A <strong>albo</strong> Track B, nie sumę.</p>
+  <div class="summary-table-full-wrap">
+  <table class="summary-table summary-table-full">
     <thead>
       <tr>
+        <th>Lp.</th>
         <th>Działka</th>
-        <th>Status</th>
-        <th>Track A — Sąd</th>
-        <th>Track B — Negocjacje</th>
+        <th style="text-align:center;">Kolizja</th>
+        <th style="text-align:center;">Napięcie</th>
+        <th style="text-align:right;">Pow. [m²]</th>
+        <th style="text-align:right;">Cena [PLN/m²]</th>
+        <th style="text-align:right;">Dł. linii [m]</th>
+        <th style="text-align:right;">Pas [m]</th>
+        <th style="text-align:right;">Pas [m²]</th>
+        <th style="text-align:right;">Track A</th>
+        <th style="text-align:right;">Track B</th>
+        <th style="text-align:right;">Razem</th>
+        <th style="text-align:center;">Status</th>
       </tr>
     </thead>
     <tbody>${summaryRows}</tbody>
     <tfoot>
       <tr>
-        <td colspan="2">Suma (${results.length} działek)</td>
-        <td style="text-align:right;color:#27ae60;">${fmtN(totalA)} PLN</td>
-        <td style="text-align:right;color:#e67e22;">${fmtN(totalB)} PLN</td>
+        <td colspan="2" style="font-weight:700;">Suma (${results.length} działek)</td>
+        <td colspan="7" style="text-align:right;font-weight:700;">—</td>
+        <td style="text-align:right;color:#27ae60;font-weight:700;">${fmtN(totalA)}</td>
+        <td style="text-align:right;color:#e67e22;font-weight:700;">${fmtN(totalB)}</td>
+        <td style="text-align:right;font-weight:700;color:#7f8c8d;">— (wybór A lub B)</td>
+        <td></td>
       </tr>
     </tfoot>
   </table>
+  </div>
+  <p style="font-size:11px;color:#7f8c8d;margin-top:8px;">Suma Track A i suma Track B to łączne kwoty przy wyborze danej ścieżki; nie należy sumować A+B jako jednej kwoty roszczenia.</p>
 
   <div class="report-footer">
     <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px;">
@@ -563,10 +635,10 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#fff;color:#3d23
         } catch(e) {}
       }
       var map = L.map(el, { zoomControl: true, attributionControl: false, scrollWheelZoom: true, dragging: true, doubleClickZoom: true });
-      var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '© Esri' }).addTo(map);
-      var kiutLayer = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu', { layers:'przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy', format:'image/png', transparent:true, opacity:1.0 }).addTo(map);
-      var egibLayer = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.8 }).addTo(map);
-      var powerLayer = L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png', { maxZoom:19, opacity:1.0, attribution:'© OpenInfra' }).addTo(map);
+      var satLayer = L.tileLayer('${BASE_LAYERS.esriSatellite.url}', { maxZoom: ${BASE_LAYERS.esriSatellite.maxZoom}, attribution: '${BASE_LAYERS.esriSatellite.attribution}' }).addTo(map);
+      var kiutLayer = L.tileLayer.wms('${GUGIK_WMS.KIUT.baseUrl}', { layers:'${GUGIK_WMS.KIUT.layers.uzbrojenie}', format:'image/png', transparent:true, opacity:1.0 }).addTo(map);
+      var egibLayer = L.tileLayer.wms('${GUGIK_WMS.KIEG.baseUrl}', { layers:'${GUGIK_WMS.KIEG.layers}', format:'image/png', transparent:true, opacity:0.8 }).addTo(map);
+      var powerLayer = L.tileLayer('${OIM_TILES.power}', { maxZoom:19, opacity:1.0, attribution:'© OpenInfra' }).addTo(map);
       
       L.control.layers(
         { 'Satelita (Esri)': satLayer },
@@ -614,21 +686,21 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#fff;color:#3d23
       doubleClickZoom: true
     });
 
-    var osmLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { subdomains:'abcd', maxZoom:19, attribution:'© CartoDB' }).addTo(map);
+    var osmLayer = L.tileLayer('${BASE_LAYERS.cartoLight.url}', { subdomains:'abcd', maxZoom:${BASE_LAYERS.cartoLight.options.maxZoom}, attribution:'${BASE_LAYERS.cartoLight.options.attribution}' }).addTo(map);
     
-    L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow',
-      { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.8 }).addTo(map);
+    L.tileLayer.wms('${GUGIK_WMS.KIEG.baseUrl}',
+      { layers:'${GUGIK_WMS.KIEG.layers}', format:'image/png', transparent:true, opacity:0.8 }).addTo(map);
 
-    var kiutLayer = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu',
-      { layers:'przewod_elektroenergetyczny', format:'image/png', transparent:true, opacity:1.0 }).addTo(map);
+    var kiutLayer = L.tileLayer.wms('${GUGIK_WMS.KIUT.baseUrl}',
+      { layers:'${GUGIK_WMS.KIUT.layers.uzbrojenie}', format:'image/png', transparent:true, opacity:1.0 }).addTo(map);
 
-    var powerLayer = L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png',
+    var powerLayer = L.tileLayer('${OIM_TILES.power}',
       { maxZoom:19, opacity:1, attribution:'© OpenInfra' });
-    var gasLayer = L.tileLayer('https://tiles.openinframap.org/gas/{z}/{x}/{y}.png',
+    var gasLayer = L.tileLayer('${OIM_TILES.gas}',
       { maxZoom:19, opacity:0.7, attribution:'© OpenInfra' });
-    var waterLayer = L.tileLayer('https://tiles.openinframap.org/water/{z}/{x}/{y}.png',
+    var waterLayer = L.tileLayer('${OIM_TILES.water}',
       { maxZoom:19, opacity:0.7, attribution:'© OpenInfra' });
-    var sewerLayer = L.tileLayer('https://tiles.openinframap.org/sewer/{z}/{x}/{y}.png',
+    var sewerLayer = L.tileLayer('${OIM_TILES.sewer}',
       { maxZoom:19, opacity:0.7, attribution:'© OpenInfra' });
 
     var parcelGroup = L.featureGroup();
@@ -672,9 +744,9 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#fff;color:#3d23
     }
 
     L.control.layers(
-      { 'Mapa': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { subdomains:'abcd', maxZoom:19, attribution:'© CartoDB' }) },
+      { 'Mapa': L.tileLayer('${BASE_LAYERS.cartoLight.url}', { subdomains:'abcd', maxZoom:${BASE_LAYERS.cartoLight.options.maxZoom}, attribution:'${BASE_LAYERS.cartoLight.options.attribution}' }) },
       {
-        '⚡ Raster z KIUT (GUGiK)': L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu', { layers:'przewod_elektroenergetyczny', format:'image/png', transparent:true, opacity:1.0 }),
+        '⚡ Raster z KIUT (GUGiK)': L.tileLayer.wms('${GUGIK_WMS.KIUT.baseUrl}', { layers:'${GUGIK_WMS.KIUT.layers.uzbrojenie}', format:'image/png', transparent:true, opacity:1.0 }),
         '⚡ Vektory OSM (Power)': powerLayer,
         '🔥 Gaz (Gas)': gasLayer,
         '💧 Woda (Water)': waterLayer,
@@ -714,23 +786,55 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#fff;color:#3d23
 
   var buildSingleHtml = ${buildSingleHtml.toString()};
 
-  var CHART_DATA = { collision: ${collisionCount}, noCollision: ${results.length - collisionCount}, totalA: ${totalA}, totalB: ${totalB}, total: ${results.length} };
+  var CHART_DATA = {
+    collision: ${collisionCount},
+    noCollision: ${results.length - collisionCount},
+    totalA: ${totalA},
+    totalB: ${totalB},
+    total: ${results.length},
+    parcelsForChart: ${JSON.stringify(parcelsForChart)}
+  };
 
   function initCharts() {
     if (typeof Chart === 'undefined') return;
     var fmt = function(n) { return (n || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 }); };
-    var c1 = document.getElementById('chart-collision');
-    if (c1) {
-      new Chart(c1, { type: 'doughnut', data: { labels: ['Z kolizją', 'Bez kolizji'], datasets: [{ data: [CHART_DATA.collision, CHART_DATA.noCollision], backgroundColor: ['#e53935', '#43a047'], borderWidth: 2 }] }, options: { responsive: true, plugins: { legend: { position: 'bottom' } } } });
+    var cSum = document.getElementById('chart-tracks-sum');
+    if (cSum) {
+      new Chart(cSum, {
+        type: 'bar',
+        data: {
+          labels: ['Track A (sąd)', 'Track B (negocjacje)'],
+          datasets: [{ label: 'PLN', data: [CHART_DATA.totalA, CHART_DATA.totalB], backgroundColor: ['#27ae60', '#e67e22'] }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } } } }
+      });
     }
-    var c2 = document.getElementById('chart-tracks');
-    if (c2) {
-      new Chart(c2, { type: 'bar', data: { labels: ['Track A (sąd)', 'Track B (negocjacje)'], datasets: [{ label: 'PLN', data: [CHART_DATA.totalA, CHART_DATA.totalB], backgroundColor: ['#27ae60', '#e67e22'] }] }, options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } } } } });
+    var cParcels = document.getElementById('chart-parcels-amounts');
+    if (cParcels && CHART_DATA.parcelsForChart && CHART_DATA.parcelsForChart.length > 0) {
+      var labels = CHART_DATA.parcelsForChart.map(function(p) { return p.shortId; });
+      var values = CHART_DATA.parcelsForChart.map(function(p) { return p.trackB; });
+      new Chart(cParcels, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{ label: 'Track B (PLN)', data: values, backgroundColor: 'rgba(230, 126, 34, 0.8)' }]
+        },
+        options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } } } }
+      });
+    } else if (cParcels) {
+      var ctx = cParcels.getContext('2d');
+      if (ctx) { ctx.font = '14px sans-serif'; ctx.fillStyle = '#888'; ctx.fillText('Brak działek z kwotą', 20, 100); }
     }
-    var c3 = document.getElementById('chart-counts');
-    if (c3) {
-      var sum = CHART_DATA.totalA + CHART_DATA.totalB || 1;
-      new Chart(c3, { type: 'doughnut', data: { labels: ['Track A (sąd)', 'Track B (negocjacje)'], datasets: [{ data: [CHART_DATA.totalA, CHART_DATA.totalB], backgroundColor: ['#27ae60', '#e67e22'], borderWidth: 2 }] }, options: { responsive: true, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: function(ctx) { var v = ctx.raw; return ctx.label + ': ' + fmt(v) + ' PLN (' + (sum ? Math.round(100 * v / sum) : 0) + '%)'; } } } } } });
+    var cColl = document.getElementById('chart-collision');
+    if (cColl) {
+      new Chart(cColl, {
+        type: 'doughnut',
+        data: {
+          labels: ['Z kolizją', 'Bez kolizji'],
+          datasets: [{ data: [CHART_DATA.collision, CHART_DATA.noCollision], backgroundColor: ['#e53935', '#43a047'], borderWidth: 2 }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+      });
     }
   }
 
@@ -768,10 +872,24 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#fff;color:#3d23
   return (
     <div className="batch-history-container">
       <header className="history-header">
-        <h1 className="history-header__title">Historia raportów</h1>
-        <p className="history-header__sub">Raporty zbiorcze z <strong>Analizy hurtowej</strong> (CSV). Otwórz raport, by zobaczyć mapy i zestawienie; możesz zapisać do druku w nowej karcie.</p>
+        <h1 className="history-header__title">Historia analiz zbiorczych</h1>
+        <p className="history-header__sub">Wcześniej wykonane analizy CSV — kliknij, by załadować raport z mapami.</p>
       </header>
 
+      {!loading && history.length > 0 && (
+        <div className="history-search-wrap" style={{ padding: "0 16px 12px", maxWidth: 480 }}>
+          <label htmlFor="history-search" className="visually-hidden">Szukaj po nazwie klienta lub pliku</label>
+          <input
+            id="history-search"
+            type="search"
+            className="history-search-input"
+            placeholder="Szukaj po nazwie klienta lub pliku…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Szukaj po nazwie klienta lub pliku"
+          />
+        </div>
+      )}
       <div className="history-content">
         {loading ? (
           <div className="history-loading" role="status" aria-label="Ładowanie">
@@ -796,9 +914,24 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#fff;color:#3d23
             <h2 className="history-empty__title">Brak raportów</h2>
             <p className="history-empty__hint">Wykonaj analizę w zakładce <strong>Analiza hurtowa</strong> — wyniki zapiszą się tutaj.</p>
           </div>
-        ) : (
+        ) : (() => {
+          const q = (searchQuery || "").trim().toLowerCase();
+          const filtered = q
+            ? history.filter(
+                (item) =>
+                  (item.client_name || "").toLowerCase().includes(q) ||
+                  (item.file_name || "").toLowerCase().includes(q)
+              )
+            : history;
+          return (
           <ul className="history-list" role="list">
-            {history.map((item, idx) => (
+            {filtered.length === 0 ? (
+              <li className="history-empty" style={{ listStyle: "none", padding: 24, textAlign: "center" }}>
+                <p style={{ margin: 0 }}>Brak raportów pasujących do „{searchQuery}"</p>
+                <button type="button" className="batch-link" style={{ marginTop: 8 }} onClick={() => setSearchQuery("")}>Wyczyść wyszukiwanie</button>
+              </li>
+            ) : (
+            filtered.map((item, idx) => (
               <li key={item.batch_id} className="history-card history-row--replaceable" role="listitem" data-batch-id={item.batch_id}>
                 <article
                   className="history-card__inner"
@@ -829,8 +962,8 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#fff;color:#3d23
                       <span className="history-card__file" title={item.file_name}>{item.file_name}</span>
                     </div>
                     <div className="history-card__stats">
-                      <span className="history-card__stat history-card__stat--count">{item.total} działek</span>
-                      <span className="history-card__stat history-card__stat--ok">✓ {item.successful}</span>
+                      <span className="history-card__stat history-card__stat--count">{item.total} DZIAŁEK</span>
+                      <span className="history-card__stat history-card__stat--ok">✓ {item.successful} ANALIZOWANYCH</span>
                     </div>
                   </div>
                   <div className="history-card__cta-wrap">
@@ -838,9 +971,11 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#fff;color:#3d23
                   </div>
                 </article>
               </li>
-            ))}
+            ))
+            )}
           </ul>
-        )}
+          );
+        })()}
       </div>
     </div>
   );

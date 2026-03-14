@@ -275,6 +275,7 @@ async def analyze_batch_csv(
                     "parcel_id": parcel_id,
                     "status": master_record.get("status", "REAL"),
                     "data": master_record,
+                    "master_record": master_record,  # duplikat dla kompatybilności (Historia raportów, PDF)
                     "error": None
                 }
             except Exception as e:
@@ -283,6 +284,7 @@ async def analyze_batch_csv(
                     "parcel_id": row.get('parcel_id', '?'),
                     "status": "ERROR",
                     "data": None,
+                    "master_record": None,
                     "error": str(e)
                 }
 
@@ -365,6 +367,7 @@ async def get_analysis_history():
 async def get_batch_details(batch_id: str):
     """
     Get detailed results for a specific batch.
+    Zwraca pełne dane (results z master_record/data) — bez obcinania.
     """
     try:
         history_file = HISTORY_DIR / f"batch_{batch_id}.json"
@@ -373,6 +376,12 @@ async def get_batch_details(batch_id: str):
 
         with open(history_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
+
+        # Kompatybilność wstecz: upewnij się, że każdy result ma master_record (frontend używa p.master_record || p.data)
+        results = data.get("results") or []
+        for r in results:
+            if r.get("master_record") is None and r.get("data") is not None:
+                r["master_record"] = r["data"]
 
         return {
             "ok": True,
