@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./ClientsPage.css";
+import NotebookPanel from "./NotebookPanel";
 
 const STORAGE_KEY = "ksws_clients_v2";
 function loadClients() {
@@ -710,108 +711,23 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
               </div>
             )}
 
-            {/* NOTEBOOKLM — osadzony widok */}
+            {/* NOTEBOOKLM — natywny panel 3-kolumnowy */}
             {activeTab === "notebook" && (
-              <div className="cp-section cp-nb-tab">
-                <div className="cp-nb-tab-header">
-                  <div className="cp-nb-tab-title">
-                    <span className="cp-nb-tab-icon">📓</span>
-                    <div>
-                      <div className="cp-nb-tab-name">NotebookLM Enterprise</div>
-                      <div className="cp-nb-tab-sub">
-                        {selectedClient.notebookLmId
-                          ? `Notebook: ${selectedClient.notebookLmId}`
-                          : "Brak przypisanego notebooka"}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="cp-nb-tab-actions">
-                    {selectedClient.notebookLmUrl && (
-                      <a
-                        href={selectedClient.notebookLmUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="cp-btn cp-btn-nb-open"
-                      >
-                        🔗 Otwórz w nowej karcie ↗
-                      </a>
-                    )}
-                    {nbApiStatus?.configured && !selectedClient.notebookLmId && (
-                      <button
-                        className="cp-btn cp-btn-nb-create"
-                        onClick={createNotebookForClient}
-                        disabled={nbCreating}
-                      >
-                        {nbCreating ? "⏳ Tworzę…" : "✨ Utwórz notebook automatycznie"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {!selectedClient.notebookLmUrl && (
-                  <div className="cp-nb-tab-empty">
-                    <div className="cp-nb-tab-empty-icon">📓</div>
-                    <div className="cp-nb-tab-empty-title">Brak notebooka dla tej sprawy</div>
-                    <div className="cp-nb-tab-empty-text">
-                      {nbApiStatus?.configured
-                        ? "Kliknij ✨ Utwórz notebook automatycznie — system stworzy notebook i doda streszczenie sprawy."
-                        : "Przejdź do zakładki AI Asystent i dodaj link do notebooka ręcznie."}
-                    </div>
-                  </div>
-                )}
-
-                {selectedClient.notebookLmUrl && (
-                  <div className="cp-nb-embed-wrap">
-                    {nbIframeError ? (
-                      <div className="cp-nb-embed-blocked">
-                        <div className="cp-nb-embed-blocked-icon">🚫</div>
-                        <div className="cp-nb-embed-blocked-title">Osadzanie zablokowane przez Google</div>
-                        <div className="cp-nb-embed-blocked-text">
-                          NotebookLM nie pozwala na osadzenie w ramce (X-Frame-Options).
-                          Użyj przycisku poniżej, aby otworzyć w nowej karcie.
-                        </div>
-                        <a
-                          href={selectedClient.notebookLmUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="cp-btn cp-btn-nb-open cp-btn-lg"
-                        >
-                          🔗 Otwórz NotebookLM ↗
-                        </a>
-                        <div className="cp-nb-embed-blocked-hint">
-                          Aby włączyć osadzanie, dodaj domenę aplikacji w Google Cloud Console
-                          → OAuth 2.0 → Authorized JavaScript origins.
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="cp-nb-embed">
-                        {nbIframeLoading && (
-                          <div className="cp-nb-embed-loading">
-                            <div className="cp-nb-embed-loading-spinner"></div>
-                            <span>Ładowanie NotebookLM…</span>
-                          </div>
-                        )}
-                        <iframe
-                          key={selectedClient.notebookLmUrl}
-                          src={selectedClient.notebookLmUrl}
-                          title="NotebookLM — sprawa klienta"
-                          width="100%"
-                          height="100%"
-                          style={{
-                            border: "none",
-                            borderRadius: 8,
-                            display: nbIframeLoading ? "none" : "block",
-                          }}
-                          allow="clipboard-read; clipboard-write; microphone"
-                          loading="lazy"
-                          onLoad={() => setNbIframeLoading(false)}
-                          onError={() => { setNbIframeError(true); setNbIframeLoading(false); }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+              <NotebookPanel
+                selectedClient={selectedClient}
+                nbApiStatus={nbApiStatus}
+                nbCreating={nbCreating}
+                nbPodcastLoading={nbPodcastLoading}
+                nbPodcastStatus={nbPodcastStatus}
+                nbAddingSource={nbAddingSource}
+                onCreateNotebook={createNotebookForClient}
+                onAddCaseSummary={() => addCaseSummarySource(selectedClient.notebookLmId)}
+                onGeneratePodcast={generatePodcast}
+                selectedId={selectedId}
+                clients={clients}
+                setClients={setClients}
+                eventLabel={eventLabel}
+              />
             )}
           </div>
         )}
