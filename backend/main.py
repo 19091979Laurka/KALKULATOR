@@ -12,7 +12,7 @@ from io import StringIO
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -21,7 +21,7 @@ from backend.modules.property import PropertyAggregator
 from backend.modules.infrastructure import prefetch_regional_osm, clear_regional_cache
 from backend.core.valuation import calculate_compensation
 from backend.core.reports import create_summary_dict
-from backend.modules.pdf_report import generate_pdf, generate_pdf_cards
+from backend.modules.pdf_report import generate_pdf
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -37,9 +37,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# frontend-react/build (po npm run build) lub frontend-react dla index.html
-_root = Path(__file__).parent.parent
-FRONTEND_DIR = (_root / "frontend-react" / "build") if (_root / "frontend-react" / "build").exists() else (_root / "frontend-react")
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 HISTORY_DIR = Path(__file__).parent / ".." / "data" / "history"
 HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -131,24 +129,13 @@ async def analyze(req: AnalyzeRequest):
     }
 
 @app.post("/api/analyze/batch")
-async def analyze_batch_csv(
-    file: UploadFile = File(...),
-    client_name: Optional[str] = Form(None),
-    client_id: Optional[str] = Form(None),
-    is_farmer: Optional[bool] = Form(None),
-):
+async def analyze_batch_csv(file: UploadFile = File(...)):
     """
     Batch analysis from CSV upload.
     CSV format: parcel_id,obreb,county,municipality
-    client_name (nazwa raportu) jest wymagane.
+
     Returns analysis for all parcels + saves to history.
     """
-    name = (client_name or "").strip()
-    if not name:
-        raise HTTPException(
-            status_code=400,
-            detail="Nazwa raportu / klienta jest wymagana. Uzupełnij pole przed analizą.",
-        )
     try:
         # Read CSV (obsługa BOM, różnych kodowań, separatorów)
         content = await file.read()
@@ -254,8 +241,6 @@ async def analyze_batch_csv(
             logger.warning("BATCH: Regional OSM prefetch error: %s — parcels will use individual queries", e)
 
         # ====== KROK 1: Analiza wszystkich działek (z cache) ======
-        batch_is_farmer = is_farmer in (True, "true", "1", 1)
-
         async def analyze_single(row):
             try:
                 parcel_id = (row.get('parcel_id') or '').strip() or None
@@ -268,14 +253,12 @@ async def analyze_batch_csv(
                     obreb=row.get('obreb'),
                     county=row.get('county'),
                     municipality=row.get('municipality'),
-                    is_farmer=batch_is_farmer,
                 )
 
                 return {
                     "parcel_id": parcel_id,
                     "status": master_record.get("status", "REAL"),
                     "data": master_record,
-                    "master_record": master_record,  # duplikat dla kompatybilności (Historia raportów, PDF)
                     "error": None
                 }
             except Exception as e:
@@ -284,7 +267,6 @@ async def analyze_batch_csv(
                     "parcel_id": row.get('parcel_id', '?'),
                     "status": "ERROR",
                     "data": None,
-                    "master_record": None,
                     "error": str(e)
                 }
 
@@ -306,9 +288,6 @@ async def analyze_batch_csv(
             "file_name": file.filename,
             "parcel_count": len(all_results),
             "successful": sum(1 for r in all_results if r["status"] != "ERROR"),
-            "client_name": name,
-            "client_id": (client_id or "").strip() or None,
-            "is_farmer": batch_is_farmer,
             "results": all_results
         }
 
@@ -350,9 +329,7 @@ async def get_analysis_history():
                     "timestamp": data["timestamp"],
                     "file_name": data["file_name"],
                     "total": data["parcel_count"],
-                    "successful": data["successful"],
-                    "client_name": data.get("client_name"),
-                    "client_id": data.get("client_id"),
+                    "successful": data["successful"]
                 })
 
         return {
@@ -367,7 +344,6 @@ async def get_analysis_history():
 async def get_batch_details(batch_id: str):
     """
     Get detailed results for a specific batch.
-    Zwraca pełne dane (results z master_record/data) — bez obcinania.
     """
     try:
         history_file = HISTORY_DIR / f"batch_{batch_id}.json"
@@ -376,12 +352,6 @@ async def get_batch_details(batch_id: str):
 
         with open(history_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
-
-        # Kompatybilność wstecz: upewnij się, że każdy result ma master_record (frontend używa p.master_record || p.data)
-        results = data.get("results") or []
-        for r in results:
-            if r.get("master_record") is None and r.get("data") is not None:
-                r["master_record"] = r["data"]
 
         return {
             "ok": True,
@@ -480,27 +450,6 @@ async def report_pdf(req: PdfReportRequest):
         )
     except Exception as e:
         logger.error(f"Błąd generowania PDF: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/report/pdf-cards")
-async def report_pdf_cards(req: PdfReportRequest):
-    """
-    PDF z jedną stroną na działkę — karta jak pojedyncza analiza (metryki, Track A/B, mini-mapa).
-    Do Ofert hurtowych — każda działka ma własną stronę.
-    """
-    try:
-        masters = [p.get("master_record") or p.get("data", {}) for p in req.parcels]
-        ids = [p.get("parcel_id", f"Dz.{i+1}") for i, p in enumerate(req.parcels)]
-        pdf_bytes = generate_pdf_cards(parcels_data=masters, parcel_ids=ids)
-        filename = f"Oferty_hurtowe_{len(ids)}_dzialek_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
-    except Exception as e:
-        logger.error(f"Błąd generowania PDF cards: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -752,198 +701,6 @@ function filterParcels(mode) {{
 </script>
 </body>
 </html>"""
-
-
-# ═════════════════════════════════════════════════════════════════
-# AI CHAT ENDPOINT
-# ═════════════════════════════════════════════════════════════════
-
-class AiChatRequest(BaseModel):
-    messages: list
-
-@app.post("/api/ai-chat")
-async def ai_chat(req: AiChatRequest):
-    """Proxy do OpenAI / Gemini dla wbudowanego asystenta AI."""
-    try:
-        import openai
-        client = openai.OpenAI()
-        response = client.chat.completions.create(
-            model="gpt-4.1-mini",
-            messages=req.messages,
-            max_tokens=1024,
-            temperature=0.7,
-        )
-        return {"reply": response.choices[0].message.content}
-    except Exception as e:
-        logger.error(f"AI chat error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ═════════════════════════════════════════════════════════════════
-# NOTEBOOKLM ENTERPRISE API ENDPOINTS
-# ═════════════════════════════════════════════════════════════════
-
-class NbCreateRequest(BaseModel):
-    title: str
-
-class NbAddTextSourceRequest(BaseModel):
-    notebook_id: str
-    source_title: str
-    content: str
-
-class NbAddUrlSourceRequest(BaseModel):
-    notebook_id: str
-    url: str
-    source_name: str = ""
-
-class NbGeneratePodcastRequest(BaseModel):
-    notebook_id: str
-    episode_focus: str = ""
-    language_code: str = "pl"
-
-class NbGetAudioRequest(BaseModel):
-    notebook_id: str
-    audio_overview_id: str
-
-
-def _nb_available() -> bool:
-    """Check if NotebookLM credentials are configured (OAuth2 or Service Account)."""
-    # New: OAuth2 user token method
-    has_oauth = bool(
-        os.environ.get("GOOGLE_OAUTH_REFRESH_TOKEN")
-        and os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
-        and os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
-    )
-    if has_oauth:
-        return True
-    # Fallback: check for oauth_tokens.json file
-    secrets_file = Path(__file__).parent / "secrets" / "oauth_tokens.json"
-    if secrets_file.exists():
-        return True
-    # Legacy: Service Account method
-    has_project = bool(os.environ.get("NOTEBOOKLM_PROJECT_ID"))
-    has_key = bool(os.environ.get("GOOGLE_SA_KEY_PATH") or os.environ.get("GOOGLE_SA_KEY_JSON"))
-    return has_project and has_key
-
-
-@app.get("/api/notebooklm/status")
-async def notebooklm_status():
-    """Check if NotebookLM API is configured and available."""
-    configured = _nb_available()
-    project = os.environ.get("GOOGLE_PROJECT_ID", os.environ.get("NOTEBOOKLM_PROJECT_ID", ""))
-    location = os.environ.get("NOTEBOOKLM_LOCATION", "global")
-    auth_method = "oauth2" if (os.environ.get("GOOGLE_OAUTH_REFRESH_TOKEN") or (Path(__file__).parent / "secrets" / "oauth_tokens.json").exists()) else "service_account"
-    return {
-        "configured": configured,
-        "project_id": project if configured else None,
-        "location": location if configured else None,
-        "auth_method": auth_method if configured else None,
-        "message": "NotebookLM API gotowe" if configured else "Brak konfiguracji — ustaw GOOGLE_OAUTH_REFRESH_TOKEN lub NOTEBOOKLM_PROJECT_ID + GOOGLE_SA_KEY_PATH",
-    }
-
-
-@app.post("/api/notebooklm/notebooks")
-async def nb_create_notebook(req: NbCreateRequest):
-    """Utwórz nowy notebook w NotebookLM."""
-    if not _nb_available():
-        raise HTTPException(status_code=503, detail="NotebookLM API nie jest skonfigurowane. Ustaw zmienne środowiskowe.")
-    try:
-        from backend.integrations.notebooklm import create_notebook, notebook_url
-        result = create_notebook(req.title)
-        notebook_id = result.get("notebookId") or result.get("name", "").split("/")[-1]
-        return {
-            "notebook_id": notebook_id,
-            "title": result.get("title", req.title),
-            "url": notebook_url(notebook_id),
-            "raw": result,
-        }
-    except Exception as e:
-        logger.error(f"NotebookLM create error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/notebooklm/notebooks")
-async def nb_list_notebooks():
-    """Lista ostatnio oglądanych notebooków."""
-    if not _nb_available():
-        raise HTTPException(status_code=503, detail="NotebookLM API nie jest skonfigurowane.")
-    try:
-        from backend.integrations.notebooklm import list_notebooks
-        return list_notebooks()
-    except Exception as e:
-        logger.error(f"NotebookLM list error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/notebooklm/notebooks/{notebook_id}")
-async def nb_get_notebook(notebook_id: str):
-    """Pobierz notebook po ID."""
-    if not _nb_available():
-        raise HTTPException(status_code=503, detail="NotebookLM API nie jest skonfigurowane.")
-    try:
-        from backend.integrations.notebooklm import get_notebook, notebook_url
-        result = get_notebook(notebook_id)
-        result["_url"] = notebook_url(notebook_id)
-        return result
-    except Exception as e:
-        logger.error(f"NotebookLM get error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/notebooklm/sources/text")
-async def nb_add_text_source(req: NbAddTextSourceRequest):
-    """Dodaj źródło tekstowe do notebooka."""
-    if not _nb_available():
-        raise HTTPException(status_code=503, detail="NotebookLM API nie jest skonfigurowane.")
-    try:
-        from backend.integrations.notebooklm import add_text_source
-        return add_text_source(req.notebook_id, req.source_title, req.content)
-    except Exception as e:
-        logger.error(f"NotebookLM add text source error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/notebooklm/sources/url")
-async def nb_add_url_source(req: NbAddUrlSourceRequest):
-    """Dodaj źródło URL do notebooka."""
-    if not _nb_available():
-        raise HTTPException(status_code=503, detail="NotebookLM API nie jest skonfigurowane.")
-    try:
-        from backend.integrations.notebooklm import add_url_source
-        return add_url_source(req.notebook_id, req.url, req.source_name)
-    except Exception as e:
-        logger.error(f"NotebookLM add URL source error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/notebooklm/audio")
-async def nb_generate_podcast(req: NbGeneratePodcastRequest):
-    """Wygeneruj audio-brief (podcast) dla notebooka."""
-    if not _nb_available():
-        raise HTTPException(status_code=503, detail="NotebookLM API nie jest skonfigurowane.")
-    try:
-        from backend.integrations.notebooklm import generate_audio_overview
-        return generate_audio_overview(
-            req.notebook_id,
-            episode_focus=req.episode_focus,
-            language_code=req.language_code,
-        )
-    except Exception as e:
-        logger.error(f"NotebookLM generate podcast error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/notebooklm/audio/{notebook_id}/{audio_overview_id}")
-async def nb_get_audio_status(notebook_id: str, audio_overview_id: str):
-    """Sprawdź status generowania audio-briefu."""
-    if not _nb_available():
-        raise HTTPException(status_code=503, detail="NotebookLM API nie jest skonfigurowane.")
-    try:
-        from backend.integrations.notebooklm import get_audio_overview
-        return get_audio_overview(notebook_id, audio_overview_id)
-    except Exception as e:
-        logger.error(f"NotebookLM get audio error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ═════════════════════════════════════════════════════════════════

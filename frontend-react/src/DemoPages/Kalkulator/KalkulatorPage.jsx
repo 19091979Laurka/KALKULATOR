@@ -7,7 +7,6 @@ import { toast } from "react-toastify";
 import CountUp from "react-countup";
 import { Spinner, Badge, Table, Progress } from "reactstrap";
 import ReportGenerator from "../../components/ReportGenerator";
-import { BASE_LAYERS, GUGIK_WMS, OIM_TILES } from "./mapSources";
 import "./KalkulatorPage.css";
 
 // ── Leaflet default icon fix ──────────────────────────────────────────────────
@@ -78,23 +77,25 @@ function ParcelMiniMap({ geojson, centroid, collision, height = 260 }) {
     });
 
     // ── 1. CartoDB Positron — czysty biały podkład mapowy (jak Mapbox Light) ──
-    L.tileLayer(BASE_LAYERS.cartoLight.url, BASE_LAYERS.cartoLight.options).addTo(map);
+    L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+      { subdomains: "abcd", maxZoom: 19, attribution: "© OSM © CARTO" }
+    ).addTo(map);
 
     // ── 2. GUGIK EGiB — siatka katastralna (niebieskie linie działek + numery) ──
-    L.tileLayer.wms(GUGIK_WMS.KIEG.baseUrl, {
-      layers: GUGIK_WMS.KIEG.layers,
-      format: "image/png",
-      transparent: true,
-      opacity: 0.9,
-    }).addTo(map);
+    L.tileLayer.wms(
+      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow",
+      { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.9 }
+    ).addTo(map);
 
     // ── 3. GESUT — uzbrojenie terenu (linie energetyczne, gaz, woda, kanalizacja) ──
-    L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, {
-      layers: `${GUGIK_WMS.KIUT.layers.uzbrojenie},${GUGIK_WMS.KIUT.layers.cieplo}`,
-      format: "image/png",
-      transparent: true,
-      opacity: 0.9,
-    }).addTo(map);
+    L.tileLayer.wms(
+      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
+      {
+        layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny,przewod_cieplowniczy",
+        format: "image/png", transparent: true, opacity: 0.9,
+      }
+    ).addTo(map);
 
     // ── 4. Obrys działki — TYLKO OBRYS, bez zielonego filla ──
     if (geojson?.coordinates) {
@@ -148,52 +149,46 @@ function ParcelMiniMap({ geojson, centroid, collision, height = 260 }) {
 }
 
 // ── GeoJSON działki + GESUT WMS overlay ──────────────────────────────────────
-function GeoJSONLayers({ parcelGeojson, collision }) {
+function GeoJSONLayers({ parcelGeojson }) {
   const map = useMap();
 
   useEffect(() => {
     if (!parcelGeojson) return;
 
-    // Granica działki — cyan (bez kolizji) / magenta (z kolizją), jak w commicie feat(maps)
-    const parcelColor = collision ? "#ff0055" : "#00ffff";
+    // Granica działki
     const parcelLayer = L.geoJSON(parcelGeojson, {
       style: {
-        color: parcelColor,
-        weight: 4,
-        fillColor: parcelColor,
-        fillOpacity: 0.15,
+        color: "#a91079",
+        weight: 3,
+        fillColor: "#a91079",
+        fillOpacity: 0.18,
       },
     });
     parcelLayer.addTo(map);
 
-    // KIUT GUGiK WMS — uzbrojenie terenu, opacity 100% (czytelne linie)
-    const gesutLayer = L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, {
-      layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy",
-      format: "image/png",
-      transparent: true,
-      opacity: 1.0,
-      attribution: GUGIK_WMS.KIUT.attribution,
-    });
+    // GESUT WMS — uzbrojenie terenu (niewidoczne na geoportal orto, ale dane są)
+    const gesutLayer = L.tileLayer.wms(
+      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
+      {
+        layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy",
+        format: "image/png",
+        transparent: true,
+        opacity: 0.7,
+        attribution: "GESUT GUGiK",
+      }
+    );
     gesutLayer.addTo(map);
 
-    let bufferCircle = null;
     try {
       const bounds = parcelLayer.getBounds();
-      if (bounds.isValid()) {
-        map.fitBounds(bounds, { padding: [40, 40] });
-        const center = bounds.getCenter();
-        bufferCircle = L.circle(center, {
-          radius: 200, color: "#ffffff", fillColor: "transparent", weight: 1.5, dashArray: "5, 5"
-        }).addTo(map).bindTooltip("Zasięg analizy promieniowej (200m)", { sticky: true, className: "no-bg-tooltip", direction: "top" });
-      }
+      if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
     } catch (_) {}
 
     return () => {
       map.removeLayer(parcelLayer);
       map.removeLayer(gesutLayer);
-      if (bufferCircle) map.removeLayer(bufferCircle);
     };
-  }, [map, parcelGeojson, collision]);
+  }, [map, parcelGeojson]);
 
   return null;
 }
@@ -209,6 +204,7 @@ const INFRA_LEGEND = [
 ];
 
 // ── Overpass API — linie i słupy energetyczne z OSM ──────────────────────────
+const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 
 const VOLTAGE_COLOR = (v) => {
   const n = parseInt(v) || 0;
@@ -456,15 +452,53 @@ function BatchParcelsLayer({ results }) {
       const geojson = p.data?.geometry?.geojson_ll || p.data?.geometry?.geojson;
       const centroid = p.data?.geometry?.centroid_ll;
       const collision = p.data?.infrastructure?.power_lines?.detected;
-      const color = collision ? "#e53935" : "#43a047";
+      const ta = p.data?.compensation?.track_a?.total || 0;
+      const tb = p.data?.compensation?.track_b?.total || 0;
+      const razem = ta + tb;
+      const color = MAT_PARCEL_COLORS[idx % MAT_PARCEL_COLORS.length];
+
+      const popup = `<div style="font-family:Inter,'Segoe UI',Arial,sans-serif;min-width:230px;border-radius:10px;overflow:hidden;font-size:12px;">
+        <div style="background:${color};color:white;padding:10px 14px;font-weight:900;font-size:13px;">
+          #${idx+1} · ${p.parcel_id||"—"}
+        </div>
+        <div style="padding:10px 14px;">
+          <div style="margin-bottom:8px;">
+            <span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${collision?"#e53935":"#43a047"};color:white;">
+              ${collision?"⚡ KOLIZJA":"✓ BEZ KOLIZJI"}
+            </span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+            <div style="background:#f5f5f5;border-radius:6px;padding:6px 8px;">
+              <div style="font-size:9px;color:#9e9e9e;text-transform:uppercase;font-weight:700;">Pow. działki</div>
+              <div style="font-weight:800;color:#212121;">${Math.round(p.data?.geometry?.area_m2||0).toLocaleString()} m²</div>
+            </div>
+            <div style="background:#f5f5f5;border-radius:6px;padding:6px 8px;">
+              <div style="font-size:9px;color:#9e9e9e;text-transform:uppercase;font-weight:700;">Napięcie</div>
+              <div style="font-weight:800;color:#212121;">${p.data?.infrastructure?.power_lines?.voltage||"—"}</div>
+            </div>
+          </div>
+          <div style="background:linear-gradient(135deg,#1976d2,#1565c0);border-radius:7px;padding:8px 10px;margin-bottom:5px;">
+            <div style="font-size:9px;color:rgba(255,255,255,0.65);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">⚖️ Track A · Sąd</div>
+            <div style="font-weight:900;color:white;font-size:13px;">${Math.round(ta).toLocaleString()} PLN</div>
+          </div>
+          <div style="background:linear-gradient(135deg,#f57c00,#e65100);border-radius:7px;padding:8px 10px;margin-bottom:5px;">
+            <div style="font-size:9px;color:rgba(255,255,255,0.65);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">🤝 Track B · Neg.</div>
+            <div style="font-weight:900;color:white;font-size:13px;">${Math.round(tb).toLocaleString()} PLN</div>
+          </div>
+          <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:7px;padding:8px 10px;">
+            <div style="font-size:9px;color:rgba(255,193,7,0.8);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">💰 RAZEM A+B</div>
+            <div style="font-weight:900;color:white;font-size:15px;">${Math.round(razem).toLocaleString()} PLN</div>
+          </div>
+        </div>
+      </div>`;
 
       if (geojson?.coordinates) {
         try {
           const poly = L.geoJSON(geojson, {
-            // Działka tylko jako delikatny obrys, żeby nie konkurowała z liniami
-            style: { color, weight: 2, fillColor: color, fillOpacity: 0.05 },
-          });
+            style: { color, weight: 3, fillColor: color, fillOpacity: 0.3 },
+          }).bindPopup(popup, { maxWidth: 260 });
           group.addLayer(poly);
+          // Numbered label
           if (Array.isArray(centroid) && centroid[0] != null) {
             const icon = L.divIcon({
               className: "",
@@ -480,7 +514,7 @@ function BatchParcelsLayer({ results }) {
           html: `<div style="background:${color};color:white;font-weight:900;font-size:11px;padding:4px 8px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.35);border:2px solid white;">#${idx+1}</div>`,
           iconAnchor: [16, 12],
         });
-        L.marker([Number(centroid[1]), Number(centroid[0])], { icon }).addTo(group);
+        L.marker([Number(centroid[1]), Number(centroid[0])], { icon }).bindPopup(popup).addTo(group);
       }
 
       // Power lines
@@ -489,9 +523,8 @@ function BatchParcelsLayer({ results }) {
         plGeo.features.forEach((feat) => {
           try {
             const v = feat.properties?.voltage || "SN";
-            const lc = v === "WN" ? "#e60000" : v === "nN" ? "#0066ff" : "#ff9800";
-            const weight = v === "WN" ? 7 : v === "nN" ? 5 : 6;
-            L.geoJSON(feat.geometry, { style: { color: lc, weight, opacity: 0.95 } }).addTo(group);
+            const lc = v === "WN" ? "#e53935" : v === "nN" ? "#1e88e5" : "#fb8c00";
+            L.geoJSON(feat.geometry, { style: { color: lc, weight: v === "WN" ? 5 : 3, opacity: 0.9 } }).addTo(group);
           } catch(_) {}
         });
       }
@@ -516,52 +549,44 @@ function InfrastructureLayer() {
   useEffect(() => {
     // ── Open Infrastructure Map — kafelki linii energetycznych (ZAWSZE WIDOCZNE) ──
     // Darmowe, publiczne, bazują na OSM. Pokrycie: globalne, w tym PL.
-    const oimPower = L.tileLayer(OIM_TILES.power, {
-      attribution: '⚡ <a href="https://openinframap.org" target="_blank">Open Infrastructure Map</a>',
-      opacity: 1.0,
-      maxZoom: 19,
-      zIndex: 6,
-    });
+    const oimPower = L.tileLayer(
+      "https://tiles.openinframap.org/power/{z}/{x}/{y}.png",
+      {
+        attribution: '⚡ <a href="https://openinframap.org" target="_blank">Open Infrastructure Map</a>',
+        opacity: 0.9,
+        maxZoom: 19,
+        zIndex: 6,
+      }
+    );
 
     // ── KIUT GUGiK WMS — linie energetyczne PL (oficjalne dane PL) ──
-    const wmsBase = { format: "image/png", transparent: true, opacity: 1.0, zIndex: 5 };
-    const kiutElektro = L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, { ...wmsBase, layers: GUGIK_WMS.KIUT.layers.uzbrojenie, attribution: GUGIK_WMS.KIUT.attribution });
-    const kiutGaz     = L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, { ...wmsBase, layers: GUGIK_WMS.KIUT.layers.gaz });
-    const kiutWoda    = L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, { ...wmsBase, layers: GUGIK_WMS.KIUT.layers.woda });
-    const kiutKanal   = L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, { ...wmsBase, layers: GUGIK_WMS.KIUT.layers.kanal });
-    const kiutCieplo  = L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, { ...wmsBase, layers: GUGIK_WMS.KIUT.layers.cieplo });
-    const kiutTelekom = L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, { ...wmsBase, layers: GUGIK_WMS.KIUT.layers.telekom });
+    const KIUT_URL = "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu";
+    const wmsBase = { format: "image/png", transparent: true, opacity: 0.8, zIndex: 5 };
+    const kiutElektro = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_elektroenergetyczny", attribution: "KIUT GUGiK" });
+    const kiutGaz     = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_gazowy" });
+    const kiutWoda    = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_wodociagowy" });
+    const kiutKanal   = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_kanalizacyjny" });
+    const kiutCieplo  = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_cieplowniczy" });
+    const kiutTelekom = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_telekomunikacyjny" });
 
-    // ── KIEG GUGiK WMS — siatka działek (działki + numery) ──
-    const kiegParcels = L.tileLayer.wms(GUGIK_WMS.KIEG.baseUrl, {
-      format: "image/png",
-      transparent: true,
-      opacity: 0.8,
-      zIndex: 4,
-      layers: GUGIK_WMS.KIEG.layers,
-      attribution: GUGIK_WMS.KIEG.attribution,
-    });
-
-    // Domyślnie włączone: OIM (zawsze widoczna) + KIUT elektro + siatka działek KIEG
+    // Domyślnie włączone: OIM (zawsze widoczna) + KIUT elektro
     oimPower.addTo(map);
     kiutElektro.addTo(map);
-    kiegParcels.addTo(map);
 
     const overlays = {
       "⚡ Linie energetyczne (Open Infra Map)": oimPower,
-      "⚡ Linie uzbrojenia terenu (KIUT GUGiK)": kiutElektro,
+      "⚡ Linie elektroenergetyczne (KIUT GUGiK)": kiutElektro,
       "🔥 Gazowy (KIUT)": kiutGaz,
       "💧 Wodociągowy (KIUT)": kiutWoda,
       "🚿 Kanalizacyjny (KIUT)": kiutKanal,
       "🌡 Ciepłowniczy (KIUT)": kiutCieplo,
       "📡 Telekomunikacyjny (KIUT)": kiutTelekom,
-      "📋 Działki i numery (KIEG GUGiK)": kiegParcels,
     };
     const ctrl = L.control.layers(null, overlays, { collapsed: true, position: "topright" }).addTo(map);
 
     return () => {
       map.removeControl(ctrl);
-      [oimPower, kiutElektro, kiutGaz, kiutWoda, kiutKanal, kiutCieplo, kiutTelekom, kiegParcels].forEach((l) => {
+      [oimPower, kiutElektro, kiutGaz, kiutWoda, kiutKanal, kiutCieplo, kiutTelekom].forEach((l) => {
         if (map.hasLayer(l)) map.removeLayer(l);
       });
     };
@@ -576,30 +601,29 @@ function BatchMapLayerControl() {
   useEffect(() => {
     // Base layers
     // Base layers
-    const topo = L.tileLayer(BASE_LAYERS.esriTopo.url, {
-      maxZoom: BASE_LAYERS.esriTopo.maxZoom,
-      attribution: BASE_LAYERS.esriTopo.attribution,
-    });
-    const satellite = L.tileLayer(BASE_LAYERS.esriSatellite.url, {
-      maxZoom: BASE_LAYERS.esriSatellite.maxZoom,
-      attribution: BASE_LAYERS.esriSatellite.attribution,
-    });
+    const topo = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 18, attribution: "© Esri" }
+    );
+    const satellite = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 19 }
+    );
     satellite.addTo(map); // ── SATELITA domyślnie ──
 
     // Overlays — wszystkie 3 włączone od razu
-    const oimPower = L.tileLayer(OIM_TILES.power, { opacity: 1.0, maxZoom: 19 });
-    const gugikEw = L.tileLayer.wms(GUGIK_WMS.KIEG.baseUrl, {
-      layers: GUGIK_WMS.KIEG.layers,
-      format: "image/png",
-      transparent: true,
-      opacity: 0.8,
-    });
-    const kiutElektro = L.tileLayer.wms(GUGIK_WMS.KIUT.baseUrl, {
-      layers: GUGIK_WMS.KIUT.layers.uzbrojenie,
-      format: "image/png",
-      transparent: true,
-      opacity: 1.0,
-    });
+    const oimPower = L.tileLayer(
+      "https://tiles.openinframap.org/power/{z}/{x}/{y}.png",
+      { opacity: 0.9, maxZoom: 19 }
+    );
+    const gugikEw = L.tileLayer.wms(
+      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow",
+      { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.65 }
+    );
+    const kiutElektro = L.tileLayer.wms(
+      "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
+      { layers: "przewod_elektroenergetyczny", format: "image/png", transparent: true, opacity: 0.85 }
+    );
     // Wszystkie 3 nakładki domyślnie włączone
     oimPower.addTo(map);
     gugikEw.addTo(map);
@@ -1014,7 +1038,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
     <div class="header-badge-col">
       <div style="text-align:right;margin-bottom:12px;">
         <div style="font-size:13px;color:#b8963e;font-weight:700;">www.kancelaria-szuwara.pl</div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.7);margin-top:2px;">tel. 500 013 269</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.7);margin-top:2px;">tel. 790 411 412</div>
       </div>
       <span class="badge">✓ REAL DATA POLICY</span>
       <span class="badge">KSWS-V.5 · TK P 10/16</span>
@@ -1072,8 +1096,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
       <span style="color:#b8963e;font-size:11px;">Kancelaria Prawno-Podatkowa</span>
     </div>
     <a href="https://www.kancelaria-szuwara.pl" style="color:#b8963e;font-weight:700;">www.kancelaria-szuwara.pl</a>
-    &nbsp;·&nbsp; tel. 500 013 269<br>
-    Kancelaria Prawno Podatkowa Rafał Szuwara · Created by Rafał Szuwara<br>
+    &nbsp;·&nbsp; tel. 790 411 412<br>
     Raport wygenerowany: <strong>${dateStr}</strong> · KALKULATOR KSWS v3.0 ·
     Dane: ULDK GUGiK, OSM Overpass, GUS BDL · Metodyka: KSWS-V.5 · TK P 10/16<br>
     <em>Dokument ma charakter informacyjno-analityczny i nie zastępuje operatu szacunkowego.</em>
@@ -1111,30 +1134,15 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
           }
         } catch(e) {}
       }
-      var map = L.map(el, { zoomControl: true, attributionControl: false, scrollWheelZoom: true, dragging: true, doubleClickZoom: true });
-      var satLayer = L.tileLayer('${BASE_LAYERS.esriSatellite.url}', { maxZoom: ${BASE_LAYERS.esriSatellite.maxZoom}, attribution: '${BASE_LAYERS.esriSatellite.attribution}' }).addTo(map);
-      var egibLayer = L.tileLayer.wms('${GUGIK_WMS.KIEG.baseUrl}', { layers: '${GUGIK_WMS.KIEG.layers}', format: 'image/png', transparent: true, opacity: 0.8 }).addTo(map);
-      var kiutLayer = L.tileLayer.wms('${GUGIK_WMS.KIUT.baseUrl}', { layers: '${GUGIK_WMS.KIUT.layers.uzbrojenie}', format: 'image/png', transparent: true, opacity: 1.0 }).addTo(map);
-      var powerLayer = L.tileLayer('${OIM_TILES.power}', { maxZoom: 19, opacity: 1.0, attribution: '© OpenInfraMap' }).addTo(map);
-      
-      L.control.layers(
-        { 'Satelita (Esri)': satLayer },
-        {
-          '⚡ Raster z KIUT (GUGiK)': kiutLayer,
-          '⚡ Vektory OSM (Power)': powerLayer,
-          '🗺️ Granice EGiB': egibLayer
-        },
-        { position: 'topright', collapsed: true }
-      ).addTo(map);
-
-      L.circle(center, {
-        radius: 200, color: '#ffffff', fillColor: 'transparent', weight: 1.5, dashArray: '5, 5'
-      }).addTo(map).bindTooltip("Zasięg analizy promieniowej (200m)", { sticky: true, className: 'no-bg-tooltip', direction: 'top' });
-
+      var map = L.map(el, { zoomControl: false, attributionControl: false, scrollWheelZoom: false, dragging: false, doubleClickZoom: false });
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { subdomains:'abcd', maxZoom:19 }).addTo(map);
+      L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.75 }).addTo(map);
+      // Warstwa uzbrojenia terenu - Open Infrastructure Map (stabilne, zawsze dostępne)
+      L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png', { maxZoom:19, opacity:0.8, attribution:'© OpenStreetMap contributors' }).addTo(map);
       if (parcel.geojson && parcel.geojson.coordinates) {
-        var color = parcel.collision ? '#ff0055' : '#00ffff';
-        var layer = L.geoJSON(parcel.geojson, { style: { color: color, weight: 4, fillOpacity: 0.15 } }).addTo(map);
-        try { map.fitBounds(layer.getBounds(), { padding: [16, 16] }); } catch(e) { map.setView(center, 14); }
+        var color = parcel.collision ? '#e53935' : '#1e88e5';
+        var layer = L.geoJSON(parcel.geojson, { style: { color: color, weight: 3, fillColor: color, fillOpacity: 0.12 } }).addTo(map);
+        try { map.fitBounds(layer.getBounds(), { padding: [8, 8] }); } catch(e) { map.setView(center, 14); }
       } else {
         map.setView(center, 14);
       }
@@ -1156,20 +1164,20 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
     });
 
     // Base layers
-    L.tileLayer('${BASE_LAYERS.cartoLight.url}',
-      { subdomains: 'abcd', maxZoom: ${BASE_LAYERS.cartoLight.options.maxZoom}, attribution: '${BASE_LAYERS.cartoLight.options.attribution}' }).addTo(map);
-    L.tileLayer.wms('${GUGIK_WMS.KIEG.baseUrl}',
-      { layers: '${GUGIK_WMS.KIEG.layers}', format: 'image/png', transparent: true, opacity: 0.75 }).addTo(map);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+      { subdomains:'abcd', maxZoom:19, attribution:'© Carto' }).addTo(map);
+    L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow',
+      { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.75 }).addTo(map);
 
     // Infrastructure layers
-    var powerLayer = L.tileLayer('${OIM_TILES.power}',
-      { maxZoom: 19, opacity: 0.8, attribution: '© OpenInfra' });
-    var gasLayer = L.tileLayer('${OIM_TILES.gas}',
-      { maxZoom: 19, opacity: 0.7, attribution: '© OpenInfra' });
-    var waterLayer = L.tileLayer('${OIM_TILES.water}',
-      { maxZoom: 19, opacity: 0.7, attribution: '© OpenInfra' });
-    var sewerLayer = L.tileLayer('${OIM_TILES.sewer}',
-      { maxZoom: 19, opacity: 0.7, attribution: '© OpenInfra' });
+    var powerLayer = L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png',
+      { maxZoom:19, opacity:0.8, attribution:'© OpenInfra' });
+    var gasLayer = L.tileLayer('https://tiles.openinframap.org/gas/{z}/{x}/{y}.png',
+      { maxZoom:19, opacity:0.7, attribution:'© OpenInfra' });
+    var waterLayer = L.tileLayer('https://tiles.openinframap.org/water/{z}/{x}/{y}.png',
+      { maxZoom:19, opacity:0.7, attribution:'© OpenInfra' });
+    var sewerLayer = L.tileLayer('https://tiles.openinframap.org/sewer/{z}/{x}/{y}.png',
+      { maxZoom:19, opacity:0.7, attribution:'© OpenInfra' });
 
     powerLayer.addTo(map);
 
@@ -1212,8 +1220,8 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
 
     // Layer controls
     L.control.layers(
-      { 'Mapa': L.tileLayer('${BASE_LAYERS.cartoLight.url}',
-        { subdomains: 'abcd', maxZoom: ${BASE_LAYERS.cartoLight.options.maxZoom} }) },
+      { 'Mapa': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+        { subdomains:'abcd', maxZoom:19 }) },
       {
         '⚡ Linie energetyczne (Power)': powerLayer,
         '🔥 Gaz (Gas)': gasLayer,
@@ -1298,9 +1306,9 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
     <div className="ksws-card">
       <div className="ksws-card-header">
         <span className="ksws-card-header-icon">📄</span>
-          <div>
-          <div className="ksws-card-header-title">Oferty hurtowe · Batch CSV</div>
-          <div className="ksws-card-header-sub">Załaduj CSV · wyniki i karty z poprzednich batchy poniżej</div>
+        <div>
+          <div className="ksws-card-header-title">Batch CSV Analysis</div>
+          <div className="ksws-card-header-sub">Analiza wielu działek · załaduj CSV</div>
         </div>
       </div>
       <div className="ksws-card-body">
@@ -1875,9 +1883,6 @@ export default function KalkulatorPage() {
     if (id === "klienci") { navigate("/kalkulator/klienci"); return; }
     if (id === "wzory")   { navigate("/kalkulator/wzory");   return; }
     if (id === "home")    { navigate("/kalkulator/home");    return; }
-    if (id === "historia-analiz") { navigate("/kalkulator/historia-analiz"); return; }
-    if (id === "batch") { navigate("/kalkulator/batch"); return; }
-    if (id === "historia") { navigate("/kalkulator/historia"); return; }
     setActiveNav(id);
   };
 
@@ -1928,7 +1933,6 @@ export default function KalkulatorPage() {
   const [mapCenter, setMapCenter] = useState(DEFAULT_CENTER);
   const [mapZoom, setMapZoom] = useState(DEFAULT_ZOOM);
   const [powerGeoJSON, setPowerGeoJSON] = useState(null);
-  const [mapLegendCollapsed, setMapLegendCollapsed] = useState(false);
 
   // ── History ──────────────────────────────────────────────────────────────────
   const [history, setHistory] = useState(loadHistory);
@@ -2065,11 +2069,12 @@ export default function KalkulatorPage() {
 
   // ── Stara funkcja openHtmlReport usunięta — teraz używamy ReportGenerator ──
 
+  // ── downloadPdf — backend PDF z pełnym raportem R1-R5 ───────────────────────
   const downloadPdf = async () => {
     if (!result) return;
     setPdfLoading(true);
     try {
-      const res = await fetch("/api/report/pdf-cards", {
+      const res = await fetch("/api/report/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2134,8 +2139,87 @@ export default function KalkulatorPage() {
   // ── RENDER ───────────────────────────────────────────────────────────────────
   return (
     <div className="ksws-layout">
+
+      {/* ════════════ SIDEBAR ════════════ */}
+      <aside className="ksws-sidebar">
+        <div className="ksws-sidebar-logo">
+          {/* Szuwara § symbol */}
+          <div className="ksws-sidebar-logo-symbol">§</div>
+          <div className="ksws-sidebar-logo-title">SZUWARA</div>
+          <div className="ksws-sidebar-logo-sub">Kancelaria Prawno-Podatkowa</div>
+          <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid rgba(184,150,62,0.2)", fontSize: "0.62rem", color: "rgba(255,255,255,0.35)", lineHeight: "1.7" }}>
+            <div style={{ color: "#b8963e", fontWeight: "700", fontSize: "0.72rem", letterSpacing: "0.5px" }}>KALKULATOR KSWS</div>
+            <div>Roszczenia przesyłowe · Track A/B</div>
+          </div>
+        </div>
+
+        <nav className="ksws-sidebar-nav">
+          <div
+            className={`ksws-sidebar-nav-item${activeNav === "analiza" ? " active" : ""}`}
+            onClick={() => handleSidebarNav("analiza")}
+            style={{ cursor: "pointer" }}
+          >
+            <span className="ksws-sidebar-nav-icon">⚡</span>
+            Analiza działki
+          </div>
+          <div
+            className={`ksws-sidebar-nav-item${activeNav === "historia" ? " active" : ""}`}
+            onClick={() => handleSidebarNav("historia")}
+            style={{ cursor: "pointer" }}
+          >
+            <span className="ksws-sidebar-nav-icon">📋</span>
+            Historia analiz
+          </div>
+          <div
+            className={`ksws-sidebar-nav-item${activeNav === "batch" ? " active" : ""}`}
+            onClick={() => handleSidebarNav("batch")}
+            style={{ cursor: "pointer" }}
+          >
+            <span className="ksws-sidebar-nav-icon">📊</span>
+            Batch CSV
+          </div>
+          {/* ── Separator ── */}
+          <div style={{ margin: "8px 16px", borderTop: "1px solid rgba(255,255,255,0.1)" }} />
+          <div
+            className="ksws-sidebar-nav-item"
+            onClick={() => handleSidebarNav("klienci")}
+            style={{ cursor: "pointer" }}
+          >
+            <span className="ksws-sidebar-nav-icon">👥</span>
+            Klienci
+          </div>
+          <div
+            className="ksws-sidebar-nav-item"
+            onClick={() => handleSidebarNav("wzory")}
+            style={{ cursor: "pointer" }}
+          >
+            <span className="ksws-sidebar-nav-icon">📝</span>
+            Wzory dokumentów
+          </div>
+          {/* ── Separator ── */}
+          <div style={{ margin: "8px 16px", borderTop: "1px solid rgba(255,255,255,0.1)" }} />
+          <div
+            className="ksws-sidebar-nav-item"
+            onClick={() => handleSidebarNav("home")}
+            style={{ cursor: "pointer", opacity: 0.7 }}
+          >
+            <span className="ksws-sidebar-nav-icon">🏠</span>
+            Strona główna
+          </div>
+        </nav>
+
+        <div className="ksws-sidebar-footer">
+          <div style={{ color: "#b8963e", fontWeight: "700", marginBottom: "4px", fontSize: "0.72rem" }}>§ SZUWARA</div>
+          <a href="https://www.kancelaria-szuwara.pl" target="_blank" rel="noopener noreferrer">
+            www.kancelaria-szuwara.pl
+          </a><br />
+          <a href="tel:790411412">790 411 412</a><br />
+          <div style={{ marginTop: "6px", opacity: 0.5 }}>KSWS v3.0 · Track A/B · GUGiK</div>
+        </div>
+      </aside>
+
       {/* ════════════ RIGHT SIDE ════════════ */}
-      <div className="ksws-content" style={{ padding: 0, overflow: "visible" }}>
+      <div className="ksws-content">
 
         {/* ── TOP BAR ── */}
         <header className="ksws-topbar">
@@ -2147,7 +2231,7 @@ export default function KalkulatorPage() {
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: "1.1rem", color: "#b8963e", fontWeight: "800", flexShrink: 0,
             }}>§</div>
-          <div>
+            <div>
               <div className="ksws-topbar-title">
                 Kalkulator Roszczeń Przesyłowych
                 <span style={{ marginLeft: "10px", fontSize: "0.65em", fontWeight: "500", color: "#b8963e", letterSpacing: "1px", textTransform: "uppercase" }}>
@@ -2182,8 +2266,8 @@ export default function KalkulatorPage() {
               <div className="ksws-card-header">
                 <span className="ksws-card-header-icon">📋</span>
                 <div>
-                  <div className="ksws-card-header-title">Historia działek</div>
-                  <div className="ksws-card-header-sub">Pojedyncze analizy · pełne dane wyliczeń · kliknij aby załadować</div>
+                  <div className="ksws-card-header-title">Historia analiz</div>
+                  <div className="ksws-card-header-sub">Pełne dane wyliczeń · kliknij aby załadować</div>
                 </div>
               </div>
               <div className="ksws-card-body">
@@ -2308,10 +2392,6 @@ export default function KalkulatorPage() {
 
           {/* ════ ANALIZA PAGE ════ */}
           {activeNav === "analiza" && (<>
-          <header className="ksws-page-header">
-            <h1 className="ksws-page-header-title">⚡ Analiza działki</h1>
-            <p className="ksws-page-header-sub">Jedna lub kilka działek · raport KSWS (Track A/B), mapa i linie energetyczne · wyniki trafiają do Historii analiz</p>
-          </header>
 
           {/* ════ FORMULARZ ════ */}
           <div className="ksws-card">
@@ -2380,7 +2460,7 @@ export default function KalkulatorPage() {
                   <div className="ksws-form-box-label">
                     <span className="ksws-form-box-num">1</span>
                     Identyfikator działki
-          </div>
+                  </div>
                   <div className="ksws-form-group" style={{ marginBottom: 0 }}>
                     <label className="ksws-form-label">
                       Identyfikator działki *
@@ -2946,7 +3026,7 @@ export default function KalkulatorPage() {
                       System: Brak wykrytej infrastruktury
                     </div>
                     <div className="ksws-alert-text">
-                      Automatyczna detekcja (OSM Overpass + KIUT) nie znalazła linii. <strong>Na mapie widać warstwy KIUT GUGiK i OpenInfraMap</strong> — jeśli linie przechodzą przez działkę, ustaw poniżej (Korekta ręczna).
+                      Automatyczna detekcja nie znalazła linii (OSM/KIUT). Jeśli na mapie widać linię (np. niebieską nN) — ustaw poniżej.
                     </div>
                     <div className="ksws-alert-actions" style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
                       <button
@@ -3167,57 +3247,38 @@ export default function KalkulatorPage() {
                           {/* Overpass OSM — linie i słupy energetyczne (pre-loaded) */}
                           <PreloadedPowerLayer geoJSON={powerGeoJSON} />
 
-                          {/* Granica działki (GeoJSON), kolor wg kolizji — cyan/magenta */}
+                          {/* Granica działki (GeoJSON) */}
                           <GeoJSONLayers
                             parcelGeojson={geom.geojson_ll || geom.geojson}
-                            collision={result?.data?.infrastructure?.power_lines?.detected}
                           />
                         </MapContainer>
 
-                        {/* Legenda — możliwość zminimalizowania, żeby nie zasłaniała mapy */}
-                        {mapLegendCollapsed ? (
-                          <button
-                            type="button"
-                            className="ksws-map-legend-toggle"
-                            onClick={() => setMapLegendCollapsed(false)}
-                          >
-                            Linie energetyczne · legenda
-                          </button>
-                        ) : (
-                          <div className="ksws-map-legend">
-                            <button
-                              type="button"
-                              className="ksws-map-legend-close"
-                              onClick={() => setMapLegendCollapsed(true)}
-                              aria-label="Ukryj legendę linii energetycznych"
-                            >
-                              ×
-                            </button>
-                            <div className="ksws-map-legend-title">Linie energetyczne</div>
-                            {INFRA_LEGEND.map((item) => (
-                              <div key={item.label} className="ksws-map-legend-item">
-                                <div
-                                  className="ksws-map-legend-swatch"
-                                  style={{ background: item.color }}
-                                />
-                                <span>{item.label}</span>
-                              </div>
-                            ))}
-                            <div className="ksws-map-legend-source">
-                              OSM · KIUT GUGiK · Overpass
+                        {/* Legenda */}
+                        <div className="ksws-map-legend">
+                          <div className="ksws-map-legend-title">Linie energetyczne</div>
+                          {INFRA_LEGEND.map((item) => (
+                            <div key={item.label} className="ksws-map-legend-item">
+                              <div
+                                className="ksws-map-legend-swatch"
+                                style={{ background: item.color }}
+                              />
+                              <span>{item.label}</span>
                             </div>
-                            <div style={{ marginTop: 8 }}>
-                              <a
-                                href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${result?.parcel_id || ""}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{ fontSize: "0.72rem", color: "#a91079", fontWeight: 600, textDecoration: "none" }}
-                              >
-                                🇵🇱 Geoportal →
-                              </a>
-                            </div>
+                          ))}
+                          <div className="ksws-map-legend-source">
+                            OSM · KIUT GUGiK · Overpass
                           </div>
-                        )}
+                          <div style={{ marginTop: 8 }}>
+                            <a
+                              href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${result?.parcel_id || ""}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ fontSize: "0.72rem", color: "#a91079", fontWeight: 600, textDecoration: "none" }}
+                            >
+                              🇵🇱 Geoportal →
+                            </a>
+                          </div>
+                        </div>
                       </div>
                     )}
 
@@ -3236,10 +3297,9 @@ export default function KalkulatorPage() {
                             attribution='© <a href="https://opentopomap.org">OpenTopoMap</a> · <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
                             maxZoom={17}
                           />
-                          {/* Granica działki (cyan/magenta wg kolizji) */}
+                          {/* Granica działki */}
                           <GeoJSONLayers
                             parcelGeojson={geom.geojson_ll || geom.geojson}
-                            collision={result?.data?.infrastructure?.power_lines?.detected}
                           />
                         </MapContainer>
                         {/* Przycisk Mapy.cz */}
@@ -3661,15 +3721,12 @@ export default function KalkulatorPage() {
                             </tr>
                           ))}
 
-                          {/* R5 — szkoda rolna: tylko przy zaznaczeniu „Rolnik” */}
-                          {R5.active ? (
+                          {/* R5 — tylko dla rolników */}
+                          {R5.active && (
                             <>
                               <tr style={{ background: "#eafaf1" }}>
                                 <td style={{ padding: "6px 10px" }}>
                                   <span style={{ fontWeight: 600, color: "#1a7a2e" }}>🌾 R5 — Szkoda rolna</span>
-                                  <div style={{ fontSize: "0.7rem", color: "#1a7a2e", marginTop: "2px" }}>
-                                    Wyliczona wyłącznie przy zaznaczeniu opcji «Rolnik» w formularzu.
-                                  </div>
                                   <div style={{ fontSize: "0.75rem", color: "#555", marginTop: "2px" }}>
                                     {R5.detail?.pole_count} słupów · fundamenty + wyspy niedostępne sprzętowi
                                   </div>
@@ -3703,17 +3760,6 @@ export default function KalkulatorPage() {
                                 </tr>
                               )}
                             </>
-                          ) : (
-                            <tr style={{ opacity: 0.7 }}>
-                              <td style={{ padding: "6px 10px" }}>
-                                <span style={{ fontWeight: 500, color: "#555" }}>R5 — Szkoda rolna</span>
-                                <div style={{ fontSize: "0.7rem", color: "#e74c3c", marginTop: "2px" }}>
-                                  Nie dotyczy — nie zaznaczono opcji «Rolnik» w formularzu.
-                                </div>
-                              </td>
-                              <td style={{ padding: "6px 10px", fontSize: "0.8rem", color: "#555" }}>art. 361 §1–2 KC</td>
-                              <td style={{ padding: "6px 10px", textAlign: "right", color: "#999" }}>n.d.</td>
-                            </tr>
                           )}
                         </tbody>
                         {total > 0 && (

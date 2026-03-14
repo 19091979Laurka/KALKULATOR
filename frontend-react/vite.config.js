@@ -45,9 +45,8 @@ export default defineConfig({
   },
   server: {
     port: 3001,
-    host: '0.0.0.0',
-    open: false,
-    allowedHosts: true,
+    host: 'localhost',
+    open: true,
     proxy: {
       "/api": { target: "http://localhost:8080", changeOrigin: true },
     },
@@ -57,7 +56,7 @@ export default defineConfig({
     sourcemap: true,
     target: 'es2020',
   },
-  base: '/',  // './' łamało ładowanie przy odświeżeniu na /kalkulator itp.
+  base: './',
   css: {
     preprocessorOptions: {
       scss: {

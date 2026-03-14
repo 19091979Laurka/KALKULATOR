@@ -345,17 +345,7 @@ class PropertyAggregator:
 
         # KSWS + Track A/B (jeśli jest linia)
         area_m2 = terrain.get("area_m2") or 0
-        # Mapuj napięcie na typ infrastruktury (elektro_nN dla linii nN, elektro_SN/WN dla pozostałych)
-        voltage = pl.get("voltage") or ""
-        v_upper = str(voltage).upper().strip()
-        if "NN" in v_upper or "N N" in v_upper or "<1" in str(voltage) or v_upper == "N":
-            infra_type = "elektro_nN"
-        elif "WN" in v_upper or "110" in str(voltage) or "400" in str(voltage) or "220" in str(voltage):
-            infra_type = "elektro_WN"
-        elif "SN" in v_upper or "15" in str(voltage) or "20" in str(voltage) or "30" in str(voltage):
-            infra_type = "elektro_SN"
-        else:
-            infra_type = infra_type_pref
+        infra_type = infra_type_pref
         coeffs = KSWS_STANDARDS.get(infra_type, KSWS_STANDARDS["default"])
         band_width = coeffs["band_width_m"]
 
@@ -391,9 +381,13 @@ class PropertyAggregator:
                 line_length = 0.0
                 measurement_source = "brak — nie wykryto"
 
-        # Efektywna długość do wyliczenia pasa — TYLKO gdy mamy rzeczywisty pomiar
-        # Brak już żadnych heurystyk typu „NEARBY = 2 × szer. pasa” (Zasada: brak estymacji).
+        # FIX: Obsługa NEARBY linii (detected=True ale length_m=0)
+        # Jeśli linia jest detect ale length_m=0, użyj band_width * 2 jako oszacowanie
         effective_line_length = line_length if line_length and line_length > 0 else 0.0
+        if pl.get("detected") and effective_line_length == 0.0:
+            # NEARBY case: oszacuj długość linii jako 2 × szerokość pasa
+            effective_line_length = (band_width * 2) if band_width and band_width > 0 else 50.0
+
         band_area = effective_line_length * band_width if effective_line_length and effective_line_length > 0 else 0.0
 
         property_value = (avg_price or 6.50) * area_m2
@@ -517,7 +511,6 @@ class PropertyAggregator:
                 infra_type=infra_type,
                 voltage=pl.get("voltage"),
                 agri=agri,
-                is_farmer=is_farmer,
                 planning=data["planning"],
                 years=years,
                 band_area=band_area,
@@ -631,11 +624,10 @@ class PropertyAggregator:
         infra_type: str,
         voltage: Optional[str],
         agri: bool,
-        is_farmer: bool = False,
-        planning: dict = None,
-        years: int = 6,
-        band_area: float = 0.0,
-        track_a: dict = None,
+        planning: dict,
+        years: int,
+        band_area: float,
+        track_a: dict,
         area_m2: float = 0.0,
         current_price_m2: float = 0.0,
         building_price_m2: float = 0.0,
@@ -644,10 +636,7 @@ class PropertyAggregator:
     ) -> dict:
         """
         Spec v2.1 Dual-Track — kwalifikacja 4 roszczeń głównych + 2 ewentualnych.
-        R5 (szkoda rolna) jest aktywna tylko gdy is_farmer=True.
         """
-        planning = planning or {}
-        track_a = track_a or {}
         mpzp = planning.get("mpzp", {})
         studium = planning.get("studium", {})
         mpzp_active = mpzp.get("has_mpzp", False)
@@ -727,9 +716,9 @@ class PropertyAggregator:
             "damage_calc": f"({building_price_m2:.2f} - {current_price_m2:.2f}) zł/m² × {area_m2:.0f} m²" if r4_damage > 0 else None,
         }
 
-        # R5 — Szkoda rolna: tylko gdy użytkownik zaznaczył "Rolnik" (is_farmer)
+        # R5 — Szkoda rolna: dezorganizacja produkcji + fundamenty słupów
         elektro_infra = infra_type.startswith("elektro") or infra_type.startswith("gaz")
-        r5_applicable = is_farmer and agri and elektro_infra and infra_detected and line_length_m > 0
+        r5_applicable = agri and elektro_infra and infra_detected and line_length_m > 0
         if r5_applicable:
             r5_calc = self._calculate_r5_agri_damage(
                 infra_type=infra_type,
