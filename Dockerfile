@@ -3,10 +3,13 @@ FROM node:20-slim AS frontend-builder
 
 WORKDIR /app/frontend-react
 
-COPY frontend-react/package*.json ./
-RUN npm ci --legacy-peer-deps
+# package*.json najpierw (lepsza warstwa cache)
+COPY frontend-react/package.json frontend-react/package-lock.json ./
+# npm install zamiast npm ci — odporniejsze w Cloud Build (postinstall/patch-package)
+RUN npm install --legacy-peer-deps
 
 COPY frontend-react/ ./
+ENV NODE_ENV=production
 RUN npm run build
 
 # ── Stage 2: Python backend + gotowy React ───────────────────────────────────
