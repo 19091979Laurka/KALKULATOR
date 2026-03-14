@@ -1,0 +1,26 @@
+# Git i środowisko
+.git
+.gitignore
+.github
+.venv*
+__pycache__
+*.pyc
+.pytest_cache
+.env
+.env.*
+
+# Frontend – w Dockerze i tak robimy npm ci
+frontend-react/node_modules
+frontend-react/build
+
+# Dokumentacja i pliki dev (nie potrzebne w obrazie)
+docs
+*.md
+!backend/**/*.md
+
+# Testy i tymczasowe (root)
+test_*.py
+tmp
+najnowyszy*.png
+kiut_test.png
+*.pdf
