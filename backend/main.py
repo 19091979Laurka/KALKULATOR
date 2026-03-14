@@ -37,7 +37,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend-react" / "build"
 HISTORY_DIR = Path(__file__).parent / ".." / "data" / "history"
 HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -6,7 +6,11 @@ pydantic==2.12.5
 shapely==2.0.6
 python-dotenv==1.2.1
 aiofiles==24.1.0
-# pdf_report.py
+pandas>=2.0.0
+openpyxl>=3.1.0
 matplotlib>=3.7.0
 reportlab>=4.0.0
 numpy>=1.24.0
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+python-multipart>=0.0.6
