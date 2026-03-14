@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./ClientsPage.css";
+import NotebookPanel from "./NotebookPanel";
 
 const STORAGE_KEY = "ksws_clients_v2";
 function loadClients() {
@@ -59,6 +60,8 @@ export default function ClientsPage() {
   const [nbPodcastLoading, setNbPodcastLoading] = useState(false);
   const [nbPodcastStatus, setNbPodcastStatus]   = useState(null); // {audioOverviewId, status}
   const [nbPodcastPollTimer, setNbPodcastPollTimer] = useState(null);
+  const [nbIframeError, setNbIframeError]   = useState(false);
+  const [nbIframeLoading, setNbIframeLoading] = useState(true);
 
   // Check NotebookLM API status on mount
   useEffect(() => {
@@ -151,6 +154,8 @@ export default function ClientsPage() {
 
   useEffect(() => { saveClients(clients); }, [clients]);
   useEffect(() => { if (activeTab === "ai") aiChatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [clients, activeTab]);
+  // Reset iframe state when switching client
+  useEffect(() => { setNbIframeError(false); setNbIframeLoading(true); }, [selectedId]);
 
   const selectedClient = clients.find((c) => c.id === selectedId) || null;
   const filtered = clients.filter((c) => {
@@ -335,6 +340,7 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
                 { key: "dokumenty",     icon: "📁", label: `Dokumenty (${(selectedClient.files || []).length})` },
                 { key: "timeline",      icon: "📅", label: `Historia (${(selectedClient.timeline || []).length})` },
                 { key: "ai",            icon: "🤖", label: "AI Asystent" },
+                { key: "notebook",      icon: "📓", label: "NotebookLM" },
               ].map((t) => (
                 <button key={t.key} className={`cp-tab ${activeTab === t.key ? "active" : ""}`} onClick={() => setActiveTab(t.key)}>
                   <span className="cp-tab-icon">{t.icon}</span>
@@ -703,6 +709,25 @@ Odpowiadaj po polsku, krótko i konkretnie.`;
                   <button className="cp-btn cp-btn-primary cp-ai-send" onClick={sendAiMessage} disabled={aiLoading || !aiInput.trim()}>{aiLoading ? "⏳" : "➤"}</button>
                 </div>
               </div>
+            )}
+
+            {/* NOTEBOOKLM — natywny panel 3-kolumnowy */}
+            {activeTab === "notebook" && (
+              <NotebookPanel
+                selectedClient={selectedClient}
+                nbApiStatus={nbApiStatus}
+                nbCreating={nbCreating}
+                nbPodcastLoading={nbPodcastLoading}
+                nbPodcastStatus={nbPodcastStatus}
+                nbAddingSource={nbAddingSource}
+                onCreateNotebook={createNotebookForClient}
+                onAddCaseSummary={() => addCaseSummarySource(selectedClient.notebookLmId)}
+                onGeneratePodcast={generatePodcast}
+                selectedId={selectedId}
+                clients={clients}
+                setClients={setClients}
+                eventLabel={eventLabel}
+              />
             )}
           </div>
         )}
