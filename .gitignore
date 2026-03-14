@@ -36,6 +36,11 @@ raporty/
 .claude/worktrees/
 .history/
 
+# Logi (nie commituj)
+*.log
+backend/*.log
+backend_*.log
+
 # OS
 Thumbs.db
 backend/secrets/

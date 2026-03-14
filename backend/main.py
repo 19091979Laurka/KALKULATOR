@@ -12,7 +12,7 @@ from io import StringIO
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -129,7 +129,7 @@ async def analyze(req: AnalyzeRequest):
     }
 
 @app.post("/api/analyze/batch")
-async def analyze_batch_csv(file: UploadFile = File(...)):
+async def analyze_batch_csv(file: UploadFile = File(...), client_name: Optional[str] = Form(None)):
     """
     Batch analysis from CSV upload.
     CSV format: parcel_id,obreb,county,municipality
@@ -286,6 +286,7 @@ async def analyze_batch_csv(file: UploadFile = File(...)):
             "batch_id": batch_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "file_name": file.filename,
+            "client_name": (client_name or "").strip() or None,
             "parcel_count": len(all_results),
             "successful": sum(1 for r in all_results if r["status"] != "ERROR"),
             "results": all_results
@@ -328,6 +329,7 @@ async def get_analysis_history():
                     "batch_id": data["batch_id"],
                     "timestamp": data["timestamp"],
                     "file_name": data["file_name"],
+                    "client_name": data.get("client_name"),
                     "total": data["parcel_count"],
                     "successful": data["successful"]
                 })
@@ -360,6 +362,28 @@ async def get_batch_details(batch_id: str):
     except Exception as e:
         logger.error(f"Błąd pobierania szczegółów batch: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/integrations/status")
+async def get_integrations_status():
+    """
+    Szybki test integracji (ULDK, teren) — do diagnozy błędów w analizie hurtowej.
+    Otwórz w przeglądarce: https://TWOJA-DOMENA/api/integrations/status
+    """
+    out = {"timestamp": datetime.now(timezone.utc).isoformat(), "checks": {}}
+    # Test ULDK na jednej działce (przykładowy TERYT)
+    test_parcel = "141906_5.0029.60"
+    try:
+        terrain = await fetch_terrain(test_parcel)
+        ok = terrain.get("ok") and terrain.get("status") == "REAL"
+        out["checks"]["ULDK (terenu)"] = {
+            "status": "ok" if ok else "error",
+            "message": None if ok else (terrain.get("error") or terrain.get("message") or "Brak danych REAL z ULDK"),
+        }
+    except Exception as e:
+        logger.exception("Integrations check ULDK failed")
+        out["checks"]["ULDK (terenu)"] = {"status": "error", "message": str(e)}
+    return out
+
 
 @app.get("/api/parcel/{parcel_id}")
 async def get_parcel_preview(parcel_id: str):

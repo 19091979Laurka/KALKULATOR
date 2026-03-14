@@ -9,6 +9,7 @@ import ClientsPage from "./ClientsPage.jsx";
 import WzoryPage from "./WzoryPage.jsx";
 import KalkulatorLayout from "./KalkulatorLayout.jsx";
 import PrintPreviewPage from "./PrintPreviewPage.jsx";
+import ErrorBoundaryKalkulator from "./ErrorBoundaryKalkulator.jsx";
 
 /**
  * Logika zakładek i przepływ: docs/KALKULATOR_PRZEPLYW_ZAKLADEK.md
@@ -23,7 +24,7 @@ const Kalkulator = () => {
         <Route path="raport-druk" element={<PrintPreviewPage />} />
 
         {/* KalkulatorPage ma własny sidebar, ale my go wyrzuciliśmy i dodaliśmy KalkulatorLayout */}
-        <Route path="analiza"  element={<KalkulatorLayout><KalkulatorPage /></KalkulatorLayout>} />
+        <Route path="analiza"  element={<KalkulatorLayout><ErrorBoundaryKalkulator><KalkulatorPage /></ErrorBoundaryKalkulator></KalkulatorLayout>} />
 
         {/* Layout (strona główna, batch, historia): Analiza działki | Batch CSV | Historia zbiorcza */}
         <Route path="home"     element={<KalkulatorLayout><LandingPage /></KalkulatorLayout>} />

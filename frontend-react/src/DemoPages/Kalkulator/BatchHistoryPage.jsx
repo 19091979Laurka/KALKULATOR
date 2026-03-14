@@ -59,6 +59,7 @@ export default function BatchHistoryPage() {
     // Reuse the same report generation logic from KalkulatorPage
     const results = batchData.results || [];
     const dateStr = new Date(batchData.timestamp).toLocaleDateString("pl-PL");
+    const clientName = batchData.client_name || batchData.file_name || "";
 
     const fmtN = (v) => (v || 0).toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const fmtI = (v) => Math.round(v || 0).toLocaleString("pl-PL");
@@ -199,11 +200,11 @@ export default function BatchHistoryPage() {
                   <div class="track-detail-row"><span class="tl">Próg neg.</span><span class="tv" style="color:#e65100;">${fmtN(tb.total)}</span></div>
                 </div>
               </div>
-              <!-- RAZEM -->
+              <!-- Przedział roszczenia (wybór A lub B) -->
               <div style="background:#3d2319;border-radius:10px;padding:14px;">
-                <div class="track-label" style="color:rgba(255,193,7,0.85);">💰 RAZEM A+B</div>
-                <div style="font-size:22px;font-weight:900;color:white;margin-top:4px;">${fmtN((ta.total || 0) + (tb.total || 0))}</div>
-                <div style="font-size:10px;color:rgba(255,255,255,0.5);margin-top:2px;font-weight:700;">PLN · Track A + B łącznie</div>
+                <div class="track-label" style="color:rgba(255,193,7,0.85);">💰 Przedział roszczenia</div>
+                <div style="font-size:18px;font-weight:900;color:white;margin-top:4px;">${fmtN(ta.total || 0)} – ${fmtN(tb.total || 0)}</div>
+                <div style="font-size:10px;color:rgba(255,255,255,0.5);margin-top:2px;font-weight:700;">PLN · wybór Track A lub B (nie sumować)</div>
               </div>
             </div>
           </div>
@@ -241,7 +242,7 @@ export default function BatchHistoryPage() {
         </td>
         <td style="padding:8px 12px;text-align:right;color:#27ae60;font-weight:700;">${fmtN(ta)} PLN</td>
         <td style="padding:8px 12px;text-align:right;color:#e67e22;font-weight:700;">${fmtN(tb)} PLN</td>
-        <td style="padding:8px 12px;text-align:right;font-weight:800;font-size:14px;">${fmtN(ta + tb)} PLN</td>
+        <td style="padding:8px 12px;text-align:right;font-weight:800;font-size:13px;">${fmtN(ta)} – ${fmtN(tb)} PLN</td>
       </tr>`;
     }).join("\n");
 
@@ -334,7 +335,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
   <div class="report-header">
     <div>
       <h1>📊 Raport Zbiorczy KSWS</h1>
-      <div class="subtitle">Analiza ${results.length} działek z roszczeń przesyłowych</div>
+      <div class="subtitle">${clientName ? "Raport: " + clientName + " · " : ""}Analiza ${results.length} działek z roszczeń przesyłowych</div>
       <div class="meta-grid">
         <div class="meta-item">
           <div class="meta-label">📅 Data raportu</div>
@@ -369,8 +370,8 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
     <div class="kpi-card purple"><div><div class="kpi-label">Track B · Neg.</div><div class="kpi-value sm">${fmtN(totalB)} PLN</div><div class="kpi-sub">negocjacje</div></div><div class="kpi-icon">🤝</div></div>
   </div>
   <div class="razem-banner">
-    <div class="razem-banner-label">💰 Razem odszkodowanie (Track A + B)</div>
-    <div class="razem-banner-amount">${fmtN(totalA + totalB)} PLN</div>
+    <div class="razem-banner-label">💰 Przedział roszczenia (wybór Track A lub B — nie sumować)</div>
+    <div class="razem-banner-amount">${fmtN(totalA)} – ${fmtN(totalB)} PLN</div>
   </div>
 
   <!-- COLLECTIVE MAP VISUALIZATION -->
@@ -390,16 +391,16 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
         <th>Status</th>
         <th>Track A — Sąd</th>
         <th>Track B — Negocjacje</th>
-        <th>RAZEM</th>
+        <th>Przedział A/B</th>
       </tr>
     </thead>
     <tbody>${summaryRows}</tbody>
     <tfoot>
       <tr>
-        <td colspan="2">SUMA (${results.length} działek)</td>
+        <td colspan="2">Przedział łącznie (${results.length} działek)</td>
         <td style="text-align:right;color:#27ae60;">${fmtN(totalA)} PLN</td>
         <td style="text-align:right;color:#e67e22;">${fmtN(totalB)} PLN</td>
-        <td style="text-align:right;color:#3d2319;">${fmtN(totalA + totalB)} PLN</td>
+        <td style="text-align:right;color:#3d2319;">${fmtN(totalA)} – ${fmtN(totalB)} PLN</td>
       </tr>
     </tfoot>
   </table>
@@ -586,110 +587,133 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
   return (
     <div className="batch-history-container">
       <div className="history-header">
-        <h2>📁 Historia analiz zbiorczych</h2>
-        <p>Wcześniej wykonane analizy CSV — kliknij by załadować raport z mapami</p>
+        <h1 className="history-header__title">📁 Historia analiz zbiorczych</h1>
+        <p className="history-header__sub">
+          Wcześniej wykonane analizy hurtowe. Możesz je przeglądać, wyszukiwać oraz przypisywać do klientów w <strong>CRM</strong>.
+        </p>
       </div>
 
-      {!loading && history.length > 0 && (
-        <div className="history-search-wrap" style={{ padding: "0 24px 12px", maxWidth: 480 }}>
-          <label htmlFor="history-search" className="visually-hidden">Szukaj po nazwie klienta lub pliku</label>
-          <input
-            id="history-search"
-            type="search"
-            className="history-search-input"
-            placeholder="Szukaj po nazwie klienta lub pliku…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="Szukaj po nazwie klienta lub pliku"
-          />
-        </div>
-      )}
-
-      {loading ? (
-        <div className="loading-container">
-          <Spinner color="primary" />
-          <p>Ładowanie historii...</p>
-        </div>
-      ) : history.length === 0 ? (
-        <div className="empty-state">
-          <p>📭 Brak historii analiz</p>
-          <p className="hint">Wykonaj nową analizę CSV w sekcji „Analiza hurtowa"</p>
-        </div>
-      ) : (() => {
-        const q = (searchQuery || "").trim().toLowerCase();
-        const filtered = q
-          ? history.filter(
-              (item) =>
-                (item.client_name || "").toLowerCase().includes(q) ||
-                (item.file_name || "").toLowerCase().includes(q)
-            )
-          : history;
-        return (
-          <div className="history-table">
-            {filtered.length === 0 ? (
-              <div className="empty-state" style={{ padding: 24 }}>
-                <p>Brak raportów pasujących do „{searchQuery}"</p>
-                <Button color="secondary" size="sm" onClick={() => setSearchQuery("")} style={{ marginTop: 8 }}>
-                  Wyczyść wyszukiwanie
-                </Button>
-              </div>
-            ) : (
-              filtered.map((item, idx) => (
-                <div key={item.batch_id} className="history-row">
-                  <div className="row-number">{idx + 1}</div>
-                  <div className="row-content">
-                    <div className="row-header">
-                      <div className="timestamp">
-                        📅 {new Date(item.timestamp).toLocaleDateString("pl-PL", {
-                          year: "numeric",
-                          month: "2-digit",
-                          day: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </div>
-                      <div className="file-name">📄 {item.client_name || item.file_name || "Brak nazwy"}</div>
-                      {item.file_name && item.client_name !== item.file_name && (
-                        <div style={{ fontSize: "0.85em", color: "#64748b" }}>{item.file_name}</div>
-                      )}
-                    </div>
-                    <div className="row-stats">
-                      <Badge color="info" pill>
-                        📦 {item.total} działek
-                      </Badge>
-                      <Badge color="success" pill>
-                        ✓ {item.successful} analizowanych
-                      </Badge>
-                      {item.client_id && (
-                        <Badge color="secondary" pill style={{ marginLeft: 6 }}>CRM</Badge>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    {(!item.client_id && item.batch_id) && (
-                      <Button
-                        color="light"
-                        size="sm"
-                        onClick={(e) => { e.stopPropagation(); navigate("/kalkulator/klienci", { state: { assignBatchId: item.batch_id, assignBatchFileName: item.file_name } }); }}
-                      >
-                        Przypisz do CRM
-                      </Button>
-                    )}
-                    <Button
-                      color="primary"
-                      size="sm"
-                      onClick={() => loadBatchDetails(item.batch_id)}
-                      className="view-button"
-                    >
-                      📊 Otwórz raport
-                    </Button>
-                  </div>
-                </div>
-              ))
-            )}
+      <div className="history-content">
+        {!loading && history.length > 0 && (
+          <div className="history-search-wrap" style={{ marginBottom: "24px", maxWidth: "480px" }}>
+            <label htmlFor="history-search" className="visually-hidden">Szukaj po nazwie klienta lub pliku</label>
+            <input
+              id="history-search"
+              type="search"
+              className="history-search-input"
+              placeholder="Szukaj po nazwie raportu, kliencie lub pliku..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Wyszukiwarka historii"
+            />
           </div>
-        );
-      })()}
+        )}
+
+        {loading ? (
+          <div className="history-loading">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="history-skeleton">
+                <div className="history-skeleton__icon"></div>
+                <div className="history-skeleton__body">
+                  <div className="history-skeleton__line history-skeleton__line--title"></div>
+                  <div className="history-skeleton__line history-skeleton__line--meta"></div>
+                </div>
+                <div className="history-skeleton__action"></div>
+              </div>
+            ))}
+          </div>
+        ) : history.length === 0 ? (
+          <div className="history-empty">
+            <div className="history-empty__icon">📭</div>
+            <h3 className="history-empty__title">Brak historii analiz</h3>
+            <p className="history-empty__hint">Wykonaj nową analizę w sekcji <strong>Analiza hurtowa</strong>.</p>
+          </div>
+        ) : (() => {
+          const q = (searchQuery || "").trim().toLowerCase();
+          const filtered = q
+            ? history.filter(
+                (item) =>
+                  (item.client_name || "").toLowerCase().includes(q) ||
+                  (item.file_name || "").toLowerCase().includes(q)
+              )
+            : history;
+
+          return (
+            <ul className="history-list">
+              {filtered.length === 0 ? (
+                <div className="history-empty" style={{ gridColumn: "1 / -1" }}>
+                  <p>Brak raportów pasujących do frazy: <strong>{searchQuery}</strong></p>
+                  <Button color="secondary" size="sm" onClick={() => setSearchQuery("")} style={{ marginTop: "12px" }}>
+                    Wyczyść wyszukiwanie
+                  </Button>
+                </div>
+              ) : (
+                filtered.map((item, idx) => (
+                  <li key={item.batch_id} className="history-card">
+                    <div className="history-card__inner" onClick={() => loadBatchDetails(item.batch_id)}>
+                      <div className="history-card__accent">
+                        {idx + 1}
+                      </div>
+
+                      <div className="history-card__main">
+                        <div className="history-card__row">
+                          <h4 className="history-card__title">
+                            {item.client_name || item.file_name || "Bez nazwy"}
+                          </h4>
+                          {item.client_id ? (
+                            <span className="history-card__crm">✓ CRM</span>
+                          ) : (
+                            <button
+                              className="history-card__crm history-card__crm--assign"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate("/kalkulator/klienci", {
+                                  state: {
+                                    assignBatchId: item.batch_id,
+                                    assignBatchFileName: item.file_name
+                                  }
+                                });
+                              }}
+                            >
+                              + Przypisz CRM
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="history-card__meta">
+                          <span className="history-card__date">
+                            📅 {new Date(item.timestamp).toLocaleDateString("pl-PL", {
+                              day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
+                            })}
+                          </span>
+                          {item.file_name && item.client_name !== item.file_name && (
+                            <span className="history-card__file">📄 {item.file_name}</span>
+                          )}
+                        </div>
+
+                        <div className="history-card__stats">
+                          <span className="history-card__stat history-card__stat--count">
+                            📦 {item.total} działek
+                          </span>
+                          <span className="history-card__stat history-card__stat--ok">
+                            ✓ {item.successful} OK
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="history-card__cta-wrap">
+                        <div className="history-card__cta">
+                          📊 Otwórz
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                ))
+              )}
+            </ul>
+          );
+        })()}
+      </div>
     </div>
   );
 }

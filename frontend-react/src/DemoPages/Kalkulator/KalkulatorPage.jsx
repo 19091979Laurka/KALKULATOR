@@ -664,26 +664,28 @@ function BatchCSVSection() {
 
   const saveBatchToHistory = (batchData) => {
     try {
+      const results = Array.isArray(batchData?.results) ? batchData.results : [];
+      if (results.length === 0) return;
       const batchHistory = JSON.parse(localStorage.getItem("batch_history") || "[]");
-      const trackA = batchData.results.reduce((s, p) => {
+      const trackA = results.reduce((s, p) => {
         const d = p.master_record || p.data || {};
         return s + (d.compensation?.track_a?.total || 0);
       }, 0);
-      const trackB = batchData.results.reduce((s, p) => {
+      const trackB = results.reduce((s, p) => {
         const d = p.master_record || p.data || {};
         return s + (d.compensation?.track_b?.total || 0);
       }, 0);
       const newBatch = {
         id: `batch_${new Date().getTime()}`,
         date: nowPL(),
-        parcel_count: batchData.parcel_count,
-        successful: batchData.successful,
-        full_data: batchData.results, // PEŁNE DANE
+        parcel_count: batchData.parcel_count ?? results.length,
+        successful: batchData.successful ?? results.length,
+        full_data: results,
         summary: {
           trackA: trackA,
           trackB: trackB,
           total: trackA + trackB,
-          collision: batchData.results.filter(p => {
+          collision: results.filter(p => {
             const d = p.master_record || p.data || {};
             return !!d.infrastructure?.power_lines?.detected;
           }).length,
@@ -2138,354 +2140,173 @@ export default function KalkulatorPage() {
 
   // ── RENDER ───────────────────────────────────────────────────────────────────
   return (
-    <div className="ksws-layout">
+    <div className="analiza-page-wrapper">
+      <header className="ksws-page-header">
+        <h1 className="ksws-page-header-title">⚡ Analiza działki</h1>
+        <p className="ksws-page-header-sub">
+          Identyfikacja działki · Dane z ULDK GUGiK · Wyliczenie roszczeń KSWS Track A/B
+        </p>
+      </header>
 
-      {/* ════════════ SIDEBAR ════════════ */}
-      <aside className="ksws-sidebar">
-        <div className="ksws-sidebar-logo">
-          {/* Szuwara § symbol */}
-          <div className="ksws-sidebar-logo-symbol">§</div>
-          <div className="ksws-sidebar-logo-title">SZUWARA</div>
-          <div className="ksws-sidebar-logo-sub">Kancelaria Prawno-Podatkowa</div>
-          <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid rgba(184,150,62,0.2)", fontSize: "0.62rem", color: "rgba(255,255,255,0.35)", lineHeight: "1.7" }}>
-            <div style={{ color: "#b8963e", fontWeight: "700", fontSize: "0.72rem", letterSpacing: "0.5px" }}>KALKULATOR KSWS</div>
-            <div>Roszczenia przesyłowe · Track A/B</div>
-          </div>
-        </div>
-
-        <nav className="ksws-sidebar-nav">
-          <div
-            className={`ksws-sidebar-nav-item${activeNav === "analiza" ? " active" : ""}`}
-            onClick={() => handleSidebarNav("analiza")}
-            style={{ cursor: "pointer" }}
-          >
-            <span className="ksws-sidebar-nav-icon">⚡</span>
-            Analiza działki
-          </div>
-          <div
-            className={`ksws-sidebar-nav-item${activeNav === "historia" ? " active" : ""}`}
-            onClick={() => handleSidebarNav("historia")}
-            style={{ cursor: "pointer" }}
-          >
-            <span className="ksws-sidebar-nav-icon">📋</span>
-            Historia analiz
-          </div>
-          <div
-            className={`ksws-sidebar-nav-item${activeNav === "batch" ? " active" : ""}`}
-            onClick={() => handleSidebarNav("batch")}
-            style={{ cursor: "pointer" }}
-          >
-            <span className="ksws-sidebar-nav-icon">📊</span>
-            Batch CSV
-          </div>
-          {/* ── Separator ── */}
-          <div style={{ margin: "8px 16px", borderTop: "1px solid rgba(255,255,255,0.1)" }} />
-          <div
-            className="ksws-sidebar-nav-item"
-            onClick={() => handleSidebarNav("klienci")}
-            style={{ cursor: "pointer" }}
-          >
-            <span className="ksws-sidebar-nav-icon">👥</span>
-            Klienci
-          </div>
-          <div
-            className="ksws-sidebar-nav-item"
-            onClick={() => handleSidebarNav("wzory")}
-            style={{ cursor: "pointer" }}
-          >
-            <span className="ksws-sidebar-nav-icon">📝</span>
-            Wzory dokumentów
-          </div>
-          {/* ── Separator ── */}
-          <div style={{ margin: "8px 16px", borderTop: "1px solid rgba(255,255,255,0.1)" }} />
-          <div
-            className="ksws-sidebar-nav-item"
-            onClick={() => handleSidebarNav("home")}
-            style={{ cursor: "pointer", opacity: 0.7 }}
-          >
-            <span className="ksws-sidebar-nav-icon">🏠</span>
-            Strona główna
-          </div>
-        </nav>
-
-        <div className="ksws-sidebar-footer">
-          <div style={{ color: "#b8963e", fontWeight: "700", marginBottom: "4px", fontSize: "0.72rem" }}>§ SZUWARA</div>
-          <a href="https://www.kancelaria-szuwara.pl" target="_blank" rel="noopener noreferrer">
-            www.kancelaria-szuwara.pl
-          </a><br />
-          <a href="tel:790411412">790 411 412</a><br />
-          <div style={{ marginTop: "6px", opacity: 0.5 }}>KSWS v3.0 · Track A/B · GUGiK</div>
-        </div>
-      </aside>
-
-      {/* ════════════ RIGHT SIDE ════════════ */}
-      <div className="ksws-content">
-
-        {/* ── TOP BAR ── */}
-        <header className="ksws-topbar">
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            {/* Szuwara § mini logo */}
-            <div style={{
-              width: "38px", height: "38px", borderRadius: "50%",
-              border: "2px solid #b8963e",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "1.1rem", color: "#b8963e", fontWeight: "800", flexShrink: 0,
-            }}>§</div>
+      <main className="ksws-main" style={{ padding: '24px' }}>
+        {/* ════ FORMULARZ ════ */}
+        <div className="ksws-card">
+          <div className="ksws-card-header">
+            <span className="ksws-card-header-icon">📍</span>
             <div>
-              <div className="ksws-topbar-title">
-                Kalkulator Roszczeń Przesyłowych
-                <span style={{ marginLeft: "10px", fontSize: "0.65em", fontWeight: "500", color: "#b8963e", letterSpacing: "1px", textTransform: "uppercase" }}>
-                  · Szuwara KPP
-                </span>
-              </div>
-              <div className="ksws-topbar-sub">
-                KSWS Track A/B · ULDK GUGiK · OSM Overpass · GUS BDL — wyłącznie dane rzeczywiste
+              <div className="ksws-card-header-title">Identyfikacja działki</div>
+              <div className="ksws-card-header-sub">
+                Dane pobierane automatycznie z ULDK GUGiK · GUS BDL · GESUT
               </div>
             </div>
           </div>
-          <div className="ksws-topbar-right">
-            <div style={{ fontSize: "0.78rem", color: "#b8963e", fontWeight: "700", letterSpacing: "0.5px" }}>
-              <a href="https://www.kancelaria-szuwara.pl" target="_blank" rel="noopener noreferrer"
-                style={{ color: "#b8963e", textDecoration: "none" }}>
-                kancelaria-szuwara.pl
-              </a>
-            </div>
-            <div className="ksws-status-badge">
-              <div className="ksws-status-dot" />
-              System aktywny
-            </div>
-          </div>
-        </header>
+          <div className="ksws-card-body">
+            <form onSubmit={runAnalysis}>
 
-        {/* ── MAIN SCROLL ── */}
-        <main className="ksws-main">
-
-          {/* ════ HISTORIA PAGE ════ */}
-          {activeNav === "historia" && (
-            <div className="ksws-card">
-              <div className="ksws-card-header">
-                <span className="ksws-card-header-icon">📋</span>
-                <div>
-                  <div className="ksws-card-header-title">Historia analiz</div>
-                  <div className="ksws-card-header-sub">Pełne dane wyliczeń · kliknij aby załadować</div>
+              {/* ── KARTA KLIENTA ── */}
+              <div className="ksws-client-card">
+                <div className="ksws-client-card-header">
+                  <span style={{ fontSize: "1em" }}>👤</span>
+                  <span>Karta klienta</span>
+                  <span className="ksws-client-card-note">— dane trafiają do raportu</span>
+                </div>
+                <div className="ksws-client-card-grid">
+                  <div className="ksws-form-group">
+                    <label className="ksws-form-label">Imię i nazwisko / Firma</label>
+                    <input
+                      className="ksws-form-input"
+                      value={clientName}
+                      onChange={(e) => setClientName(e.target.value)}
+                      placeholder="Jan Kowalski"
+                    />
+                  </div>
+                  <div className="ksws-form-group">
+                    <label className="ksws-form-label">E-mail klienta</label>
+                    <input
+                      className="ksws-form-input"
+                      type="email"
+                      value={clientEmail}
+                      onChange={(e) => setClientEmail(e.target.value)}
+                      placeholder="jan@email.pl"
+                    />
+                  </div>
+                  <div className="ksws-form-group">
+                    <label className="ksws-form-label">Nr sprawy</label>
+                    <input
+                      className="ksws-form-input"
+                      value={caseNumber}
+                      onChange={(e) => setCaseNumber(e.target.value)}
+                      placeholder="SZU/2026/001"
+                    />
+                  </div>
+                  <div className="ksws-form-group">
+                    <label className="ksws-form-label">Data wysłania maila</label>
+                    <input
+                      className="ksws-form-input"
+                      type="date"
+                      value={emailSentDate}
+                      onChange={(e) => setEmailSentDate(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="ksws-card-body">
-                {history.length === 0 ? (
-                  <div className="ksws-empty" style={{ padding: "40px 0" }}>
-                    <div className="ksws-empty-icon">📋</div>
-                    <div className="ksws-empty-title">Brak historii</div>
-                    <div className="ksws-empty-sub">
-                      Przeprowadź analizę działki, aby wyniki pojawiły się tutaj.
-                    </div>
+
+              {/* ── BOX 1: Identyfikator działki ── */}
+              <div className="ksws-form-box">
+                <div className="ksws-form-box-label">
+                  <span className="ksws-form-box-num">1</span>
+                  Identyfikator działki
+                </div>
+                <div className="ksws-form-group" style={{ marginBottom: 0 }}>
+                  <label className="ksws-form-label">
+                    Identyfikator działki *
+                    <span className="ksws-form-hint">
+                      Pełny TERYT np. <code>141906_5.0029.60</code> — lub wpisz sam numer i uzupełnij Obręb poniżej
+                    </span>
+                  </label>
+                  <input
+                    className="ksws-form-input ksws-form-input-lg"
+                    value={parcelIds}
+                    onChange={(e) => setParcelIds(e.target.value)}
+                    placeholder="141906_5.0029.60  lub wiele po przecinku: 141906_5.0029.60, 141906_5.0029.129"
+                    autoComplete="off"
+                  />
+                  <div className="ksws-form-tip">
+                    Format TERYT: <strong>WWPPGG_R.OOOO.NR</strong> — WW=województwo PP=powiat GG=gmina R=rodzaj O=obręb NR=numer
+                  </div>
+                </div>
+              </div>
+
+              {/* ── BOX 2: Dane ewidencyjne ── */}
+              <div className="ksws-form-box">
+                <div className="ksws-form-box-label">
+                  <span className="ksws-form-box-num">2</span>
+                  Dane ewidencyjne
+                  <span style={{ marginLeft: 8, fontSize: "0.72em", color: "#8ac926", fontWeight: 700 }}>
+                    ✓ Uzupełniają się automatycznie po analizie
+                  </span>
+                </div>
+                <div className="ksws-form-grid" style={{ marginBottom: 0 }}>
+                  <div className="ksws-form-group">
+                    <label className="ksws-form-label">Numer działki</label>
+                    <input
+                      className="ksws-form-input"
+                      value={parcelIds.includes(",") ? "" : parcelIds.split(".").pop() || parcelIds}
+                      readOnly
+                      placeholder="Numer"
+                    />
+                  </div>
+                  <div className="ksws-form-group">
+                    <label className="ksws-form-label">Obręb (OOOO)</label>
+                    <input
+                      className="ksws-form-input"
+                      value={obreb}
+                      onChange={(e) => setObreb(e.target.value)}
+                      placeholder="np. 0029"
+                    />
+                  </div>
+                  <div className="ksws-form-group">
+                    <label className="ksws-form-label">Gmina (GG)</label>
+                    <input
+                      className="ksws-form-input"
+                      value={municipality}
+                      onChange={(e) => setMunicipality(e.target.value)}
+                      placeholder="np. Raciąż"
+                    />
+                  </div>
+                  <div className="ksws-form-group">
+                    <label className="ksws-form-label">Powiat (PP)</label>
+                    <input
+                      className="ksws-form-input"
+                      value={county}
+                      onChange={(e) => setCounty(e.target.value)}
+                      placeholder="np. płoński"
+                    />
+                  </div>
+                  <div className="ksws-form-btn-col">
                     <button
+                      type="submit"
                       className="ksws-btn ksws-btn-primary"
-                      style={{ marginTop: 16 }}
-                      onClick={() => setActiveNav("analiza")}
+                      disabled={loading || !parcelIds}
+                      style={{ width: "100%" }}
                     >
-                      ⚡ Przejdź do analizy
+                      {loading ? (
+                        <>
+                          <Spinner size="sm" style={{ marginRight: 8 }} /> Pobieranie...
+                        </>
+                      ) : (
+                        "⚡ Analizuj"
+                      )}
                     </button>
                   </div>
-                ) : (
-                  <div className="ksws-history-full">
-                    {history.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className="ksws-history-full-item"
-                        style={{ flexDirection: "column", gap: "8px", padding: "16px", cursor: "pointer" }}
-                        onClick={() => {
-                          // Załaduj zapisany raport z historii (bez ponownego fetchowania z API)
-                          if (item.full_master_record) {
-                            const mr = item.full_master_record;
-                            const fakeResult = {
-                              parcel_id: item.parcel_id,
-                              data_status: "REAL",
-                              master_record: mr,
-                            };
-                            setResult(fakeResult);
-                            setAllResults([fakeResult]);
-                            setParcelIds(item.parcel_id);
-                            // Ustaw mapę na centroid działki
-                            const centroid = mr.geometry?.centroid_ll;
-                            if (Array.isArray(centroid) && centroid[0] != null) {
-                              setMapCenter([Number(centroid[1]), Number(centroid[0])]);
-                              setMapZoom(16);
-                            }
-                            // Ustaw GeoJSON linii energetycznych
-                            const plGeo = mr.infrastructure?.power_lines?.geojson;
-                            if (plGeo?.features?.length > 0) {
-                              setPowerGeoJSON(plGeo);
-                            } else {
-                              setPowerGeoJSON(null);
-                            }
-                            setActiveNav("analiza");
-                            toast.success("Załadowano raport z historii ✓");
-                          } else {
-                            // Fallback: brak zapisanego raportu → uruchom nową analizę
-                            setParcelIds(item.parcel_id);
-                            setActiveNav("analiza");
-                          }
-                        }}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            <div className="ksws-history-full-num">{idx + 1}</div>
-                            <div>
-                              <div className="ksws-history-full-id" style={{ fontWeight: 700, fontSize: "0.95rem" }}>
-                                <a href={`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${item.parcel_id}`} target="_blank" rel="noreferrer" style={{ color: "#b8963e", textDecoration: "none" }} onClick={(e) => e.stopPropagation()}>
-                                  {item.parcel_id} 🔗
-                                </a>
-                              </div>
-                              <div className="ksws-history-full-date">{item.date}</div>
-                              {item.location && <div style={{ fontSize: "0.72rem", color: "#888" }}>{item.location}</div>}
-                            </div>
-                          </div>
-                          <div className="ksws-history-full-arrow">→</div>
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", fontSize: "0.78rem", background: "#f7f8fa", borderRadius: "6px", padding: "10px", marginTop: "4px" }}>
-                          <div><span style={{ color: "#999" }}>Pow:</span> <strong>{Math.round(item.area_m2 || 0).toLocaleString()} m²</strong></div>
-                          <div><span style={{ color: "#999" }}>Cena:</span> <strong>{Math.round(item.price_m2 || 0)} PLN/m²</strong></div>
-                          <div><span style={{ color: "#999" }}>Wartość:</span> <strong>{Math.round(item.value_pln || 0).toLocaleString()} PLN</strong></div>
-                          <div><span style={{ color: "#999" }}>Kolizja:</span> <strong style={{ color: item.collision ? "#e74c3c" : "#27ae60" }}>{item.collision ? "TAK" : "NIE"}</strong></div>
-                          <div><span style={{ color: "#999" }}>Napięcie:</span> <strong>{item.voltage || "—"}</strong></div>
-                          <div><span style={{ color: "#999" }}>Dł linii:</span> <strong>{Math.round(item.line_length_m || 0)} m</strong></div>
-                          <div><span style={{ color: "#999" }}>Pas:</span> <strong>{Math.round(item.band_width_m || 0)}m × {Math.round(item.band_area_m2 || 0)} m²</strong></div>
-                          <div><span style={{ color: "#999" }}>Razem:</span> <strong style={{ color: "#3d2319" }}>{Math.round(item.razem || item.track_a || 0).toLocaleString()} PLN</strong></div>
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", fontSize: "0.82rem", marginTop: "4px" }}>
-                          <div style={{ background: "#eafaf1", padding: "8px 12px", borderRadius: "6px", textAlign: "center" }}>
-                            <div style={{ fontSize: "0.68rem", color: "#999" }}>Track A</div>
-                            <div style={{ fontWeight: 700, color: "#27ae60" }}>{Math.round(item.track_a || 0).toLocaleString()} PLN</div>
-                          </div>
-                          <div style={{ background: "#fef9e7", padding: "8px 12px", borderRadius: "6px", textAlign: "center" }}>
-                            <div style={{ fontSize: "0.68rem", color: "#999" }}>Track B</div>
-                            <div style={{ fontWeight: 700, color: "#f39c12" }}>{Math.round(item.track_b || 0).toLocaleString()} PLN</div>
-                          </div>
-                          <div style={{ background: "#eaf2fd", padding: "8px 12px", borderRadius: "6px", textAlign: "center" }}>
-                            <div style={{ fontSize: "0.68rem", color: "#999" }}>RAZEM</div>
-                            <div style={{ fontWeight: 700, color: "#3d2319" }}>{Math.round(item.razem || item.track_a || 0).toLocaleString()} PLN</div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    <div style={{ textAlign: "right", marginTop: 14 }}>
-                      <button
-                        className="ksws-btn-link"
-                        onClick={() => {
-                          localStorage.removeItem("ksws_history");
-                          setHistory([]);
-                        }}
-                      >
-                        🗑 Wyczyść historię
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ════ BATCH CSV PAGE ════ */}
-          {activeNav === "batch" && (
-            <BatchCSVSection />
-          )}
-
-          {/* ════ ANALIZA PAGE ════ */}
-          {activeNav === "analiza" && (<>
-
-          {/* ════ FORMULARZ ════ */}
-          <div className="ksws-card">
-            <div className="ksws-card-header">
-              <span className="ksws-card-header-icon">📍</span>
-              <div>
-                <div className="ksws-card-header-title">Identyfikacja działki</div>
-                <div className="ksws-card-header-sub">
-                  Dane pobierane automatycznie z ULDK GUGiK · GUS BDL · GESUT
                 </div>
               </div>
-            </div>
-            <div className="ksws-card-body">
-              <form onSubmit={runAnalysis}>
 
-                {/* ── KARTA KLIENTA ── */}
-                <div className="ksws-client-card">
-                  <div className="ksws-client-card-header">
-                    <span style={{ fontSize: "1em" }}>👤</span>
-                    <span>Karta klienta</span>
-                    <span className="ksws-client-card-note">— dane trafiają do raportu</span>
-                  </div>
-                  <div className="ksws-client-card-grid">
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">Imię i nazwisko / Firma</label>
-                      <input
-                        className="ksws-form-input"
-                        value={clientName}
-                        onChange={(e) => setClientName(e.target.value)}
-                        placeholder="Jan Kowalski"
-                      />
-                    </div>
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">E-mail klienta</label>
-                      <input
-                        className="ksws-form-input"
-                        type="email"
-                        value={clientEmail}
-                        onChange={(e) => setClientEmail(e.target.value)}
-                        placeholder="jan@email.pl"
-                      />
-                    </div>
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">Nr sprawy</label>
-                      <input
-                        className="ksws-form-input"
-                        value={caseNumber}
-                        onChange={(e) => setCaseNumber(e.target.value)}
-                        placeholder="SZU/2026/001"
-                      />
-                    </div>
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">Data wysłania maila</label>
-                      <input
-                        className="ksws-form-input"
-                        type="date"
-                        value={emailSentDate}
-                        onChange={(e) => setEmailSentDate(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── BOX 1: Identyfikator działki ── */}
-                <div className="ksws-form-box">
-                  <div className="ksws-form-box-label">
-                    <span className="ksws-form-box-num">1</span>
-                    Identyfikator działki
-                  </div>
-                  <div className="ksws-form-group" style={{ marginBottom: 0 }}>
-                    <label className="ksws-form-label">
-                      Identyfikator działki *
-                      <span className="ksws-form-hint">
-                        Pełny TERYT np. <code>141906_5.0029.60</code> — lub wpisz sam numer i uzupełnij Obręb poniżej
-                      </span>
-                    </label>
-                    <input
-                      className="ksws-form-input ksws-form-input-lg"
-                      value={parcelIds}
-                      onChange={(e) => setParcelIds(e.target.value)}
-                      placeholder="141906_5.0029.60  lub wiele po przecinku: 141906_5.0029.60, 141906_5.0029.129"
-                      autoComplete="off"
-                    />
-                    <div className="ksws-form-tip">
-                      Format TERYT: <strong>WWPPGG_R.OOOO.NR</strong> — WW=województwo PP=powiat GG=gmina R=rodzaj O=obręb NR=numer
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── BOX 2: Dane ewidencyjne ── */}
-                <div className="ksws-form-box">
-                  <div className="ksws-form-box-label">
-                    <span className="ksws-form-box-num">2</span>
-                    Dane ewidencyjne
+              {/* ── BOX 2: Dane ewidencyjne ── */}
+              <div className="ksws-form-box">
+                <div className="ksws-form-box-label">
+                  <span className="ksws-form-box-num">2</span>
+                  Dane ewidencyjne
                     <span style={{ marginLeft: 8, fontSize: "0.72em", color: "#8ac926", fontWeight: 700 }}>
                       ✓ Uzupełniają się automatycznie po analizie
                     </span>
@@ -3782,11 +3603,9 @@ export default function KalkulatorPage() {
             </>
           )}
 
-          </>)}
           {/* END ANALIZA PAGE */}
 
         </main>
-      </div>
     </div>
   );
 }
