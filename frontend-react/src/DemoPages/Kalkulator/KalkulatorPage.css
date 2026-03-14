@@ -1,10 +1,21 @@
 /* ════════════════════════════════════════════════════════════════════════════
    SZUWARA KANCELARIA PRAWNO-PODATKOWA — KALKULATOR KSWS v3.0
    UX Redesign 2026 — nowoczesny, profesjonalny design
-   www.kancelaria-szuwara.pl · 790 411 412
+   www.kancelaria-szuwara.pl · 500 013 269
    ═════════════════════════════════════════════════════════════════════════════ */
 
 :root {
+  /* ── DashCode-style palette (dash-next2.vercel.app) ── */
+  --dash-bg:        #f8fafc;
+  --dash-bg-card:   #ffffff;
+  --dash-border:    #e2e8f0;
+  --dash-border-focus: #cbd5e1;
+  --dash-text:      #0f172a;
+  --dash-text-muted: #64748b;
+  --dash-primary:   #6366f1;
+  --dash-shadow:    0 1px 3px rgba(0, 0, 0, 0.06);
+  --dash-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.04);
+
   /* ── Paleta kolorów ── */
   --purple:       #5c3d8f;
   --purple-dark:  #3d2660;
@@ -26,11 +37,11 @@
   /* Layout */
   --ksws-sidebar-bg:    var(--purple);
   --ksws-sidebar-width: 260px;
-  --ksws-bg:            #f4f6fb;
+  --ksws-bg:            var(--dash-bg);
   --ksws-white:         #ffffff;
-  --ksws-card-bg:       #ffffff;
-  --ksws-border:        #e9ecef;
-  --ksws-border-strong: #dee2e6;
+  --ksws-card-bg:       var(--dash-bg-card);
+  --ksws-border:        var(--dash-border);
+  --ksws-border-strong: #cbd5e1;
 
   /* Tekst */
   --ksws-text-dark:   #212529;
@@ -66,10 +77,10 @@
 .ksws-layout {
   display: flex;
   min-height: 100vh;
-  background: #f4f6fb;
+  background: var(--dash-bg);
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
-  color: #212529;
+  color: var(--dash-text);
 }
 
 /* ── SIDEBAR ──────────────────────────────────────────────────────────────── */
@@ -94,13 +105,60 @@
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
-  background: #f4f6fb;
+  background: var(--dash-bg);
+}
+
+/* ── Wspólny nagłówek strony (DashCode: bordered, clean) ─────────────────── */
+.ksws-page-header {
+  background: var(--dash-bg-card);
+  border: 1px solid var(--dash-border);
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  padding: 20px 32px 18px;
+  flex-shrink: 0;
+}
+.ksws-page-header-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--dash-text);
+  margin: 0 0 6px 0;
+  letter-spacing: -0.02em;
+}
+.ksws-page-header-sub {
+  font-size: 0.875rem;
+  color: var(--dash-text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+@media (max-width: 768px) {
+  .ksws-page-header { padding: 16px 20px 14px; }
+  .ksws-page-header-title { font-size: 1.25rem; }
 }
 
 /* ── SIDEBAR INNER ────────────────────────────────────────────────────────── */
 .ksws-sidebar-logo {
-  padding: 24px 20px 20px;
+  padding: 14px 12px 16px;
   border-bottom: 1px solid rgba(255,255,255,0.12);
+  background: #fff;
+}
+
+.ksws-sidebar-logo-img {
+  display: block;
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+  margin: 0 auto 10px;
+  object-fit: contain;
+}
+
+.ksws-sidebar-app-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #212529;
+  text-align: center;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
 }
 
 .ksws-sidebar-logo-symbol {
@@ -203,8 +261,31 @@
   padding: 16px 20px;
   border-top: 1px solid rgba(255,255,255,0.10);
   font-size: 0.72rem;
-  color: rgba(255,255,255,0.45);
+  color: rgba(255,255,255,0.55);
   line-height: 1.7;
+}
+
+.ksws-sidebar-footer-name {
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  margin-bottom: 6px;
+}
+
+.ksws-sidebar-footer-link {
+  display: block;
+  color: rgba(255,255,255,0.6);
+  text-decoration: none;
+  margin-bottom: 2px;
+}
+
+.ksws-sidebar-footer-link:hover {
+  color: #ffffff;
+}
+
+.ksws-sidebar-footer-created {
+  margin-top: 10px;
+  font-size: 0.65rem;
+  opacity: 0.7;
 }
 
 .ksws-sidebar-footer a {
@@ -1417,9 +1498,9 @@
 .ksws-main::-webkit-scrollbar-thumb { background: #ced4da; border-radius: 3px; }
 .ksws-main::-webkit-scrollbar-thumb:hover { background: var(--purple-light); }
 
-/* ── RESPONSIVE SIDEBAR HIDE ──────────────────────────────────────────────── */
+/* ── RESPONSIVE (KalkulatorPage wewnętrzne) ───────────────────────────────── */
 @media (max-width: 768px) {
-  .ksws-sidebar { display: none; }
+  /* ksws-sidebar: NIE display:none — Layout ma hamburger drawer. Ta reguła dla starych .ksws-main/.ksws-topbar */
   .ksws-main { padding: 16px; }
   .ksws-topbar { padding: 12px 16px; height: auto; }
 }
@@ -4113,15 +4194,24 @@ body:has(.kalkulator-route) {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 1100;
+  z-index: 9999;
   box-shadow: 0 2px 12px rgba(92,61,143,0.4);
 }
 
 .ksws-mobile-topbar-logo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex: 1;
+  min-width: 0;
+}
+
+.ksws-mobile-topbar-img {
+  height: 32px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .ksws-mobile-topbar-symbol {
@@ -4242,11 +4332,11 @@ body:has(.kalkulator-route) {
    BREAKPOINTS
    ══════════════════════════════════════════════════════════════════ */
 
-@media (max-width: 768px) {
+@media (max-width: 992px) {
 
-  /* Show mobile topbar */
+  /* Show mobile topbar (992 = spójnie z closed-sidebar-mobile w Main) */
   .ksws-mobile-topbar {
-    display: flex;
+    display: flex !important;
   }
 
   /* Show overlay when sidebar is open */
@@ -4268,13 +4358,15 @@ body:has(.kalkulator-route) {
 
   /* Sidebar becomes a fixed drawer */
   .ksws-sidebar {
+    display: flex !important;
+    flex-direction: column;
     position: fixed;
     top: 0;
     left: 0;
     bottom: 0;
     width: 280px;
     max-width: 85vw;
-    z-index: 1200;
+    z-index: 10000;
     transform: translateX(-100%);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     overflow-y: auto;

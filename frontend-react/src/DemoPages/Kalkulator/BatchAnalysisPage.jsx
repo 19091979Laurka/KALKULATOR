@@ -287,6 +287,9 @@ const BatchAnalysisPage = () => {
   const [historyVersion, setHistoryVersion] = useState(0);
   const [editingBatchId, setEditingBatchId] = useState(null);
   const [pastedList, setPastedList] = useState("");
+  const [batchClientName, setBatchClientName] = useState("");
+  const [batchClientId, setBatchClientId] = useState("");
+  const [batchIsFarmer, setBatchIsFarmer] = useState(false);
   const fileInputRef = useRef(null);
 
   const saveBatchToHistory = useCallback((json) => {
@@ -318,6 +321,7 @@ const BatchAnalysisPage = () => {
   };
 
   const runPasteAnalysis = async () => {
+    if (!batchClientName.trim()) return;
     const lines = pastedList.trim().split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
     if (!lines.length) return;
     const csv = "parcel_id,obreb,county,municipality\n" + lines.map((id) => `${id},,,`).join("\n");
@@ -330,6 +334,9 @@ const BatchAnalysisPage = () => {
     try {
       const formData = new FormData();
       formData.append("file", f);
+      formData.append("client_name", batchClientName.trim());
+      if (batchClientId.trim()) formData.append("client_id", batchClientId.trim());
+      if (batchIsFarmer) formData.append("is_farmer", "1");
       const res = await fetch("/api/analyze/batch", { method: "POST", body: formData });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail || `HTTP ${res.status}`);
@@ -359,6 +366,9 @@ const BatchAnalysisPage = () => {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("client_name", batchClientName.trim());
+      if (batchClientId.trim()) formData.append("client_id", batchClientId.trim());
+      if (batchIsFarmer) formData.append("is_farmer", "1");
       const res = await fetch("/api/analyze/batch", { method: "POST", body: formData });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail || `HTTP ${res.status}`);
@@ -408,159 +418,187 @@ const BatchAnalysisPage = () => {
   const displayTrackB = totals && (hasEditedLengths ? totals.track_b_recalc : totals.track_b_api);
 
   return (
-    <div className="batch-wrapper">
-      {/* ── HEADER ── */}
-      <div className="batch-header">
-        <h1>📊 Analiza hurtowa</h1>
-        <p>Wgraj plik CSV lub wklej listę działek — wygeneruje raport Oferty hurtowe · Batch CSV i zapisze w Historii raportów poniżej</p>
-      </div>
+    <div className="batch-page">
+      <header className="batch-page__header">
+        <h1 className="batch-page__title">Analiza hurtowa</h1>
+        <p className="batch-page__sub">Wgraj CSV lub wklej listę działek. Wyniki pojawią się na stronie; raport zbiorczy zapisze się w <strong>Historii raportów</strong>.</p>
+      </header>
 
-      {/* ── UPLOAD SECTION ── */}
-      {!results && (
-        <div className="batch-upload-section">
-          <div className="upload-box"
-            onDragOver={e => e.preventDefault()}
-            onDrop={handleDrop}>
-            <label
-              className="file-label"
-              htmlFor="csv-input"
-              onClick={() => fileInputRef.current?.click()}>
-              {file
-                ? `📎 ${file.name}`
-                : "📂 Kliknij lub przeciągnij plik CSV"}
-              <div style={{ fontSize: "0.8em", fontWeight: 400, marginTop: 6, color: "#9e8b83" }}>
-                Kolumny: <strong>parcel_id</strong> (wymagany), <strong>obręb</strong> (zalecany przy numerze bez TERYT), powiat, gmina · maks. 99 wierszy
+      <div className="batch-page__content">
+        {!results && !loading ? (
+          <>
+            {/* Krok 1: Plik lub lista */}
+            <section className="batch-card batch-card--upload" aria-label="Dodaj dane">
+              <h2 className="batch-card__heading">1. Plik CSV lub listę działek</h2>
+              <div
+                className={`batch-drop ${file || pastedList.trim() ? "batch-drop--filled" : ""}`}
+                onDragOver={e => e.preventDefault()}
+                onDrop={handleDrop}
+              >
+                <label className="batch-drop__label" htmlFor="csv-input" onClick={() => fileInputRef.current?.click()}>
+                  {file ? (
+                    <span className="batch-drop__file">{file.name}</span>
+                  ) : (
+                    <span className="batch-drop__placeholder">Kliknij lub przeciągnij plik CSV</span>
+                  )}
+                  <span className="batch-drop__hint">parcel_id (wymagany), obręb, powiat, gmina · max 99 wierszy</span>
+                </label>
+                <input id="csv-input" ref={fileInputRef} type="file" accept=".csv,text/csv" className="batch-drop__input" onChange={handleFileChange} />
               </div>
-            </label>
-            <input
-              id="csv-input"
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              style={{ display: "none" }}
-              onChange={handleFileChange}
-            />
-          </div>
 
-          {error && <div className="error-box">❌ {error}</div>}
+              <details className="batch-paste">
+                <summary className="batch-paste__summary">Albo wklej listę działek</summary>
+                <div className="batch-paste__inner">
+                  <textarea
+                    className="batch-paste__textarea"
+                    value={pastedList}
+                    onChange={e => setPastedList(e.target.value)}
+                    placeholder="np. 142003_2.0002.81/5&#10;81/6&#10;303/4"
+                    rows={4}
+                  />
+                  <button
+                    type="button"
+                    className="batch-btn batch-btn--secondary"
+                    disabled={!pastedList.trim() || loading || !batchClientName.trim()}
+                    onClick={runPasteAnalysis}
+                    title={!batchClientName.trim() ? "Wpisz nazwę raportu poniżej" : undefined}
+                  >
+                    {loading ? "Analizuję…" : "Analizuj z listy"}
+                  </button>
+                </div>
+              </details>
+            </section>
 
-          <button
-            className="submit-btn"
-            disabled={!file || loading}
-            onClick={handleSubmit}>
-            {loading ? "⏳ Analizuję działki..." : "🚀 Analizuj działki"}
-          </button>
+            {/* Krok 2: Ustawienia + CTA */}
+            <section className="batch-card batch-card--settings" aria-label="Ustawienia raportu">
+              <h2 className="batch-card__heading">2. Ustawienia raportu</h2>
+              <div className="batch-settings">
+                <div className="batch-field">
+                  <label className="batch-field__label" htmlFor="batch-client-name">Nazwa raportu / klienta <span className="batch-field__required">*</span></label>
+                  <input
+                    id="batch-client-name"
+                    type="text"
+                    className={`batch-field__input ${!batchClientName.trim() ? "batch-field__input--error" : ""}`}
+                    value={batchClientName}
+                    onChange={e => setBatchClientName(e.target.value)}
+                    placeholder="np. Kowalski — 99 działek"
+                  />
+                </div>
+                <div className="batch-field">
+                  <label className="batch-field__label" htmlFor="batch-client-id">ID klienta (CRM)</label>
+                  <input
+                    id="batch-client-id"
+                    type="text"
+                    className="batch-field__input"
+                    value={batchClientId}
+                    onChange={e => setBatchClientId(e.target.value)}
+                    placeholder="opcjonalnie"
+                  />
+                </div>
+                <label className="batch-checkbox">
+                  <input type="checkbox" checked={batchIsFarmer} onChange={e => setBatchIsFarmer(e.target.checked)} className="batch-checkbox__input" />
+                  <span className="batch-checkbox__label">Gospodarstwo rolne (R5)</span>
+                </label>
+              </div>
+              {error && <div className="batch-alert batch-alert--error" role="alert">{error}</div>}
+              <button
+                type="button"
+                className="batch-btn batch-btn--primary"
+                disabled={(!file && !pastedList.trim()) || loading || !batchClientName.trim()}
+                onClick={file ? handleSubmit : runPasteAnalysis}
+                title={!batchClientName.trim() ? "Wpisz nazwę raportu" : (!file && !pastedList.trim()) ? "Dodaj plik CSV lub wklej listę" : undefined}
+              >
+                {loading ? "Analizuję działki…" : "Analizuj działki"}
+              </button>
+              {loading && <p className="batch-loading-hint">Pobieranie z ULDK, OSM, GUS BDL — ok. 1–3 min</p>}
+            </section>
 
-          {loading && (
-            <p className="file-info">
-              Pobieranie danych z ULDK, OSM Overpass i GUS BDL — może potrwać 1-3 min dla większych zbiorów...
-            </p>
-          )}
-
-          <p className="file-info" style={{ marginTop: 16 }}>
-            <strong>Albo wklej listę działek</strong> (jeden numer w linii lub po przecinku / średniku):
-          </p>
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
-            <textarea
-              value={pastedList}
-              onChange={(e) => setPastedList(e.target.value)}
-              placeholder={"np. 142003_2.0002.81/5\n81/6\n303/4"}
-              rows={3}
-              style={{ flex: "1 1 280px", minWidth: 200, padding: 12, borderRadius: 8, border: "1px solid #D6CCC2", fontFamily: "inherit", fontSize: "0.9em" }}
-            />
-            <button
-              type="button"
-              className="submit-btn"
-              disabled={!pastedList.trim() || loading}
-              onClick={runPasteAnalysis}
-              style={{ alignSelf: "flex-end" }}
-            >
-              {loading ? "⏳ Analizuję..." : "🚀 Analizuj z listy"}
-            </button>
-          </div>
-          <p className="file-info">
-            Przykład: pełny TERYT <code>142003_2.0002.81/5</code> lub numer + obręb <code>81/5,Baboszewo</code>.{" "}
-            <button
-              type="button"
-              className="tab-download"
-              style={{ marginLeft: 6, padding: "2px 8px", fontSize: "0.85em" }}
-              onClick={() => {
-                const header = "parcel_id,obreb,county,municipality";
-                const rows = ["142003_2.0002.81/5,Baboszewo,,", "303/4,Niedarzyn,,"];
-                const csv = [header, ...rows].join("\n");
-                const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+            <div className="batch-links">
+              <button type="button" className="batch-link" onClick={() => {
+                const csv = "parcel_id,obreb,county,municipality\n142003_2.0002.81/5,Baboszewo,,\n303/4,Niedarzyn,,";
                 const a = document.createElement("a");
-                a.href = URL.createObjectURL(blob);
+                a.href = URL.createObjectURL(new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }));
                 a.download = "szablon_batch_dzialki.csv";
                 a.click();
                 URL.revokeObjectURL(a.href);
-              }}>
-              ⬇ Pobierz szablon CSV
-            </button>
-          </p>
-          <p className="file-info" style={{ marginTop: 12 }}>
-            <button type="button" className="tab-download" style={{ fontSize: "0.85em" }} onClick={() => navigate("/kalkulator/historia")}>
-              📋 Historia analiz zbiorczych — otwórz raport z mapami
-            </button>
-          </p>
-        </div>
-      )}
+              }}>Pobierz szablon CSV</button>
+              <button type="button" className="batch-link" onClick={() => navigate("/kalkulator/historia")}>Historia raportów</button>
+            </div>
+          </>
+        ) : null}
 
-      {/* ── RESULTS ── */}
-      {results && totals && (
-        <div className="results-section">
-          {/* Stats row */}
-          <div className="stats-row">
-            <div className="stat-card">
-              <div className="stat-value">{totals.total}</div>
-              <div className="stat-label">Działek</div>
+        {loading && !results && (
+          <section className="batch-results batch-results--skeleton" aria-busy="true" aria-label="Ładowanie wyników">
+            <div className="dash-section">
+              <h3 className="dash-section__title">Analizuję działki</h3>
+              <p className="dash-section__sub">Pobieranie z ULDK, OSM, GUS BDL — ok. 1–3 min</p>
+              <div className="dash-progress dash-progress--md">
+                <div className="dash-progress__track">
+                  <div className="dash-progress__bar dash-progress__bar--indeterminate" role="progressbar" aria-valuetext="Ładowanie" />
+                </div>
+              </div>
             </div>
-            <div className="stat-card success">
-              <div className="stat-value" style={{ color: "#27ae60" }}>{results.summary?.successful || 0}</div>
-              <div className="stat-label">Pobrano dane</div>
+            <div className="batch-summary-card batch-summary-card--skeleton">
+              <div className="batch-summary-card__total batch-skeleton batch-skeleton--text" />
+              <div className="batch-summary-card__tracks">
+                <div className="batch-skeleton batch-skeleton--line" />
+                <div className="batch-skeleton batch-skeleton--line" />
+              </div>
             </div>
-            <div className="stat-card orange">
-              <div className="stat-value" style={{ color: "#e67e22" }}>{totals.collision}</div>
-              <div className="stat-label">Kolizja z linią</div>
+            <div className="batch-kpi-row">
+              {[1, 2, 3, 4, 5].map(i => <div key={i} className="batch-kpi-chip batch-skeleton batch-skeleton--chip" />)}
             </div>
-            <div className="stat-card money">
-              <div className="stat-value" style={{ fontSize: "1.4em" }}>{Math.round(displayTrackA).toLocaleString("pl-PL")}</div>
-              <div className="stat-label">Track A [PLN]</div>
+            <div className="batch-tabs-wrap">
+              <div className="batch-skeleton batch-skeleton--tabs" />
             </div>
-            <div className="stat-card money2">
-              <div className="stat-value" style={{ fontSize: "1.4em" }}>{Math.round(displayTrackB).toLocaleString("pl-PL")}</div>
-              <div className="stat-label">Track B [PLN]</div>
+            <div className="batch-table-skeleton">
+              {[1, 2, 3, 4, 5, 6, 7].map(i => (
+                <div key={i} className="batch-skeleton batch-skeleton--row" />
+              ))}
             </div>
-          </div>
+          </section>
+        )}
 
-          {/* Total box — ta sama kwota co w Oferty hurtowe i PDF (API), chyba że są korekty długości */}
-          <div className="summary-box">
-            <div className="summary-title">💰 ŁĄCZNE ROSZCZENIA (Track A + Track B){hasEditedLengths ? " (po korekcie długości)" : ""}</div>
-            <div className="summary-value">{Math.round(displayTrackA + displayTrackB).toLocaleString("pl-PL")} PLN</div>
-          </div>
+        {results && totals && (
+          <section className="batch-results" aria-label="Wyniki analizy">
+            <div className="batch-summary-card">
+              <div className="batch-summary-card__total">
+                <span className="batch-summary-card__label">Łączne roszczenie (Track A + B){hasEditedLengths ? " — po korekcie" : ""}</span>
+                <span className="batch-summary-card__value">{Math.round(displayTrackA + displayTrackB).toLocaleString("pl-PL")} zł</span>
+              </div>
+              <div className="batch-summary-card__tracks">
+                <div className="batch-summary-card__track batch-summary-card__track--a">
+                  <span className="batch-summary-card__track-label">Track A</span>
+                  <span className="batch-summary-card__track-value">{Math.round(displayTrackA).toLocaleString("pl-PL")} zł</span>
+                </div>
+                <div className="batch-summary-card__track batch-summary-card__track--b">
+                  <span className="batch-summary-card__track-label">Track B</span>
+                  <span className="batch-summary-card__track-value">{Math.round(displayTrackB).toLocaleString("pl-PL")} zł</span>
+                </div>
+              </div>
+            </div>
 
-          {/* Tabs — Raport = szablon jak Oferty hurtowe (mapa, KPI, Odszkodowanie wg działki, Łączne roszczenie) */}
-          <div className="tabs">
-            <button className={`tab${activeTab === "raport" ? " active" : ""}`} onClick={() => setActiveTab("raport")}>
-              📊 Raport
-            </button>
-            <button className={`tab${activeTab === "table" ? " active" : ""}`} onClick={() => setActiveTab("table")}>
-              📋 Tabela działek
-            </button>
-            <button className={`tab${activeTab === "info" ? " active" : ""}`} onClick={() => setActiveTab("info")}>
-              ℹ️ Info o analizie
-            </button>
-            <button className="tab-download" onClick={() => downloadCSV(results.parcels, editedLengths)}>
-              ⬇️ Pobierz CSV
-            </button>
-            <button className="tab-download" style={{ marginLeft: 6 }} onClick={() => setResults(null)}>
-              🔄 Nowa analiza
-            </button>
-          </div>
+            <div className="batch-kpi-row">
+              <div className="batch-kpi-chip"><span className="batch-kpi-chip__value">{totals.total}</span><span className="batch-kpi-chip__label">Działek</span></div>
+              <div className="batch-kpi-chip"><span className="batch-kpi-chip__value">{results.summary?.successful ?? 0}</span><span className="batch-kpi-chip__label">Pobrano</span></div>
+              <div className="batch-kpi-chip"><span className="batch-kpi-chip__value">{totals.collision}</span><span className="batch-kpi-chip__label">Kolizja</span></div>
+              <div className="batch-kpi-chip"><span className="batch-kpi-chip__value">{totals.total - totals.collision}</span><span className="batch-kpi-chip__label">Bez kol.</span></div>
+            </div>
 
-          {/* RAPORT TAB — szablon jak Oferty hurtowe (zob. RAPORTY_MIEJSCA_WZORY.md sekcja 4) */}
+            <div className="batch-tabs-wrap">
+              <div className="batch-tabs" role="tablist">
+                <button type="button" role="tab" aria-selected={activeTab === "raport"} className={`batch-tab ${activeTab === "raport" ? "batch-tab--active" : ""}`} onClick={() => setActiveTab("raport")}>Raport</button>
+                <button type="button" role="tab" aria-selected={activeTab === "table"} className={`batch-tab ${activeTab === "table" ? "batch-tab--active" : ""}`} onClick={() => setActiveTab("table")}>Tabela działek</button>
+                <button type="button" role="tab" aria-selected={activeTab === "info"} className={`batch-tab ${activeTab === "info" ? "batch-tab--active" : ""}`} onClick={() => setActiveTab("info")}>Info</button>
+              </div>
+              <div className="batch-tabs-actions">
+                <button type="button" className="batch-action-link" onClick={() => downloadCSV(results.parcels, editedLengths)}>Pobierz CSV</button>
+                <button type="button" className="batch-action-link" onClick={() => setResults(null)}>Nowa analiza</button>
+              </div>
+            </div>
+
           {activeTab === "raport" && (
-            <div style={{ background: "#f0f3f8", borderRadius: 16, padding: 20, marginTop: 16 }}>
+            <div className="batch-tab-panel batch-tab-panel--raport">
               {/* KPI cards — jak Oferty hurtowe */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 18 }}>
                 {[
@@ -640,37 +678,38 @@ const BatchAnalysisPage = () => {
             </div>
           )}
 
-          {/* TABLE TAB */}
           {activeTab === "table" && (
-            <div className="table-box">
+            <div className="batch-tab-panel batch-tab-panel--table">
+            <h3 className="batch-table-title">Tabela działek</h3>
+            <div className="batch-table-wrap">
               <table className="results-table">
                 <thead>
                   <tr>
-                    <th>Działka</th>
-                    <th style={{ textAlign: "center" }}>Kolizja</th>
-                    <th style={{ textAlign: "center" }}>Napięcie</th>
-                    <th style={{ textAlign: "right" }}>Pow. [m²]</th>
-                    <th style={{ textAlign: "right" }}>Cena [PLN/m²]</th>
-                    <th style={{ textAlign: "right", minWidth: 110 }}>
+                    <th className="results-table__th">Działka</th>
+                    <th className="results-table__th results-table__th--center">Kolizja</th>
+                    <th className="results-table__th results-table__th--center">Napięcie</th>
+                    <th className="results-table__th results-table__th--right">Pow. [m²]</th>
+                    <th className="results-table__th results-table__th--right">Cena [PLN/m²]</th>
+                    <th className="results-table__th results-table__th--right results-table__th--input">
                       Dł. linii [m]
-                      <div style={{ fontSize: "0.7em", fontWeight: 400, color: "#D5BDAF" }}>edytowalne</div>
+                      <span className="results-table__th-hint">edytowalne</span>
                     </th>
-                    <th style={{ textAlign: "right" }}>Pas [m]</th>
-                    <th style={{ textAlign: "right" }}>Pas [m²]</th>
-                    <th style={{ textAlign: "right" }}>Track A</th>
-                    <th style={{ textAlign: "right" }}>Track B</th>
-                    <th style={{ textAlign: "right" }}>Razem</th>
-                    <th style={{ textAlign: "center" }}>Raport</th>
+                    <th className="results-table__th results-table__th--right">Pas [m]</th>
+                    <th className="results-table__th results-table__th--right">Pas [m²]</th>
+                    <th className="results-table__th results-table__th--right">Track A</th>
+                    <th className="results-table__th results-table__th--right">Track B</th>
+                    <th className="results-table__th results-table__th--right">Razem</th>
+                    <th className="results-table__th results-table__th--center">Raport</th>
                   </tr>
                 </thead>
                 <tbody>
                   {results.parcels.map((p, i) => {
                     if (p.status === "ERROR") {
                       return (
-                        <tr key={i}>
-                          <td><strong>{p.parcel_id}</strong></td>
-                          <td colSpan={11} style={{ color: "#c0392b" }}>
-                            ❌ Błąd: {p.error}
+                        <tr key={i} className="results-table__row results-table__row--error">
+                          <td className="results-table__cell"><strong>{p.parcel_id}</strong></td>
+                          <td colSpan={11} className="results-table__cell results-table__cell--error">
+                            Błąd: {p.error}
                           </td>
                         </tr>
                       );
@@ -696,73 +735,53 @@ const BatchAnalysisPage = () => {
                     const needsInput = pl.detected && autoLen <= 0 && (editedLen === undefined || editedLen === null);
 
                     return (
-                      <tr key={i} className={collision ? "collision" : ""}>
-                        <td>
-                          <strong>{p.parcel_id}</strong>
+                      <tr key={i} className={`results-table__row ${collision ? "results-table__row--collision" : ""}`}>
+                        <td className="results-table__cell">
+                          <span className="results-table__parcel-id">{p.parcel_id}</span>
                           {needsInput && (
-                            <div style={{ fontSize: "0.72em", color: "#e67e22", marginTop: 2 }}>
-                              ⚠ Wpisz długość linii
-                            </div>
+                            <span className="results-table__warn">Wpisz długość linii</span>
                           )}
                         </td>
-                        <td style={{ textAlign: "center" }}>
-                          {collision
-                            ? <span style={{ color: "#27ae60", fontWeight: 700 }}>✓</span>
-                            : <span style={{ color: "#bbb" }}>—</span>}
+                        <td className="results-table__cell results-table__cell--center">
+                          <span className={`table-badge ${collision ? "table-badge--success" : "table-badge--muted"}`}>
+                            {collision ? "Tak" : "Nie"}
+                          </span>
                         </td>
-                        <td style={{ textAlign: "center" }}>{pl.voltage || "—"}</td>
-                        <td style={{ textAlign: "right" }}>{Math.round(area).toLocaleString("pl-PL")}</td>
-                        <td style={{ textAlign: "right" }}>{price ? price.toFixed(2) : "—"}</td>
-                        <td style={{ textAlign: "right", padding: "8px 10px" }}>
+                        <td className="results-table__cell results-table__cell--center">{pl.voltage || "—"}</td>
+                        <td className="results-table__cell results-table__cell--right results-table__cell--num">{Math.round(area).toLocaleString("pl-PL")}</td>
+                        <td className="results-table__cell results-table__cell--right results-table__cell--num">{price ? price.toFixed(2) : "—"}</td>
+                        <td className="results-table__cell results-table__cell--right">
                           <input
                             type="number"
                             min="0"
                             step="0.1"
+                            className={`table-input ${needsInput ? "table-input--error" : ""}`}
                             value={editedLen !== undefined && editedLen !== null ? editedLen : (autoLen > 0 ? autoLen : "")}
-                            placeholder={needsInput ? "⚠ brak" : "0"}
+                            placeholder={needsInput ? "brak" : "0"}
                             onChange={e => handleLengthChange(p.parcel_id, e.target.value)}
-                            style={{
-                              width: 80,
-                              padding: "4px 6px",
-                              border: needsInput ? "2px solid #e67e22" : "1px solid #D6CCC2",
-                              borderRadius: 5,
-                              textAlign: "right",
-                              fontSize: "0.9em",
-                              background: needsInput ? "#fff8f0" : "#fff",
-                            }}
                           />
                         </td>
-                        <td style={{ textAlign: "right" }}>{calc.band_width}</td>
-                        <td style={{ textAlign: "right" }}>
+                        <td className="results-table__cell results-table__cell--right results-table__cell--num">{calc.band_width}</td>
+                        <td className="results-table__cell results-table__cell--right results-table__cell--num">
                           {calc.band_area > 0 ? calc.band_area.toLocaleString("pl-PL") : "—"}
                         </td>
-                        <td style={{ textAlign: "right", color: "#27ae60", fontWeight: 700 }}>
+                        <td className="results-table__cell results-table__cell--right results-table__cell--num results-table__cell--track-a">
                           {calc.track_a > 0 ? calc.track_a.toLocaleString("pl-PL") : "—"}
                         </td>
-                        <td style={{ textAlign: "right", color: "#b8963e", fontWeight: 700 }}>
+                        <td className="results-table__cell results-table__cell--right results-table__cell--num results-table__cell--track-b">
                           {calc.track_b > 0 ? calc.track_b.toLocaleString("pl-PL") : "—"}
                         </td>
-                        <td style={{ textAlign: "right", fontWeight: 800 }}>
-                          {(calc.track_a + calc.track_b) > 0
-                            ? (calc.track_a + calc.track_b).toLocaleString("pl-PL")
-                            : "—"}
+                        <td className="results-table__cell results-table__cell--right results-table__cell--num results-table__cell--total">
+                          {(calc.track_a + calc.track_b) > 0 ? (calc.track_a + calc.track_b).toLocaleString("pl-PL") : "—"}
                         </td>
-                        <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                        <td className="results-table__cell results-table__cell--center">
                           <button
+                            type="button"
+                            className="table-btn table-btn--primary"
                             onClick={() => downloadParcelHtml(p, lineLen > 0 ? lineLen : null)}
-                            title="Pobierz raport HTML do podglądu / PDF z przeglądarki"
-                            style={{
-                              background: "linear-gradient(135deg,#5c3d2e,#b8963e)",
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: 6,
-                              padding: "5px 8px",
-                              cursor: "pointer",
-                              fontSize: "0.8em",
-                              fontWeight: 600,
-                              whiteSpace: "nowrap",
-                            }}>
-                            ⬇ HTML
+                            title="Pobierz raport HTML"
+                          >
+                            Pobierz HTML
                           </button>
                         </td>
                       </tr>
@@ -771,11 +790,11 @@ const BatchAnalysisPage = () => {
                 </tbody>
               </table>
             </div>
+            </div>
           )}
 
-          {/* INFO TAB */}
           {activeTab === "info" && (
-            <div className="content-box">
+            <div className="batch-tab-panel batch-tab-panel--info">
               <h3>ℹ️ Informacje o analizie</h3>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", fontSize: "0.9em" }}>
                 <div><strong>Batch ID:</strong> {results.batch_id}</div>
@@ -803,10 +822,10 @@ const BatchAnalysisPage = () => {
               </p>
             </div>
           )}
-        </div>
-      )}
+        </section>
+        )}
 
-      {/* Historia raportów dla hurtowych dostępna jest w osobnej zakładce „Historia raportów” w sidebarze. */}
+      </div>
     </div>
   );
 };
