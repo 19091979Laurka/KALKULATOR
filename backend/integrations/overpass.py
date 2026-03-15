@@ -142,8 +142,8 @@ async def fetch_power_lines(
   way["power"="minor_line"]({bbox_str});
   way["power"="cable"]({bbox_str});
   way["power"="minor_cable"]({bbox_str});
-  {"node[\"power\"=\"tower\"]("+bbox_str+");" if include_poles else ""}
-  {"node[\"power\"=\"pole\"]("+bbox_str+");" if include_poles else ""}
+    {('node["power"="tower"](' + bbox_str + ');') if include_poles else ''}
+    {('node["power"="pole"](' + bbox_str + ');') if include_poles else ''}
 );
 out geom;
 """
