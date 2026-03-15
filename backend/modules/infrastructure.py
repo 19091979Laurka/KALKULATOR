@@ -393,7 +393,7 @@ async def _kiut_raster_line_length(
         import numpy as np
         import io
 
-        # BBOX z geometrii działki + bufor 400m (linie KIUT mogą być ~300m od EGIB działki)
+        # BBOX z geometrii działki + bufor 200m
         coords_raw = parcel_geom.get("coordinates", [])
         if not coords_raw:
             return None
@@ -403,9 +403,9 @@ async def _kiut_raster_line_length(
         c_lon = sum(lons_p) / len(lons_p)
         c_lat = sum(lats_p) / len(lats_p)
 
-        # Bufor 400m w stopniach (przesunięcie KIUT vs EGIB może sięgać ~300m)
-        buf_lon = 400.0 / (111319.0 * math.cos(math.radians(c_lat)))
-        buf_lat = 400.0 / 111132.0
+        # Bufor 200m w stopniach
+        buf_lon = 200.0 / (111319.0 * math.cos(math.radians(c_lat)))
+        buf_lat = 200.0 / 111132.0
         min_lon = min(lons_p) - buf_lon
         max_lon = max(lons_p) + buf_lon
         min_lat = min(lats_p) - buf_lat
@@ -952,7 +952,7 @@ async def fetch_infrastructure(
         # Próba pomiaru z rastra KIUT — multi-band retry (strefa może być za wąska przy błędzie pozycyjnym OSM)
         raster_length = None
         if parcel_geom:
-            for try_band in sorted(set([strefa_m, 30, 50, 100, 200, 300])):
+            for try_band in sorted(set([strefa_m, 30, 50])):
                 logger.info("INFRA [%s]: NEARBY — próba KIUT raster (band=%dm)", parcel_id, int(try_band))
                 raster_length = await _kiut_raster_line_length(parcel_geom, band_width_m=try_band)
                 logger.info("INFRA [%s]: NEARBY — KIUT raster wynik band=%dm: %s", parcel_id, int(try_band), raster_length)
@@ -1058,7 +1058,7 @@ async def fetch_infrastructure(
                 # Próbuj kolejno: strefa z infra_type → 30m → 50m (rosnący bufor dla przesunięcia OSM)
                 raster_length = None
                 if parcel_geom:
-                    for try_band in sorted(set([strefa_m, 30, 50, 100, 200, 300])):
+                    for try_band in sorted(set([strefa_m, 30, 50])):
                         raster_length = await _kiut_raster_line_length(parcel_geom, band_width_m=try_band)
                         if raster_length is not None and raster_length > 0:
                             logger.info("INFRA [%s]: KIUT raster udany z band=%dm", parcel_id, int(try_band))
