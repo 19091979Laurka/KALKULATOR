@@ -15,9 +15,9 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-_ULDK_TIMEOUT = 10          # s — szybka odpowiedź (~0.5-2s normalnie)
-_ULDK_RETRIES = 2           # liczba prób łącznie (fail fast)
-_ULDK_RETRY_DELAY = 1.0     # s między próbami — max wait: ~12s łącznie
+_ULDK_TIMEOUT = 12          # s — szybka odpowiedź (~0.5-2s normalnie)
+_ULDK_RETRIES = 4           # więcej prób, bo ULDK bywa niestabilny
+_ULDK_RETRY_DELAY = 1.5     # s między próbami — łagodniejsze tempo
 
 
 class ULDKClientFixed:

@@ -38,6 +38,11 @@ _AGRICULTURAL_PRICES: Dict[str, float] = {
 # CENY GRUNTÓW BUDOWLANYCH (zł/m²) — RCN GUGiK 2024
 # Klasy: B, Bi, Ba, Bp, zurbanizowane
 # ============================================================
+# Nadpisania na poziomie powiatu (klucz: nazwa powiatu lowercase bez "powiat ")
+_BUILDING_PRICES_POWIAT: Dict[str, float] = {
+    "płock": 180.0,   # powiat płocki, woj. mazowieckie
+    "płocki": 180.0,  # j.w. (ULDK może zwracać "płocki")
+}
 _BUILDING_PRICES: Dict[str, float] = {
     "mazowieckie": 450.0,
     "małopolskie": 350.0,
@@ -97,6 +102,7 @@ class GUSClientFixed:
         voivodeship: str,
         land_class: Optional[str] = None,
         use_type: Optional[str] = None,
+        county: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Pobierz cenę rynkową gruntu z uwzględnieniem klasy użytku.
@@ -105,6 +111,7 @@ class GUSClientFixed:
             voivodeship: Nazwa lub kod TERYT województwa
             land_class:  Klasa OZK np. "R", "R II", "Ł III", "B", "Bi"
             use_type:    Typ użytku: "agricultural" | "building" | None (auto)
+            county:      Powiat (np. "płock") — dla budowlanych może nadpisać cenę wojewódzką
         """
         voi = (voivodeship or "").lower().strip()
 
@@ -133,13 +140,18 @@ class GUSClientFixed:
             except Exception as e:
                 logger.warning("GUS BDL API failed: %s", e)
 
-        # 2. Fallback z tabel regionalnych
-        price = self._fallback_price(voi, agri)
+        # 2. Fallback z tabel (województwo + ewentualnie powiat dla budowlanych)
+        price = self._fallback_price(voi, agri, county=county)
+        source = "GUS tabela regionalna (fallback)"
+        if not agri and county:
+            county_key = (county or "").lower().strip().replace("powiat ", "")
+            if county_key in _BUILDING_PRICES_POWIAT:
+                source = f"GUS (powiat {county_key})"
         return {
             "ok": price is not None,
             "price_m2": price,
             "land_type": "agricultural" if agri else "building",
-            "source": "GUS tabela regionalna (fallback)",
+            "source": source,
         }
 
     async def _fetch_agri_from_bdl(self, voi: str) -> Optional[float]:
@@ -250,8 +262,14 @@ class GUSClientFixed:
         voi = (voivodeship or "").lower().strip()
         return float(self._AGRI_PRODUCTION_PER_HA.get(voi, 12000))  # ~12k PLN/ha fallback
 
-    def _fallback_price(self, voi: str, agricultural: bool = True) -> Optional[float]:
-        """Zwróć cenę z tabel regionalnych."""
+    def _fallback_price(
+        self, voi: str, agricultural: bool = True, county: Optional[str] = None
+    ) -> Optional[float]:
+        """Zwróć cenę z tabel regionalnych. Dla budowlanych: najpierw powiat, potem województwo."""
+        if not agricultural and county:
+            county_key = (county or "").lower().strip().replace("powiat ", "")
+            if county_key in _BUILDING_PRICES_POWIAT:
+                return _BUILDING_PRICES_POWIAT[county_key]
         price_table = _AGRICULTURAL_PRICES if agricultural else _BUILDING_PRICES
         teryt_table = _TERYT_AGRI_PRICES if agricultural else {}
 

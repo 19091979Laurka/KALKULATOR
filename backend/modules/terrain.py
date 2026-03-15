@@ -13,6 +13,15 @@ logger = logging.getLogger(__name__)
 _uldk = ULDKClient()
 _gesut = GESUTClient()
 
+def _normalize_obreb(name: str) -> str:
+    """Obręb bez polskich znaków (np. BOŻEWO → BOZEWO) — fallback dla ULDK GetParcelByIdOrNr."""
+    if not name:
+        return name
+    t = str(name).strip()
+    for a, b in [("Ą", "A"), ("Ć", "C"), ("Ę", "E"), ("Ł", "L"), ("Ń", "N"), ("Ó", "O"), ("Ś", "S"), ("Ź", "Z"), ("Ż", "Z")]:
+        t = t.replace(a, b).replace(a.lower(), b.lower())
+    return t
+
 async def fetch_terrain(
     parcel_id: str,
     lon: Optional[float] = None,
@@ -47,14 +56,26 @@ async def fetch_terrain(
         # 1. Próba bezpośrednia: pełny TERYT ID (np. "140601_2.0004.74/4")
         raw = await asyncio.to_thread(_uldk.get_parcel_by_id, parcel_id)
 
-        # 2. parcel_id zawiera spację → zakładamy format "NazwaObrebu NrDzialki"
-        #    (np. "Cieszkowo Kolonia 74/4") — GetParcelByIdOrNr wymaga nazwy OBREBU, nie gminy
+        # 2. Jeśli ULDK nie znalazł pełnego TERYT, spróbuj wyszukać po numerze/obrebie.
+        #    Dotyczy sytuacji, gdy ID ma postać "141906_5.0029.60" lub "142003_2.0002.81/8".
+        if (not raw or not raw.get("ok")):
+            # 2a. Spróbuj GetParcelByIdOrNr bez żadnych zmian (może zadziała dla ID zawierającego /).
+            raw = await asyncio.to_thread(_uldk.get_parcel_by_id_or_nr, parcel_id)
+
+        # 2b. parcel_id zawiera spację → zakładamy format "NazwaObrebu NrDzialki"
+        #     (np. "Cieszkowo Kolonia 74/4") — GetParcelByIdOrNr wymaga nazwy OBREBU, nie gminy
         if (not raw or not raw.get("ok")) and ' ' in parcel_id:
             raw = await asyncio.to_thread(_uldk.get_parcel_by_id_or_nr, parcel_id)
 
         # 3. Obręb podany explicite → "NazwaObrebu NrDzialki" (najbardziej wiarygodne)
         if (not raw or not raw.get("ok")) and obreb:
             raw = await asyncio.to_thread(_uldk.get_parcel_by_id_or_nr, f"{obreb} {parcel_id}")
+
+        # 3b. Fallback: obręb znormalizowany (bez polskich znaków) — ULDK czasem zwraca brak przy Ż/Ó/Ą itd.
+        if (not raw or not raw.get("ok")) and obreb:
+            _norm_obreb = _normalize_obreb(obreb)
+            if _norm_obreb != obreb:
+                raw = await asyncio.to_thread(_uldk.get_parcel_by_id_or_nr, f"{_norm_obreb} {parcel_id}")
 
         # 4. Fallback: gmina lub powiat jako przybliżenie nazwy obrebu
         #    UWAGA: Gmina ≠ Obręb. Działa tylko gdy nazwa obrebu = nazwa gminy/wsi.
@@ -63,6 +84,9 @@ async def fetch_terrain(
             raw = await asyncio.to_thread(_uldk.get_parcel_by_id_or_nr, f"{municipality} {parcel_id}")
         if (not raw or not raw.get("ok")) and county:
             raw = await asyncio.to_thread(_uldk.get_parcel_by_id_or_nr, f"{county} {parcel_id}")
+        # 5. Ostatnia szansa: sam numer (np. 81/5, 302/6) — GetParcelByIdOrNr może zwrócić wynik w jednej jednostce
+        if (not raw or not raw.get("ok")) and " " not in (parcel_id or "") and (parcel_id or "").strip():
+            raw = await asyncio.to_thread(_uldk.get_parcel_by_id_or_nr, parcel_id.strip())
 
         if raw and raw.get("ok"):
             result["parcel_id"] = raw.get("teryt") or parcel_id

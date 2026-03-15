@@ -8,7 +8,7 @@ import asyncio
 from typing import Dict, Any, List, Optional, Tuple
 
 import requests
-from shapely.geometry import shape
+from shapely.geometry import shape, Point
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +27,8 @@ def _bbox_from_geojson(geom: Dict) -> Tuple[float, float, float, float]:
     return (min(lats), min(lons), max(lats), max(lons))
 
 
-def _buffer_bbox(s: float, w: float, n: float, e: float, delta: float = 0.01) -> str:
-    """Overpass bbox(south,west,north,east) z buforem ~1km zamiast 200m."""
+def _buffer_bbox(s: float, w: float, n: float, e: float, delta: float = 0.02) -> str:
+    """Overpass bbox(south,west,north,east) z buforem ~2km zamiast 1km dla lepszego wykrywania infrastruktury."""
     return f"{max(-90, s - delta)},{max(-180, w - delta)},{min(90, n + delta)},{min(180, e + delta)}"
 
 
@@ -98,6 +98,7 @@ def _line_length_meters(geom: Dict, parcel_geom: Optional[Dict]) -> float:
 async def fetch_power_lines(
     parcel_geom: Optional[Dict],
     bbox_4326: Optional[Tuple[float, float, float, float]] = None,
+    include_poles: bool = True,
 ) -> Dict[str, Any]:
     """
     Pobierz linie energetyczne z OSM w zasięgu działki.
@@ -120,6 +121,8 @@ async def fetch_power_lines(
         "lines": [],
         "line_length_m": 0.0,
         "line_geojson": {"type": "FeatureCollection", "features": []},
+        "poles_geojson": {"type": "FeatureCollection", "features": []},
+        "poles_count": 0,
         "source": "OSM Overpass",
     }
 
@@ -139,6 +142,8 @@ async def fetch_power_lines(
   way["power"="minor_line"]({bbox_str});
   way["power"="cable"]({bbox_str});
   way["power"="minor_cable"]({bbox_str});
+  {"node[\"power\"=\"tower\"]("+bbox_str+");" if include_poles else ""}
+  {"node[\"power\"=\"pole\"]("+bbox_str+");" if include_poles else ""}
 );
 out geom;
 """
@@ -161,27 +166,52 @@ out geom;
                 elements = data.get("elements", [])
                 lines = []
                 features = []
+                poles_features = []
                 total_length = 0.0
 
                 for el in elements:
-                    if el.get("type") != "way":
-                        continue
-                    nodes = el.get("geometry", [])
-                    if len(nodes) < 2:
-                        continue
-                    coords = [[n["lon"], n["lat"]] for n in nodes]
-                    geojson = {"type": "LineString", "coordinates": coords}
-                    tags = el.get("tags", {})
-                    voltage = _parse_voltage(tags)
-                    length_m = _line_length_meters(geojson, parcel_geom) if parcel_geom else 0.0
-                    total_length += length_m
-                    lines.append({"geometry": geojson, "voltage": voltage, "length_m": length_m})
-                    features.append({"type": "Feature", "geometry": geojson, "properties": {"voltage": voltage, "length_m": length_m}})
+                    if el.get("type") == "way":
+                        nodes = el.get("geometry", [])
+                        if len(nodes) < 2:
+                            continue
+                        coords = [[n["lon"], n["lat"]] for n in nodes]
+                        geojson = {"type": "LineString", "coordinates": coords}
+                        tags = el.get("tags", {})
+                        voltage = _parse_voltage(tags)
+                        length_m = _line_length_meters(geojson, parcel_geom) if parcel_geom else 0.0
+                        total_length += length_m
+                        lines.append({"geometry": geojson, "voltage": voltage, "length_m": length_m})
+                        features.append({"type": "Feature", "geometry": geojson, "properties": {"voltage": voltage, "length_m": length_m}})
+                    elif include_poles and el.get("type") == "node":
+                        tags = el.get("tags", {}) or {}
+                        if tags.get("power") in ("tower", "pole"):
+                            geojson = {"type": "Point", "coordinates": [el.get("lon"), el.get("lat")]}
+                            poles_features.append({"type": "Feature", "geometry": geojson, "properties": {"power": tags.get("power")}})
 
                 result["lines"] = lines
                 result["line_length_m"] = round(total_length, 1)
                 result["line_geojson"] = {"type": "FeatureCollection", "features": features}
-                result["ok"] = len(lines) > 0
+                result["poles_geojson"] = {"type": "FeatureCollection", "features": poles_features}
+                # Poles count within parcel (buffered) for robustness
+                if parcel_geom and poles_features:
+                    try:
+                        parcel = shape(parcel_geom)
+                        if not parcel.is_valid:
+                            parcel = parcel.buffer(0)
+                        parcel_buffered = parcel.buffer(0.0002)
+                        count = 0
+                        for feat in poles_features:
+                            coords = feat.get("geometry", {}).get("coordinates")
+                            if not coords:
+                                continue
+                            pt = Point(coords[0], coords[1])
+                            if parcel_buffered.contains(pt):
+                                count += 1
+                        result["poles_count"] = count
+                    except Exception as e:
+                        logger.warning("Overpass poles count error: %s", e)
+                # Request succeeded even if there are no lines (poles-only is still meaningful)
+                result["ok"] = True
                 logger.info("Overpass OK: %d linii, length_m=%.1f", len(lines), total_length)
                 return result
 

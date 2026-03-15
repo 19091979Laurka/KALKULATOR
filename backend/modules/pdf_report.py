@@ -10,8 +10,10 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.image as mpimg
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import numpy as np
+import requests
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -412,6 +414,87 @@ def chart_parcel_minimap(p):
     fig, ax = plt.subplots(figsize=(4, 4), facecolor="#F8F9FC")
     ax.set_facecolor("#EEF2F7")
     ax.set_aspect("equal")
+
+    def _collect_coords(g):
+        lons, lats = [], []
+        if not g:
+            return lons, lats
+        gtype = g.get("type")
+        coords = g.get("coordinates") or []
+        if gtype == "Polygon":
+            rings = coords
+        elif gtype == "MultiPolygon":
+            rings = [r for poly in coords for r in poly]
+        else:
+            rings = []
+        for ring in rings:
+            for c in ring:
+                if len(c) >= 2:
+                    lons.append(c[0])
+                    lats.append(c[1])
+        return lons, lats
+
+    def _expand_bbox(min_lon, min_lat, max_lon, max_lat, pad_ratio=0.2, min_pad=0.0007):
+        dx = max_lon - min_lon
+        dy = max_lat - min_lat
+        pad_x = max(dx * pad_ratio, min_pad)
+        pad_y = max(dy * pad_ratio, min_pad)
+        return (
+            min_lon - pad_x,
+            min_lat - pad_y,
+            max_lon + pad_x,
+            max_lat + pad_y,
+        )
+
+    # Podkład mapy (Geoportal Orto WMS) — jeśli się nie pobierze, zostaje tło
+    bbox = None
+    if geojson and geojson.get("coordinates"):
+        lons, lats = _collect_coords(geojson)
+        if lons and lats:
+            bbox = _expand_bbox(min(lons), min(lats), max(lons), max(lats))
+
+    # Fallback: jeśli brak geometrii, spróbuj użyć centroidu z danych (np. ULDK)
+    if not bbox:
+        centroid = geom.get("centroid_ll") if isinstance(geom, dict) else None
+        if centroid and isinstance(centroid, (list, tuple)) and len(centroid) == 2:
+            lon, lat = centroid
+            bbox = _expand_bbox(lon - 0.0007, lat - 0.0007, lon + 0.0007, lat + 0.0007, pad_ratio=0.0)
+
+    # Fallback 2: jeśli brak geometry, użyj bb z linii energetycznych
+    if not bbox and pl_geojson and isinstance(pl_geojson.get("features"), list):
+        lons, lats = [], []
+        for feat in pl_geojson.get("features", []):
+            g = feat.get("geometry") or {}
+            if g.get("type") == "LineString":
+                for c in g.get("coordinates", []):
+                    if len(c) >= 2:
+                        lons.append(c[0]); lats.append(c[1])
+        if lons and lats:
+            bbox = _expand_bbox(min(lons), min(lats), max(lons), max(lats))
+
+    if bbox:
+        try:
+            min_lon, min_lat, max_lon, max_lat = bbox
+            wms_url = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution"
+            params = {
+                "SERVICE": "WMS",
+                "VERSION": "1.1.1",
+                "REQUEST": "GetMap",
+                "LAYERS": "Raster",
+                "STYLES": "",
+                "FORMAT": "image/png",
+                "TRANSPARENT": "FALSE",
+                "SRS": "EPSG:4326",
+                "BBOX": f"{min_lon},{min_lat},{max_lon},{max_lat}",
+                "WIDTH": "512",
+                "HEIGHT": "512",
+            }
+            resp = requests.get(wms_url, params=params, timeout=12)
+            if resp.ok and resp.content:
+                img = mpimg.imread(io.BytesIO(resp.content))
+                ax.imshow(img, extent=[min_lon, max_lon, min_lat, max_lat], origin="upper")
+        except Exception:
+            pass
 
     # Działka
     if geojson and geojson.get("coordinates"):

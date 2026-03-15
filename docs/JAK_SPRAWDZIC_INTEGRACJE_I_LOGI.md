@@ -49,7 +49,22 @@ W logach zobaczysz dokładny komunikat Pythona (np. `requests.exceptions.Timeout
 
 ---
 
-## 4. Typowe przyczyny „dużo błędów”
+## 4. Dlaczego WSZYSTKIE działki mogą się nie udać (0 przetworzonych)
+
+- **Format identyfikatora**  
+  ULDK rozpoznaje: **pełny TERYT** (np. `142003_2.0002.81/5`) albo **obręb + numer** (np. obręb „Niedarzyn”, numer `114/2`).  
+  Jeśli w CSV/wklejce masz **tylko numer** (np. `81/5`, `302/6`) **bez kolumny obręb** albo bez drugiej kolumny przy wklejaniu, backend wcześniej nie próbował GetParcelByIdOrNr po samym numerze — od wersji z fallbackiem próbuje też samego numeru (może zadziałać w jednej jednostce). **Najpewniej:** w CSV dodaj kolumnę **obręb** i podaj nazwę obrębu ewidencyjnego; przy wklejaniu: druga kolumna = obręb (np. `81/5,Niedarzyn`).
+
+- **ULDK niedostępne**  
+  Gdy serwis GUGiK nie odpowiada (timeout 10 s, 2 próby), **wszystkie** zapytania mogą się nie udać. Sprawdź `/api/integrations/status` i logi Cloud Run.
+
+- **Zmiany w kodzie / brak parametrów**  
+  W batchu backend **nie odbierał** parametru `is_farmer` z formularza — opcja „Gospodarstwo rolne” nie była przekazywana (nie powoduje to samych błędów, tylko inne kwoty R5). To jest poprawione: batch czyta `is_farmer` z Form i przekazuje do analizy.
+
+- **Historia a `master_record`**  
+  Zapis z batcha trzyma wyniki w polu `data`. Część kodu (np. raport PDF) szuka też `master_record`. Przy odczycie historii backend uzupełnia teraz `master_record` z `data`, żeby raporty i frontend działały tak samo po otwarciu batcha z Historii.
+
+## 5. Typowe przyczyny „dużo błędów”
 
 | Objaw / komunikat | Możliwa przyczyna |
 |-------------------|-------------------|
@@ -60,7 +75,7 @@ W logach zobaczysz dokładny komunikat Pythona (np. `requests.exceptions.Timeout
 
 ---
 
-## 5. Szybki checklist
+## 6. Szybki checklist
 
 1. Otwórz **/api/integrations/status** w przeglądarce (domena Cloud Run).
 2. Sprawdź **logi** w Cloud Run (filtr: „Błąd analizy” lub „ERROR”).

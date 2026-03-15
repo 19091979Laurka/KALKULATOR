@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Card, CardBody, CardTitle, Button, FormGroup, Label, Input, Row, Col, Badge, Spinner, Container } from "reactstrap";
-import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, WMSTileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import PageTitleAlt2 from "../../Layout/AppMain/PageTitleAlt2";
@@ -79,7 +79,35 @@ export default function PodgladPage() {
               <CardBody className="p-0">
                 <div style={{ height: 350 }}>
                   <MapContainer key={parcelId || "map"} center={center} zoom={16} style={{ height: "100%", width: "100%" }} scrollWheelZoom>
-                    <TileLayer attribution='&copy; OSM' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    <WMSTileLayer
+                      url="https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution"
+                      layers="Raster"
+                      format="image/png"
+                      transparent={false}
+                      version="1.1.1"
+                      srs="EPSG:3857"
+                      attribution="Geoportal Orto"
+                    />
+                    <WMSTileLayer
+                      url="https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow"
+                      layers="dzialki,numery_dzialek"
+                      format="image/png"
+                      transparent
+                      opacity={0.75}
+                      version="1.1.1"
+                      srs="EPSG:3857"
+                      zIndex={400}
+                    />
+                    <WMSTileLayer
+                      url="https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu"
+                      layers="przewod_elektroenergetyczny"
+                      format="image/png"
+                      transparent
+                      opacity={0.7}
+                      version="1.1.1"
+                      srs="EPSG:3857"
+                      zIndex={600}
+                    />
                     <GeoLayer geojson={hasError ? null : geom} />
                   </MapContainer>
                 </div>

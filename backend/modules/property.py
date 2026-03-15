@@ -155,6 +155,8 @@ def calculate_intersection_length(parcel_geojson: Dict[str, Any], wfs_features: 
         parcel_poly = shape(parcel_geojson)
         if not parcel_poly.is_valid:
             parcel_poly = parcel_poly.buffer(0)
+        # Buffer ~50m compensates for OSM vs GUGiK cadastral positional offset (typically 10-50m in Poland)
+        parcel_buffered = parcel_poly.buffer(0.00045)
 
         total_length = 0.0
         feature_count = 0
@@ -173,6 +175,8 @@ def calculate_intersection_length(parcel_geojson: Dict[str, Any], wfs_features: 
                         line = line.buffer(0)
 
                     intersection = parcel_poly.intersection(line)
+                    if intersection.is_empty:
+                        intersection = parcel_buffered.intersection(line)
                     total_length += _collect_intersection_length(intersection)
                     feature_count += 1
 
@@ -212,6 +216,7 @@ class PropertyAggregator:
         manual_infra_detected: Optional[bool] = None,
         manual_voltage: Optional[str] = None,
         manual_line_length_m: Optional[float] = None,  # Ręczny pomiar długości linii [m]
+        manual_poles_count: Optional[int] = None,      # Ręczna liczba słupów
         years: int = 6,  # Okres WBK: 6 lat (art. 118 KC po noweli 2018)
         is_farmer: bool = False,  # Rolnik → wymusza agri=True, aktywuje R5
     ) -> Dict[str, Any]:
@@ -296,8 +301,11 @@ class PropertyAggregator:
         land_type = gus_result.get("land_type", "agricultural" if agri else "building")
         price_source = gus_result.get("source", "GUS")
 
-        # Zawsze pobierz też cenę budowlaną (do R4: obliczenie szkody z blokady WZ)
-        gus_building_result = await self.gus.fetch_market_price(voi, use_type="building")
+        # Zawsze pobierz też cenę budowlaną (do R4 i korekty ręcznej „budowlany”)
+        county = terrain.get("county") or ""
+        gus_building_result = await self.gus.fetch_market_price(
+            voi, use_type="building", county=county or None
+        )
         gus_building_price = gus_building_result.get("price_m2") if gus_building_result.get("ok") else None
 
         # === KOREKTA PLANISTYCZNA: działka rolna ale WZ wydane → cena jak budowlana ===
@@ -334,6 +342,13 @@ class PropertyAggregator:
             land_type = manual_land_type
             agri = (manual_land_type == "agricultural")
             logger.info("Manual override: land_type=%s", manual_land_type)
+            # Gdy użytkownik wybiera „budowlany”, używamy ceny budowlanej GUS (nie rolnej)
+            if manual_land_type == "building":
+                if gus_building_price is not None and gus_building_price > 0:
+                    avg_price = gus_building_price
+                    price_source = "GUS BDL (budowlana)"
+                    logger.info("Korekta ręczna budowlany → cena GUS budowlana: %.2f zł/m²", gus_building_price)
+                # jeśli brak ceny budowlanej z GUS, avg_price zostaje (albo użytkownik może wpisać manual_price_m2)
 
         # === KOREKTA RĘCZNA — infrastruktura ===
         if manual_infra_detected is not None:
@@ -342,10 +357,23 @@ class PropertyAggregator:
         if manual_voltage is not None:
             pl["voltage"] = manual_voltage
             logger.info("Manual override: voltage=%s", manual_voltage)
+        if manual_poles_count is not None and manual_poles_count >= 0:
+            pl["poles_count"] = manual_poles_count
+            logger.info("Manual override: poles_count=%s", manual_poles_count)
 
         # KSWS + Track A/B (jeśli jest linia)
         area_m2 = terrain.get("area_m2") or 0
         infra_type = infra_type_pref
+        # Dopasuj typ infrastruktury do napięcia, jeśli jest znane (REAL DATA ONLY)
+        v = (pl.get("voltage") or "").upper()
+        if pl.get("detected") and v in ("WN", "SN", "NN", "N", "NN", "nN"):
+            if v == "WN":
+                infra_type = "elektro_WN"
+            elif v in ("NN", "N", "NN", "nN"):
+                infra_type = "elektro_nN"
+            else:
+                infra_type = "elektro_SN"
+
         coeffs = KSWS_STANDARDS.get(infra_type, KSWS_STANDARDS["default"])
         band_width = coeffs["band_width_m"]
 
@@ -381,14 +409,8 @@ class PropertyAggregator:
                 line_length = 0.0
                 measurement_source = "brak — nie wykryto"
 
-        # FIX: Obsługa NEARBY linii (detected=True ale length_m=0)
-        # Jeśli linia jest detect ale length_m=0, użyj band_width * 2 jako oszacowanie
-        effective_line_length = line_length if line_length and line_length > 0 else 0.0
-        if pl.get("detected") and effective_line_length == 0.0:
-            # NEARBY case: oszacuj długość linii jako 2 × szerokość pasa
-            effective_line_length = (band_width * 2) if band_width and band_width > 0 else 50.0
-
-        band_area = effective_line_length * band_width if effective_line_length and effective_line_length > 0 else 0.0
+        # ZASADA: brak szacowania długości — jeśli nie ma wektora, długość = 0
+        band_area = (line_length * band_width) if line_length and line_length > 0 else 0.0
 
         property_value = (avg_price or 6.50) * area_m2
         # Compensation: zawsze oblicz (0 gdy brak infrastruktury)
@@ -438,7 +460,8 @@ class PropertyAggregator:
                 "power": {
                     "exists": pl.get("detected", False),
                     "voltage": pl.get("voltage") or "—",
-                    "poles_count": None,
+                    "poles_count": pl.get("poles_count"),
+                    "poles_geojson": pl.get("poles_geojson", {"type": "FeatureCollection", "features": []}),
                     "buffer_zone_m": data["infra_base"].get("energie", {}).get("strefa_m"),
                     "occupied_area_m2": band_area if pl.get("detected") else None,
                     "line_length_m": line_length,
@@ -449,7 +472,12 @@ class PropertyAggregator:
                     "woda": media.get("woda", {}).get("detected", False),
                     "kanal": media.get("kanal", {}).get("detected", False),
                 },
-                "telecom": {"fiber_ready": False},
+                "telecom": {
+                    "fiber_ready": data["infra_base"].get("telecom", {}).get("detected", False),
+                    "detected": data["infra_base"].get("telecom", {}).get("detected", False),
+                    "source": data["infra_base"].get("telecom", {}).get("source", ""),
+                    "info": data["infra_base"].get("telecom", {}).get("info", ""),
+                },
                 "other_media": media,
             },
             "egib": {
@@ -493,6 +521,7 @@ class PropertyAggregator:
                 "price_per_m2": avg_price,
                 "label": coeffs.get("label", ""),
                 "measurement_source": measurement_source,
+                "voltage": pl.get("voltage"),
             },
             "compensation": {
                 "track_a": track_a,

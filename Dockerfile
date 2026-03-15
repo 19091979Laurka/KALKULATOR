@@ -3,8 +3,9 @@ FROM node:20-slim AS frontend-builder
 
 WORKDIR /app/frontend-react
 
-# package*.json najpierw (lepsza warstwa cache)
+# package*.json i patches/ (postinstall=patch-package wymaga katalogu patches)
 COPY frontend-react/package.json frontend-react/package-lock.json ./
+COPY frontend-react/patches ./patches
 # npm install zamiast npm ci — odporniejsze w Cloud Build (postinstall/patch-package)
 RUN npm install --legacy-peer-deps
 

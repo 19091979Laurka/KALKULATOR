@@ -22,6 +22,9 @@ backend/secrets/
 backend/*_service_account.json
 backend/*.json
 
+# Logi i PID z start-local.sh
+.logs/
+
 # Dane lokalne (batch history, snapshoty)
 data/history/
 data/cache/
@@ -31,6 +34,9 @@ SNAPSHOT_*
 # Raporty tymczasowe
 raport_*.html
 raporty/
+*_test.pdf
+test_*.pdf
+collective_*_test.pdf
 
 # Claude worktrees i historia
 .claude/worktrees/

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import BatchMapSection from "./BatchMapSection.jsx";
 import "./BatchAnalysisPage.css";
 
 // ─── KSWS coefficients (muszą być zsynchronizowane z backend/modules/property.py) ───
@@ -509,6 +510,12 @@ const BatchAnalysisPage = () => {
         {/* ── RESULTS STATE ── */}
         {results && totals && !loading && (
           <div className="batch-results">
+            {/* Mapa zbiorcza z warstwami (Satelita/Topo, OIM, GUGIK, KIUT) */}
+            <BatchMapSection
+              results={results.parcels}
+              total={results.summary?.total ?? results.parcels?.length}
+              collision={totals.collision}
+            />
             <div className="batch-summary-card">
               <div className="batch-summary-card__total">
                 <span className="batch-summary-card__label">💰 Sumaryczny przedział roszczenia (Track A + B)</span>
@@ -689,6 +696,22 @@ const BatchAnalysisPage = () => {
 
             {activeTab === "info" && (
               <div className="batch-tab-panel batch-tab-panel--info">
+                {results.run_log && results.run_log.length > 0 && (
+                  <>
+                    <h3>📋 Log pobierania (ostatni batch)</h3>
+                    <p style={{ fontSize: "0.85em", color: "#636e72", marginBottom: 10 }}>Co się działo przy pobieraniu ULDK/OSM i analizie — błędy per działka.</p>
+                    <ul style={{ listStyle: "none", padding: 12, margin: 0, maxHeight: 320, overflowY: "auto", background: "#f8f9fc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                      {results.run_log.map((entry, i) => (
+                        <li key={i} style={{ fontSize: "0.8rem", padding: "6px 0", borderBottom: i < results.run_log.length - 1 ? "1px solid #e2e8f0" : "none" }}>
+                          <span style={{ color: "#64748b", marginRight: 8 }}>{entry.step}</span>
+                          {entry.parcel_id && <strong style={{ marginRight: 6 }}>{entry.parcel_id}</strong>}
+                          <span style={{ color: entry.step.includes("fail") || entry.step.includes("error") ? "#b91c1c" : "#1e293b" }}>{entry.message}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <hr />
+                  </>
+                )}
                 <h3>ℹ️ O analizie hurtowej</h3>
                 <ul>
                   <li>Maksymalna liczba działek w jednym pliku: <strong>99</strong></li>

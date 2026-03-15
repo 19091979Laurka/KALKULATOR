@@ -41,6 +41,9 @@ FRONTEND_DIR = Path(__file__).parent.parent / "frontend-react" / "build"
 HISTORY_DIR = Path(__file__).parent / ".." / "data" / "history"
 HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 
+# Log ostatniego batcha — do podglądu w API (co się działo przy pobieraniu)
+_last_batch_log: List[dict] = []
+
 class AnalyzeRequest(BaseModel):
     parcel_ids: str
     obreb: Optional[str] = None        # obręb ewidencyjny (np. "Cieszkowo Kolonia") — wymagany dla GetParcelByIdOrNr
@@ -53,6 +56,7 @@ class AnalyzeRequest(BaseModel):
     manual_infra_detected: Optional[bool] = None  # Ręczne potwierdzenie infrastruktury
     manual_voltage: Optional[str] = None          # "WN" | "SN" | "nN"
     manual_line_length_m: Optional[float] = None  # Ręczny pomiar długości linii [m]
+    manual_poles_count: Optional[int] = None      # Ręczna liczba słupów
     years: int = 6                                 # Okres WBK (art. 118 KC): 6 lat od 2018
     is_farmer: bool = False                        # Rolnik → wymusza agri=True, aktywuje R5 (szkoda rolna)
 
@@ -86,6 +90,8 @@ async def analyze(req: AnalyzeRequest):
     """
     aggregator = PropertyAggregator()
     ids = [i.strip() for i in req.parcel_ids.replace("\n", ",").split(",") if i.strip()]
+    # Usuń duplikaty przy zachowaniu kolejności (np. przypadkowe powtórzenia)
+    ids = list(dict.fromkeys(ids))
     results = []
 
     for pid in ids:
@@ -102,6 +108,7 @@ async def analyze(req: AnalyzeRequest):
                 manual_infra_detected=req.manual_infra_detected,
                 manual_voltage=req.manual_voltage,
                 manual_line_length_m=req.manual_line_length_m,
+                manual_poles_count=req.manual_poles_count,
                 years=req.years,
                 is_farmer=req.is_farmer,
             )
@@ -129,13 +136,19 @@ async def analyze(req: AnalyzeRequest):
     }
 
 @app.post("/api/analyze/batch")
-async def analyze_batch_csv(file: UploadFile = File(...), client_name: Optional[str] = Form(None)):
+async def analyze_batch_csv(
+    file: UploadFile = File(...),
+    client_name: Optional[str] = Form(None),
+    is_farmer: Optional[str] = Form(None),
+):
     """
     Batch analysis from CSV upload.
     CSV format: parcel_id,obreb,county,municipality
+    Form: file (required), client_name, is_farmer (1/true/tak = rolnik, R5).
 
     Returns analysis for all parcels + saves to history.
     """
+    batch_is_farmer = str(is_farmer or "").strip().lower() in ("1", "true", "tak", "yes")
     try:
         # Read CSV (obsługa BOM, różnych kodowań, separatorów)
         content = await file.read()
@@ -176,7 +189,7 @@ async def analyze_batch_csv(file: UploadFile = File(...), client_name: Optional[
         if not rows:
             raise ValueError("CSV jest pusty lub brak kolumny parcel_id")
 
-        # Mapowanie kolumn obręb / gmina / powiat (różne nazwy w CSV)
+        # Mapowanie kolumn obręb / gmina / powiat + korekty ręczne (różne nazwy w CSV)
         def _norm(s: Optional[str]) -> Optional[str]:
             out = (s or "").strip()
             return out if out else None
@@ -186,23 +199,69 @@ async def analyze_batch_csv(file: UploadFile = File(...), client_name: Optional[
         col_county = keys_lower.get("county") or keys_lower.get("powiat")
         col_municipality = keys_lower.get("municipality") or keys_lower.get("gmina")
 
+        # Korekty ręczne — opcjonalne kolumny
+        col_kolizja = keys_lower.get("kolizja") or keys_lower.get("collision")
+        col_voltage = keys_lower.get("napiecie") or keys_lower.get("napięcie") or keys_lower.get("voltage")
+        col_len = keys_lower.get("dlugosc_linii_m") or keys_lower.get("długość_linii_m") or \
+                  keys_lower.get("line_length_m") or keys_lower.get("dlugosc") or keys_lower.get("length_m")
+        col_poles = keys_lower.get("slupy") or keys_lower.get("słupy") or keys_lower.get("poles") or \
+                    keys_lower.get("poles_count") or keys_lower.get("liczba_slupow") or keys_lower.get("liczba_słupow")
+
+        def _to_float(val: Optional[str]) -> Optional[float]:
+            if val is None:
+                return None
+            s = str(val).strip().replace(",", ".")
+            if not s or s in ("—", "-"):
+                return None
+            try:
+                return float(s)
+            except Exception:
+                return None
+
+        def _to_int(val: Optional[str]) -> Optional[int]:
+            if val is None:
+                return None
+            s = str(val).strip()
+            if not s or s in ("—", "-"):
+                return None
+            try:
+                return int(float(s.replace(",", ".")))
+            except Exception:
+                return None
+
         for r in rows:
             r["parcel_id"] = _norm(r.get("parcel_id") or "")
             r["obreb"] = _norm(r.get("obreb") or (r.get(col_obreb) if col_obreb else ""))
             r["county"] = _norm(r.get("county") or (r.get(col_county) if col_county else ""))
             r["municipality"] = _norm(r.get("municipality") or (r.get(col_municipality) if col_municipality else ""))
+            # Korekty ręczne z CSV (jeśli podane)
+            if col_kolizja:
+                v = (r.get(col_kolizja) or "").strip().upper()
+                if v in ("TAK", "YES", "1", "TRUE"):
+                    r["manual_infra_detected"] = True
+                elif v in ("NIE", "NO", "0", "FALSE"):
+                    r["manual_infra_detected"] = False
+            if col_voltage:
+                v = _norm(r.get(col_voltage))
+                if v:
+                    r["manual_voltage"] = v
+            if col_len:
+                r["manual_line_length_m"] = _to_float(r.get(col_len))
+            if col_poles:
+                r["manual_poles_count"] = _to_int(r.get(col_poles))
         if col_obreb or col_county or col_municipality:
             logger.info("BATCH: Zmapowano kolumny CSV obręb=%s county=%s municipality=%s", col_obreb, col_county, col_municipality)
 
         aggregator = PropertyAggregator()
         all_results = []
+        global _last_batch_log
+        _last_batch_log = [{"ts": datetime.now(timezone.utc).isoformat(), "step": "start", "message": f"Start analizy batch, działek: {len(rows)}"}]
 
         # ====== KROK 0: Pre-fetch geometrii działek → regional OSM cache ======
-        # Pobierz geometrie wszystkich działek (ULDK) → compute regional BBOX
-        # → jedno zapytanie Overpass zamiast 99 osobnych
         logger.info("BATCH: Krok 0 — pobieranie geometrii %d działek z ULDK...", len(rows))
         rows_with_id = [r for r in rows if (r.get('parcel_id') or '').strip()]
         parcel_geometries = []
+        _last_batch_log.append({"ts": datetime.now(timezone.utc).isoformat(), "step": "uldk", "message": f"Pobieranie geometrii ULDK: {len(rows_with_id)} działek"})
 
         async def fetch_geom(row):
             pid = (row.get('parcel_id') or '').strip() or None
@@ -218,27 +277,35 @@ async def analyze_batch_csv(file: UploadFile = File(...), client_name: Optional[
                 if t.get("ok") and t.get("geometry"):
                     return t["geometry"]
                 else:
-                    logger.warning("fetch_geom [%s]: terrain not ok — %s", pid, t.get("error", "brak geometrii"))
+                    err = t.get("error") or t.get("message") or "brak geometrii"
+                    logger.warning("fetch_geom [%s]: terrain not ok — %s", pid, err)
+                    _last_batch_log.append({"ts": datetime.now(timezone.utc).isoformat(), "step": "uldk_fail", "parcel_id": pid, "message": str(err)})
             except Exception as e:
                 logger.error("fetch_geom [%s]: exception — %s", pid, e)
+                _last_batch_log.append({"ts": datetime.now(timezone.utc).isoformat(), "step": "uldk_error", "parcel_id": pid, "message": str(e)})
             return None
 
-        # Pobierz geometrie równolegle (max 20 jednocześnie — throttle ULDK), z obrębem z CSV
-        CHUNK_SIZE = 20
+        # Pobierz geometrie równolegle (max 5 jednocześnie — łagodniej dla ULDK)
+        CHUNK_SIZE = 5
         for i in range(0, len(rows_with_id), CHUNK_SIZE):
             chunk = rows_with_id[i:i + CHUNK_SIZE]
             geom_tasks = [fetch_geom(r) for r in chunk]
             geom_results = await asyncio.gather(*geom_tasks)
             parcel_geometries.extend([g for g in geom_results if g])
+            # Delikatny odstęp, żeby nie zabić ULDK przy batchu
+            await asyncio.sleep(0.4)
 
         logger.info("BATCH: Pobrano %d/%d geometrii", len(parcel_geometries), len(rows_with_id))
+        _last_batch_log.append({"ts": datetime.now(timezone.utc).isoformat(), "step": "uldk_done", "message": f"Pobrano {len(parcel_geometries)}/{len(rows_with_id)} geometrii z ULDK"})
 
         # Jedno zapytanie Overpass dla CAŁEGO regionu
         try:
             osm_count = await prefetch_regional_osm(parcel_geometries)
             logger.info("BATCH: Regional OSM cache: %d linii energetycznych", osm_count)
+            _last_batch_log.append({"ts": datetime.now(timezone.utc).isoformat(), "step": "osm", "message": f"Regional OSM: {osm_count} linii energetycznych"})
         except Exception as e:
             logger.warning("BATCH: Regional OSM prefetch error: %s — parcels will use individual queries", e)
+            _last_batch_log.append({"ts": datetime.now(timezone.utc).isoformat(), "step": "osm_warn", "message": str(e)})
 
         # ====== KROK 1: Analiza wszystkich działek (z cache) ======
         async def analyze_single(row):
@@ -253,6 +320,11 @@ async def analyze_batch_csv(file: UploadFile = File(...), client_name: Optional[
                     obreb=row.get('obreb'),
                     county=row.get('county'),
                     municipality=row.get('municipality'),
+                    manual_infra_detected=row.get("manual_infra_detected"),
+                    manual_voltage=row.get("manual_voltage"),
+                    manual_line_length_m=row.get("manual_line_length_m"),
+                    manual_poles_count=row.get("manual_poles_count"),
+                    is_farmer=batch_is_farmer,
                 )
 
                 return {
@@ -263,6 +335,7 @@ async def analyze_batch_csv(file: UploadFile = File(...), client_name: Optional[
                 }
             except Exception as e:
                 logger.error(f"Błąd analizy {row.get('parcel_id', '?')}: {e}")
+                _last_batch_log.append({"ts": datetime.now(timezone.utc).isoformat(), "step": "analyze_fail", "parcel_id": row.get('parcel_id', '?'), "message": str(e)})
                 return {
                     "parcel_id": row.get('parcel_id', '?'),
                     "status": "ERROR",
@@ -296,6 +369,9 @@ async def analyze_batch_csv(file: UploadFile = File(...), client_name: Optional[
             json.dump(history_data, f, indent=2, ensure_ascii=False)
 
         logger.info(f"Batch analysis saved to {history_file}")
+        ok_count = sum(1 for r in all_results if r["status"] != "ERROR")
+        fail_count = sum(1 for r in all_results if r["status"] == "ERROR")
+        _last_batch_log.append({"ts": datetime.now(timezone.utc).isoformat(), "step": "done", "message": f"Zakończono: {ok_count} OK, {fail_count} błędów"})
 
         return {
             "ok": True,
@@ -303,10 +379,11 @@ async def analyze_batch_csv(file: UploadFile = File(...), client_name: Optional[
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "summary": {
                 "total": len(all_results),
-                "successful": sum(1 for r in all_results if r["status"] != "ERROR"),
-                "failed": sum(1 for r in all_results if r["status"] == "ERROR")
+                "successful": ok_count,
+                "failed": fail_count
             },
-            "parcels": all_results
+            "parcels": all_results,
+            "run_log": list(_last_batch_log),
         }
 
     except Exception as e:
@@ -342,6 +419,16 @@ async def get_analysis_history():
         logger.error(f"Błąd pobierania historii: {e}")
         return {"ok": False, "error": str(e), "history": []}
 
+@app.get("/api/batch-last-log")
+async def get_batch_last_log():
+    """
+    Zwraca log z ostatniego uruchomienia analizy batch (co się działo przy pobieraniu ULDK/OSM i przy analizie).
+    Przydatne do diagnozy: które działki nie pobrały geometrii, które rzuciły błąd.
+    """
+    global _last_batch_log
+    return {"ok": True, "log": list(_last_batch_log)}
+
+
 @app.get("/api/history/{batch_id}")
 async def get_batch_details(batch_id: str):
     """
@@ -354,6 +441,10 @@ async def get_batch_details(batch_id: str):
 
         with open(history_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
+        # Kompatybilność: frontend/raporty używają master_record lub data
+        for r in (data.get("results") or []):
+            if "master_record" not in r and r.get("data") is not None:
+                r["master_record"] = r["data"]
 
         return {
             "ok": True,
@@ -385,7 +476,7 @@ async def get_integrations_status():
     return out
 
 
-@app.get("/api/parcel/{parcel_id}")
+@app.get("/api/parcel/{parcel_id:path}")
 async def get_parcel_preview(parcel_id: str):
     """Szybki podgląd tylko z ULDK (Rule 6)."""
     terrain = await fetch_terrain(parcel_id)
@@ -457,8 +548,10 @@ async def report_pdf(req: PdfReportRequest):
     Dane wejściowe: lista wyników z /api/analyze (pole parcels).
     """
     try:
-        masters = [p.get("master_record", {}) for p in req.parcels]
-        ids     = [p.get("parcel_id", f"Dz.{i+1}") for i, p in enumerate(req.parcels)]
+        if not req.parcels:
+            raise HTTPException(status_code=400, detail="Brak działek do raportu PDF")
+        masters = [(p.get("master_record") or p.get("data") or {}) for p in req.parcels]
+        ids = [str(p.get("parcel_id") or f"Dz.{i+1}") for i, p in enumerate(req.parcels)]
         pdf_bytes = generate_pdf(
             parcels_data=masters,
             parcel_ids=ids,
@@ -466,7 +559,8 @@ async def report_pdf(req: PdfReportRequest):
             kw_number=req.kw_number or "",
             address=req.address or "",
         )
-        filename = f"raport_KSWS_{ids[0].replace('/','_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+        safe_id = (ids[0] if ids else "raport").replace("/", "_").replace("\\", "_")[:80]
+        filename = f"raport_KSWS_{safe_id}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -615,17 +709,47 @@ var linesData = {lines_json};
 
 var map = L.map('map',{{zoomControl:true}}).setView([52,20],7);
 
-// Satellite
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',
-  {{maxZoom:19,attribution:'ESRI'}}).addTo(map);
+// Base layers (Geoportal Orto + alternatywy)
+var ortoWms = L.tileLayer.wms('https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution', {
+  layers: 'Raster',
+  format: 'image/png',
+  transparent: false,
+  version: '1.1.1',
+  srs: 'EPSG:3857',
+  maxZoom: 19,
+  attribution: 'Geoportal Orto'
+});
+var esriStreet = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{{z}}/{{y}}/{{x}}',
+  {{maxZoom:19,attribution:'ESRI'}});
+var osm = L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png',
+  {{maxZoom:19,attribution:'© OpenStreetMap'}});
+ortoWms.addTo(map);
+
+// Labels overlay for imagery
+var esriLabels = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{{z}}/{{y}}/{{x}}',
+  {{maxZoom:19,opacity:0.9,attribution:'ESRI'}}).addTo(map);
 
 // KIUT WMS (uzbrojenie)
 var kiutUrl = 'https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu';
-var elektro = L.tileLayer.wms(kiutUrl,{{layers:'przewod_elektroenergetyczny',format:'image/png',transparent:true,opacity:.6}});
-var gaz = L.tileLayer.wms(kiutUrl,{{layers:'przewod_gazowy',format:'image/png',transparent:true,opacity:.5}});
-var woda = L.tileLayer.wms(kiutUrl,{{layers:'przewod_wodociagowy',format:'image/png',transparent:true,opacity:.5}});
+var elektro = L.tileLayer.wms(kiutUrl,{{layers:'przewod_elektroenergetyczny',format:'image/png',transparent:true,opacity:.95,crossOrigin:true,version:'1.1.1',srs:'EPSG:3857',zIndex:950}});
+var gaz = L.tileLayer.wms(kiutUrl,{{layers:'przewod_gazowy',format:'image/png',transparent:true,opacity:.6,crossOrigin:true,version:'1.1.1',srs:'EPSG:3857',zIndex:560}});
+var woda = L.tileLayer.wms(kiutUrl,{{layers:'przewod_wodociagowy',format:'image/png',transparent:true,opacity:.6,crossOrigin:true,version:'1.1.1',srs:'EPSG:3857',zIndex:560}});
 elektro.addTo(map);
-L.control.layers(null,{{'⚡ Elektroenergetyczny':elektro,'🔥 Gazowy':gaz,'💧 Wodociągowy':woda}},{{collapsed:false,position:'topright'}}).addTo(map);
+
+// OpenInfraMap raster (global power lines)
+var oimPower = L.tileLayer('https://tiles.openinframap.org/power/{{z}}/{{x}}/{{y}}.png',
+  {{maxZoom:19,opacity:1.0,attribution:'OpenInfraMap',zIndex:1000}});
+
+// Layer controls
+var baseLayers = {{'Geoportal Orto (WMS)': ortoWms, 'ESRI Ulice': esriStreet, 'OSM': osm}};
+var overlays = {{
+  '🧭 Etykiety': esriLabels,
+  '⚡ KIUT elektro (WMS)': elektro,
+  '🔥 KIUT gaz (WMS)': gaz,
+  '💧 KIUT woda (WMS)': woda,
+  '⚡ OpenInfraMap (raster)': oimPower
+}};
+L.control.layers(baseLayers, overlays, {{collapsed:false,position:'topright'}}).addTo(map);
 
 // Power lines (Overpass) — grube neonowe linie
 var vColors = {{'WN':'#ff2200','SN':'#00ff44','110kV':'#ffcc00','nN':'#00ccff'}};
@@ -734,6 +858,10 @@ function filterParcels(mode) {{
 @app.get("/{full_path:path}")
 async def spa_fallback(full_path: str):
     """SPA fallback — React Router obsługuje routing po stronie klienta."""
+    # Nie obsługuj API routes
+    if full_path.startswith("api/"):
+        return {"error": "API route not found"}
+
     # Próbuj plik statyczny
     static_file = FRONTEND_DIR / full_path
     if static_file.exists() and static_file.is_file():

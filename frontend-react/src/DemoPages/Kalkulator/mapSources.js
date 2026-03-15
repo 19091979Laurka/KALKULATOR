@@ -31,6 +31,12 @@ export const BASE_LAYERS = {
 
 // ─── WMS GUGiK (integracja.gugik.gov.pl) ──────────────────────────────────
 export const GUGIK_WMS = {
+  ORTO: {
+    baseUrl: "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution",
+    layers: "Raster",
+    version: "1.1.1",
+    attribution: "Geoportal Orto",
+  },
   KIUT: {
     baseUrl: "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
     layers: {
@@ -42,6 +48,8 @@ export const GUGIK_WMS = {
       telekom: "przewod_telekomunikacyjny",
       /** Wszystkie główne (elektro+gaz+woda+kanal) w jednej warstwie */
       uzbrojenie: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny",
+      /** Pełne uzbrojenie (dodaje telekom, cieplo, specjalny, niezidentyfikowany, urządzenia) */
+      uzbrojenie_full: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny,przewod_cieplowniczy,przewod_telekomunikacyjny,przewod_specjalny,przewod_niezidentyfikowany,przewod_urzadzenia",
     },
     defaultOpacity: 1.0,
     attribution: "KIUT GUGiK",
@@ -69,4 +77,35 @@ export const OIM_TILES = {
 export const OVERPASS_INFO = {
   url: "https://overpass-api.de/api/interpreter",
   role: "Backend pobiera linie energetyczne (wektor). Frontend tylko wyświetla pre-loaded GeoJSON.",
+};
+
+// ─── Dodatkowe WMS (Geoportal / GUGiK) — do wdrożenia w kontrolce warstw ───
+// Pełna lista i rekomendacje: docs/RESEARCH_WIZUALIZACJA_LINII_SLUPOW_KSWS.md
+export const EXTRA_WMS = {
+  GESUT: {
+    baseUrl: "https://mapy.geoportal.gov.pl/wss/service/pub/guest/G2_GESUT_WMS/MapServer/WMSServer",
+    layers: "Sieci uzbrojenia / linie przesyłowe", // sprawdź GetCapabilities dla dokładnej nazwy
+    attribution: "GESUT GUGiK",
+  },
+  BDOT10k: {
+    baseUrl: "https://mapy.geoportal.gov.pl/wss/service/pub/guest/G2_BDOT10k_WMS/MapServer/WMSServer",
+    layers: "Sieci uzbrojenia terenu", // wieże, maszty, słupy (obiekty punktowe)
+    attribution: "BDOT10k GUGiK",
+  },
+  SIDUSIS: {
+    baseUrl: "https://mapy.geoportal.gov.pl/wss/service/pub/guest/G2_SIDUSIS_WMS/MapServer/WMSServer",
+    attribution: "SIDUSIS – infrastruktura szerokopasmowa",
+  },
+  KIMP: {
+    baseUrl: "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaMiejscowychPlanowZagospodarowaniaPrzestrzennego",
+    attribution: "KIMP – MPZP",
+  },
+  NMT_Shading: {
+    baseUrl: "https://mapy.geoportal.gov.pl/wss/service/PZGIK/NMT/GRID1/WMS/Shading",
+    attribution: "NMT – cieniowanie",
+  },
+  ULDK_WMS: {
+    baseUrl: "https://uldk.gugik.gov.pl/cgi-bin/uldk-wms",
+    attribution: "ULDK",
+  },
 };

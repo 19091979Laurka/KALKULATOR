@@ -553,28 +553,32 @@ function InfrastructureLayer() {
       "https://tiles.openinframap.org/power/{z}/{x}/{y}.png",
       {
         attribution: '⚡ <a href="https://openinframap.org" target="_blank">Open Infrastructure Map</a>',
-        opacity: 0.9,
+        opacity: 0.95,
         maxZoom: 19,
-        zIndex: 6,
+        zIndex: 700,
       }
     );
 
     // ── KIUT GUGiK WMS — linie energetyczne PL (oficjalne dane PL) ──
     const KIUT_URL = "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu";
-    const wmsBase = { format: "image/png", transparent: true, opacity: 0.8, zIndex: 5 };
+    const wmsBase = { format: "image/png", transparent: true, opacity: 0.95, zIndex: 900, version: "1.1.1", srs: "EPSG:3857" };
     const kiutElektro = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_elektroenergetyczny", attribution: "KIUT GUGiK" });
+    const kiutFull = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny,przewod_cieplowniczy,przewod_telekomunikacyjny,przewod_specjalny,przewod_niezidentyfikowany,przewod_urzadzenia" });
     const kiutGaz     = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_gazowy" });
     const kiutWoda    = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_wodociagowy" });
     const kiutKanal   = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_kanalizacyjny" });
     const kiutCieplo  = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_cieplowniczy" });
     const kiutTelekom = L.tileLayer.wms(KIUT_URL, { ...wmsBase, layers: "przewod_telekomunikacyjny" });
 
-    // Domyślnie włączone: OIM (zawsze widoczna) + KIUT elektro
-    oimPower.addTo(map);
-    kiutElektro.addTo(map);
+    // Wszystkie warstwy włączone od razu (kwadracik z warstwami tylko do odznaczania)
+    const allLayers = [oimPower, kiutFull, kiutElektro, kiutGaz, kiutWoda, kiutKanal, kiutCieplo, kiutTelekom];
+    allLayers.forEach((l) => l.addTo(map));
+    try { kiutElektro.bringToFront(); } catch (_) {}
+    try { oimPower.bringToFront(); } catch (_) {}
 
     const overlays = {
       "⚡ Linie energetyczne (Open Infra Map)": oimPower,
+      "🧭 KIUT pełne (wszystkie przewody)": kiutFull,
       "⚡ Linie elektroenergetyczne (KIUT GUGiK)": kiutElektro,
       "🔥 Gazowy (KIUT)": kiutGaz,
       "💧 Wodociągowy (KIUT)": kiutWoda,
@@ -583,10 +587,13 @@ function InfrastructureLayer() {
       "📡 Telekomunikacyjny (KIUT)": kiutTelekom,
     };
     const ctrl = L.control.layers(null, overlays, { collapsed: true, position: "topright" }).addTo(map);
+    try { kiutFull.bringToFront(); } catch (_) {}
+    try { kiutElektro.bringToFront(); } catch (_) {}
+    try { oimPower.bringToFront(); } catch (_) {}
 
     return () => {
       map.removeControl(ctrl);
-      [oimPower, kiutElektro, kiutGaz, kiutWoda, kiutKanal, kiutCieplo, kiutTelekom].forEach((l) => {
+      allLayers.forEach((l) => {
         if (map.hasLayer(l)) map.removeLayer(l);
       });
     };
@@ -614,20 +621,23 @@ function BatchMapLayerControl() {
     // Overlays — wszystkie 3 włączone od razu
     const oimPower = L.tileLayer(
       "https://tiles.openinframap.org/power/{z}/{x}/{y}.png",
-      { opacity: 0.9, maxZoom: 19 }
+      { opacity: 1.0, maxZoom: 19, zIndex: 1000 }
     );
     const gugikEw = L.tileLayer.wms(
       "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow",
-      { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.65 }
+      { layers: "dzialki,numery_dzialek", format: "image/png", transparent: true, opacity: 0.65, version: "1.1.1", srs: "EPSG:3857", zIndex: 400 }
     );
     const kiutElektro = L.tileLayer.wms(
       "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu",
-      { layers: "przewod_elektroenergetyczny", format: "image/png", transparent: true, opacity: 0.85 }
+      { layers: "przewod_elektroenergetyczny", format: "image/png", transparent: true, opacity: 0.98, version: "1.1.1", srs: "EPSG:3857", zIndex: 950 }
     );
     // Wszystkie 3 nakładki domyślnie włączone
     oimPower.addTo(map);
     gugikEw.addTo(map);
     kiutElektro.addTo(map);
+    try { gugikEw.bringToFront(); } catch (_) {}
+    try { kiutElektro.bringToFront(); } catch (_) {}
+    try { oimPower.bringToFront(); } catch (_) {}
 
     const baseLayers = {
       "🛰️ Satelita": satellite,
@@ -844,7 +854,11 @@ function BatchCSVSection() {
               <div class="data-box-v2" style="border-left:3px solid #16a085;">
                 <div class="db-label">📏 Dł. linii</div>
                 <div class="db-value">${(ksws.line_length_m || pl.length_m || 0) > 0 ? fmtI(ksws.line_length_m || pl.length_m) + " m" : "—"}</div>
-                ${ksws.measurement_source && ksws.measurement_source !== "geodezyjne" ? `<span class="db-hint">⚠ ${ksws.measurement_source}</span>` : ""}
+                ${(ksws.line_length_m || pl.length_m || 0) === 0 && pl.detected ? `<span class="db-hint" style="color:#c0392b;">Brak długości — uzupełnij w Korekcie ręcznej i ponów analizę.</span>` : (ksws.measurement_source && ksws.measurement_source !== "geodezyjne" ? `<span class="db-hint">⚠ ${ksws.measurement_source}</span>` : "")}
+              </div>
+              <div class="data-box-v2" style="border-left:3px solid #8d6e63;">
+                <div class="db-label">🗼 Słupy</div>
+                <div class="db-value">${pl.poles_count ?? "—"}</div>
               </div>
               <div class="data-box-v2" style="border-left:3px solid #27ae60;">
                 <div class="db-label">↔️ Szer. pasa</div>
@@ -853,6 +867,7 @@ function BatchCSVSection() {
               <div class="data-box-v2" style="border-left:3px solid #f39c12;">
                 <div class="db-label">🔲 Pow. pasa</div>
                 <div class="db-value">${(ksws.band_area_m2 || 0) > 0 ? fmtI(ksws.band_area_m2) + " m²" : "—"}</div>
+                ${(ksws.band_area_m2 || 0) === 0 && pl.detected ? `<span class="db-hint" style="color:#c0392b;">Brak pow. pasa — podaj Długość linii w Korekcie ręcznej.</span>` : ""}
               </div>
               <div class="data-box-v2" style="border-left:3px solid #e67e22;">
                 <div class="db-label">📊 % w pasie</div>
@@ -1109,10 +1124,19 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
 (function() {
   var PARCEL_MAPS = ${JSON.stringify(results.map(p => {
     const d = p.master_record || p.data || {};
+    const pl = d.infrastructure?.power_lines || {};
+    const plGeo = pl.geojson;
+    const lineFeatures = (plGeo?.features && Array.isArray(plGeo.features) && plGeo.features.length > 0)
+      ? plGeo.features
+      : (pl.features && Array.isArray(pl.features)) ? pl.features : [];
+    const polesGeo = d.infrastructure?.power?.poles_geojson;
+    const polesFeatures = polesGeo?.features && Array.isArray(polesGeo.features) ? polesGeo.features : [];
     return {
       centroid: d.geometry?.centroid_ll,
       geojson: d.geometry?.geojson_ll || d.geometry?.geojson,
       collision: !!d.infrastructure?.power_lines?.detected,
+      powerLineFeatures: lineFeatures,
+      polesFeatures: polesFeatures,
     };
   }))};
 
@@ -1137,10 +1161,13 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
         } catch(e) {}
       }
       var map = L.map(el, { zoomControl: false, attributionControl: false, scrollWheelZoom: false, dragging: false, doubleClickZoom: false });
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { subdomains:'abcd', maxZoom:19 }).addTo(map);
-      L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.75 }).addTo(map);
+      L.tileLayer.wms('https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution', { layers:'Raster', format:'image/png', transparent:false, version:'1.1.1', srs:'EPSG:3857', opacity:1.0 }).addTo(map);
+      var egib = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.75, crossOrigin:true, version:'1.1.1', srs:'EPSG:3857' }).addTo(map);
+      var kiut = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu', { layers:'przewod_elektroenergetyczny', format:'image/png', transparent:true, opacity:0.85, crossOrigin:true, version:'1.1.1', srs:'EPSG:3857' }).addTo(map);
+      try { egib.setZIndex(400); } catch(e) {}
+      try { kiut.setZIndex(600); } catch(e) {}
       // Warstwa uzbrojenia terenu - Open Infrastructure Map (stabilne, zawsze dostępne)
-      L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png', { maxZoom:19, opacity:0.8, attribution:'© OpenStreetMap contributors' }).addTo(map);
+      L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png', { maxZoom:19, opacity:0.8, attribution:'© OpenInfraMap' }).addTo(map);
       if (parcel.geojson && parcel.geojson.coordinates) {
         var color = parcel.collision ? '#e53935' : '#1e88e5';
         var layer = L.geoJSON(parcel.geojson, { style: { color: color, weight: 3, fillColor: color, fillOpacity: 0.12 } }).addTo(map);
@@ -1166,14 +1193,16 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
     });
 
     // Base layers
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-      { subdomains:'abcd', maxZoom:19, attribution:'© Carto' }).addTo(map);
+    L.tileLayer.wms('https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution',
+      { layers:'Raster', format:'image/png', transparent:false, version:'1.1.1', srs:'EPSG:3857', opacity:1.0, attribution:'Geoportal Orto' }).addTo(map);
     L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow',
-      { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.75 }).addTo(map);
+      { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.75, crossOrigin:true }).addTo(map);
+    L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu',
+      { layers:'przewod_elektroenergetyczny', format:'image/png', transparent:true, opacity:0.7, crossOrigin:true }).addTo(map);
 
     // Infrastructure layers
     var powerLayer = L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png',
-      { maxZoom:19, opacity:0.8, attribution:'© OpenInfra' });
+      { maxZoom:19, opacity:0.95, attribution:'© OpenInfra' });
     var gasLayer = L.tileLayer('https://tiles.openinframap.org/gas/{z}/{x}/{y}.png',
       { maxZoom:19, opacity:0.7, attribution:'© OpenInfra' });
     var waterLayer = L.tileLayer('https://tiles.openinframap.org/water/{z}/{x}/{y}.png',
@@ -1209,6 +1238,32 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
 
     parcelGroup.addTo(map);
 
+    // Linie energetyczne (grube czarne) i słupy — jak na Geoportalu, na wierzchu
+    var infraGroup = L.featureGroup();
+    PARCEL_MAPS.forEach(function(parcel) {
+      (parcel.powerLineFeatures || []).forEach(function(feat) {
+        try {
+          var geom = feat.geometry || feat;
+          if (!geom || !geom.coordinates) return;
+          var layer = L.geoJSON(geom.type ? geom : { type: 'Feature', geometry: geom, properties: {} }, {
+            style: { color: '#1a1a1a', weight: 6, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }
+          });
+          layer.eachLayer(function(l) { infraGroup.addLayer(l); });
+        } catch (e) {}
+      });
+      (parcel.polesFeatures || []).forEach(function(feat) {
+        try {
+          var geom = feat.geometry || feat;
+          if (geom.type !== 'Point' || !Array.isArray(geom.coordinates) || geom.coordinates.length < 2) return;
+          var lat = geom.coordinates[1], lng = geom.coordinates[0];
+          L.circleMarker([lat, lng], { radius: 7, fillColor: '#1a1a1a', color: '#fff', weight: 2, fillOpacity: 0.95 })
+            .bindTooltip('Słup energetyczny', { direction: 'top' }).addTo(infraGroup);
+        } catch (e) {}
+      });
+    });
+    infraGroup.addTo(map);
+    try { infraGroup.setZIndex(650); } catch (e) {}
+
     // Fit all parcels in view
     if (allBounds.length > 0) {
       var group = L.featureGroup(PARCEL_MAPS.filter(p => p.geojson).map(p =>
@@ -1222,9 +1277,11 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
 
     // Layer controls
     L.control.layers(
-      { 'Mapa': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-        { subdomains:'abcd', maxZoom:19 }) },
+      { 'Geoportal Orto (WMS)': L.tileLayer.wms('https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution',
+        { layers:'Raster', format:'image/png', transparent:false, version:'1.1.1', srs:'EPSG:3857', opacity:1.0 }) },
       {
+        '⚡ KIUT elektro (WMS)': L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu',
+          { layers:'przewod_elektroenergetyczny', format:'image/png', transparent:true, opacity:0.7, crossOrigin:true, version:'1.1.1', srs:'EPSG:3857' }),
         '⚡ Linie energetyczne (Power)': powerLayer,
         '🔥 Gaz (Gas)': gasLayer,
         '💧 Woda (Water)': waterLayer,
@@ -1244,7 +1301,9 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
       div.style.boxShadow = '0 0 15px rgba(0,0,0,0.2)';
       div.innerHTML = '<strong>Legenda</strong><br>' +
         '<span style="color:#e53935;font-weight:bold;">— — —</span> Z kolizją (collision)<br>' +
-        '<span style="color:#1e88e5;font-weight:bold;">———</span> Bez kolizji (no collision)';
+        '<span style="color:#1e88e5;font-weight:bold;">———</span> Bez kolizji (no collision)<br>' +
+        '<span style="color:#1a1a1a;font-weight:bold;">━━━</span> Linia energetyczna (wektor)<br>' +
+        '<span style="color:#1a1a1a;">●</span> Słup energetyczny';
       return div;
     };
     legend.addTo(map);
@@ -2011,6 +2070,13 @@ export default function KalkulatorPage() {
       setManualVoltage(vol === "WN" || vol === "SN" || vol === "nN" ? vol : vol ? String(vol) : "");
       const len = pl.length_m ?? ksws.line_length_m;
       setManualLineLength(len != null && len > 0 ? String(Math.round(len)) : "");
+      // Auto-rozwiń Korektę ręczną gdy wykryto linię ale brak długości — użytkownik musi wpisać
+      if (pl.detected && !(len > 0)) {
+        setShowManual(true);
+        setTimeout(() => {
+          document.querySelector(".ksws-accordion-toggle")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 400);
+      }
 
       const centroid = first.master_record?.geometry?.centroid_ll;
       if (Array.isArray(centroid) && centroid[0] != null) {
@@ -2020,13 +2086,11 @@ export default function KalkulatorPage() {
         setMapZoom(16);
       }
 
-      // Użyj GeoJSON linii energetycznych z backendu (Overpass już pobrany przez backend)
-      const backendPowerGeoJSON = first.master_record?.infrastructure?.power_lines?.geojson;
-      if (backendPowerGeoJSON?.features?.length > 0) {
-        setPowerGeoJSON(backendPowerGeoJSON);
-      } else {
-        setPowerGeoJSON(null);
-      }
+      // Linie + słupy z backendu (Overpass/BDOT10k) — łącznie do jednej warstwy (PreloadedPowerLayer rysuje i linie, i punkty)
+      const lineFeatures = first.master_record?.infrastructure?.power_lines?.geojson?.features ?? [];
+      const polesFeatures = first.master_record?.infrastructure?.power?.poles_geojson?.features ?? [];
+      const combined = [...lineFeatures, ...polesFeatures];
+      setPowerGeoJSON(combined.length > 0 ? { type: "FeatureCollection", features: combined } : null);
 
       // Save to history — FULL calculation data
       const mr2 = first.master_record || {};
@@ -2163,136 +2227,38 @@ export default function KalkulatorPage() {
           <div className="ksws-card-body">
             <form onSubmit={runAnalysis}>
 
-              {/* ── KARTA KLIENTA ── */}
-              <div className="ksws-client-card">
-                <div className="ksws-client-card-header">
-                  <span style={{ fontSize: "1em" }}>👤</span>
-                  <span>Karta klienta</span>
-                  <span className="ksws-client-card-note">— dane trafiają do raportu</span>
-                </div>
-                <div className="ksws-client-card-grid">
-                  <div className="ksws-form-group">
-                    <label className="ksws-form-label">Imię i nazwisko / Firma</label>
-                    <input
-                      className="ksws-form-input"
-                      value={clientName}
-                      onChange={(e) => setClientName(e.target.value)}
-                      placeholder="Jan Kowalski"
-                    />
-                  </div>
-                  <div className="ksws-form-group">
-                    <label className="ksws-form-label">E-mail klienta</label>
-                    <input
-                      className="ksws-form-input"
-                      type="email"
-                      value={clientEmail}
-                      onChange={(e) => setClientEmail(e.target.value)}
-                      placeholder="jan@email.pl"
-                    />
-                  </div>
-                  <div className="ksws-form-group">
-                    <label className="ksws-form-label">Nr sprawy</label>
-                    <input
-                      className="ksws-form-input"
-                      value={caseNumber}
-                      onChange={(e) => setCaseNumber(e.target.value)}
-                      placeholder="SZU/2026/001"
-                    />
-                  </div>
-                  <div className="ksws-form-group">
-                    <label className="ksws-form-label">Data wysłania maila</label>
-                    <input
-                      className="ksws-form-input"
-                      type="date"
-                      value={emailSentDate}
-                      onChange={(e) => setEmailSentDate(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* ── BOX 1: Identyfikator działki ── */}
+              {/* ── BOX 1: TERYT + Analizuj ── */}
               <div className="ksws-form-box">
                 <div className="ksws-form-box-label">
                   <span className="ksws-form-box-num">1</span>
-                  Identyfikator działki
+                  Identyfikator działki (TERYT)
                 </div>
-                <div className="ksws-form-group" style={{ marginBottom: 0 }}>
-                  <label className="ksws-form-label">
-                    Identyfikator działki *
-                    <span className="ksws-form-hint">
-                      Pełny TERYT np. <code>141906_5.0029.60</code> — lub wpisz sam numer i uzupełnij Obręb poniżej
-                    </span>
-                  </label>
-                  <input
-                    className="ksws-form-input ksws-form-input-lg"
-                    value={parcelIds}
-                    onChange={(e) => setParcelIds(e.target.value)}
-                    placeholder="141906_5.0029.60  lub wiele po przecinku: 141906_5.0029.60, 141906_5.0029.129"
-                    autoComplete="off"
-                  />
-                  <div className="ksws-form-tip">
-                    Format TERYT: <strong>WWPPGG_R.OOOO.NR</strong> — WW=województwo PP=powiat GG=gmina R=rodzaj O=obręb NR=numer
-                  </div>
-                </div>
-              </div>
-
-              {/* ── BOX 2: Dane ewidencyjne ── */}
-              <div className="ksws-form-box">
-                <div className="ksws-form-box-label">
-                  <span className="ksws-form-box-num">2</span>
-                  Dane ewidencyjne
-                  <span style={{ marginLeft: 8, fontSize: "0.72em", color: "#8ac926", fontWeight: 700 }}>
-                    ✓ Uzupełniają się automatycznie po analizie
-                  </span>
-                </div>
-                <div className="ksws-form-grid" style={{ marginBottom: 0 }}>
-                  <div className="ksws-form-group">
-                    <label className="ksws-form-label">Numer działki</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "flex-end" }}>
+                  <div className="ksws-form-group" style={{ flex: "1 1 280px", marginBottom: 0 }}>
+                    <label className="ksws-form-label">
+                      TERYT lub numer działki *
+                      <span className="ksws-form-hint" style={{ display: "block", marginTop: 4 }}>
+                        Pełny TERYT np. 141906_5.0029.60 — albo sam numer (wtedy uzupełnij dane w boxie 2)
+                      </span>
+                    </label>
                     <input
-                      className="ksws-form-input"
-                      value={parcelIds.includes(",") ? "" : parcelIds.split(".").pop() || parcelIds}
-                      readOnly
-                      placeholder="Numer"
+                      className="ksws-form-input ksws-form-input-lg"
+                      value={parcelIds}
+                      onChange={(e) => setParcelIds(e.target.value)}
+                      placeholder="141906_5.0029.60  lub 60, 114/2"
+                      autoComplete="off"
                     />
                   </div>
-                  <div className="ksws-form-group">
-                    <label className="ksws-form-label">Obręb (OOOO)</label>
-                    <input
-                      className="ksws-form-input"
-                      value={obreb}
-                      onChange={(e) => setObreb(e.target.value)}
-                      placeholder="np. 0029"
-                    />
-                  </div>
-                  <div className="ksws-form-group">
-                    <label className="ksws-form-label">Gmina (GG)</label>
-                    <input
-                      className="ksws-form-input"
-                      value={municipality}
-                      onChange={(e) => setMunicipality(e.target.value)}
-                      placeholder="np. Raciąż"
-                    />
-                  </div>
-                  <div className="ksws-form-group">
-                    <label className="ksws-form-label">Powiat (PP)</label>
-                    <input
-                      className="ksws-form-input"
-                      value={county}
-                      onChange={(e) => setCounty(e.target.value)}
-                      placeholder="np. płoński"
-                    />
-                  </div>
-                  <div className="ksws-form-btn-col">
+                  <div style={{ flex: "0 0 auto" }}>
                     <button
                       type="submit"
                       className="ksws-btn ksws-btn-primary"
-                      disabled={loading || !parcelIds}
-                      style={{ width: "100%" }}
+                      disabled={loading || !parcelIds.trim()}
+                      style={{ minWidth: 140 }}
                     >
                       {loading ? (
                         <>
-                          <Spinner size="sm" style={{ marginRight: 8 }} /> Pobieranie...
+                          <Spinner size="sm" style={{ marginRight: 8 }} /> Pobieranie…
                         </>
                       ) : (
                         "⚡ Analizuj"
@@ -2302,188 +2268,101 @@ export default function KalkulatorPage() {
                 </div>
               </div>
 
-              {/* ── BOX 2: Dane ewidencyjne ── */}
+              {/* ── BOX 2: Jeśli brak TERYT — uzupełnij dane działki ── */}
               <div className="ksws-form-box">
                 <div className="ksws-form-box-label">
                   <span className="ksws-form-box-num">2</span>
-                  Dane ewidencyjne
-                    <span style={{ marginLeft: 8, fontSize: "0.72em", color: "#8ac926", fontWeight: 700 }}>
-                      ✓ Uzupełniają się automatycznie po analizie
-                    </span>
+                  Jeśli brak pełnego TERYT — uzupełnij dane działki
+                  <span style={{ marginLeft: 8, fontSize: "0.72em", color: "#666", fontWeight: 500 }}>
+                    (obręb wymagany przy samym numerze)
+                  </span>
+                </div>
+                <div className="ksws-form-grid" style={{ marginBottom: 0 }}>
+                  <div className="ksws-form-group">
+                    <label className="ksws-form-label">Numer działki</label>
+                    <input
+                      className="ksws-form-input"
+                      value={parcelIds.includes(",") ? "" : (parcelIds.split(".").pop() || parcelIds)}
+                      onChange={(e) => setParcelIds(e.target.value.trim())}
+                      placeholder="np. 60 lub 114/2"
+                    />
                   </div>
-                  <div className="ksws-form-grid" style={{ marginBottom: 0 }}>
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">Numer działki</label>
-                      <input
-                        className="ksws-form-input"
-                        value={parcelIds.includes(",") ? "" : parcelIds.split(".").pop() || parcelIds}
-                        onChange={(e) => {
-                          const nr = e.target.value.trim();
-                          if (obreb) setParcelIds(nr);
-                          else setParcelIds(nr);
-                        }}
-                        placeholder="np. 60 lub 114/2"
-                      />
-                    </div>
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">Obręb ewidencyjny</label>
-                      <input
-                        className="ksws-form-input"
-                        value={obreb}
-                        onChange={(e) => setObreb(e.target.value)}
-                        placeholder="np. Szapsk, Cieszkowo Kolonia"
-                      />
-                      <span className="ksws-form-hint" style={{ display: "block", marginTop: 4 }}>
-                        Wymagany przy wyszukiwaniu po samym numerze działki (bez pełnego TERYT).
-                      </span>
-                    </div>
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">Gmina</label>
-                      <input
-                        className="ksws-form-input"
-                        value={municipality}
-                        onChange={(e) => setMunicipality(e.target.value)}
-                        placeholder="np. Baboszewo"
-                      />
-                    </div>
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">Powiat</label>
-                      <input
-                        className="ksws-form-input"
-                        value={county}
-                        onChange={(e) => setCounty(e.target.value)}
-                        placeholder="np. płoński"
-                      />
-                    </div>
-                    <div className="ksws-form-group">
-                      <label className="ksws-form-label">Województwo</label>
-                      <input
-                        className="ksws-form-input"
-                        value={voivodeship}
-                        onChange={(e) => setVoivodeship(e.target.value)}
-                        placeholder="np. mazowieckie"
-                      />
-                    </div>
+                  <div className="ksws-form-group">
+                    <label className="ksws-form-label">Obręb ewidencyjny</label>
+                    <input
+                      className="ksws-form-input"
+                      value={obreb}
+                      onChange={(e) => setObreb(e.target.value)}
+                      placeholder="np. Szapsk, Cieszkowo Kolonia"
+                    />
+                  </div>
+                  <div className="ksws-form-group">
+                    <label className="ksws-form-label">Gmina</label>
+                    <input
+                      className="ksws-form-input"
+                      value={municipality}
+                      onChange={(e) => setMunicipality(e.target.value)}
+                      placeholder="np. Baboszewo"
+                    />
+                  </div>
+                  <div className="ksws-form-group">
+                    <label className="ksws-form-label">Powiat</label>
+                    <input
+                      className="ksws-form-input"
+                      value={county}
+                      onChange={(e) => setCounty(e.target.value)}
+                      placeholder="np. płoński"
+                    />
+                  </div>
+                  <div className="ksws-form-group">
+                    <label className="ksws-form-label">Województwo</label>
+                    <input
+                      className="ksws-form-input"
+                      value={voivodeship}
+                      onChange={(e) => setVoivodeship(e.target.value)}
+                      placeholder="np. mazowieckie"
+                    />
                   </div>
                 </div>
+              </div>
 
-                {/* ── BOX 3: KW + Status prawny ── */}
-                <div className="ksws-form-box">
-                  <div className="ksws-form-box-label">
-                    <span className="ksws-form-box-num">3</span>
-                    Księga Wieczysta i status prawny
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-start" }}>
-                    {/* KW */}
-                    <div className="ksws-form-group" style={{ minWidth: 220, flex: "0 0 260px" }}>
-                      <label className="ksws-form-label">
-                        Nr Księgi Wieczystej
-                        <span className="ksws-form-hint">Format: AAAA/NNNNNNNN/N (np. WA1M/00012345/6)</span>
-                      </label>
-                      <input
-                        className="ksws-form-input"
-                        value={kwNumber}
-                        onChange={(e) => {
-                          // Auto-format: AAAA/NNNNNNNN/N
-                          let v = e.target.value.toUpperCase().replace(/[^A-Z0-9/]/g, "");
-                          // Strip existing slashes to reformat
-                          const raw = v.replace(/\//g, "");
-                          if (raw.length <= 4) v = raw;
-                          else if (raw.length <= 12) v = raw.slice(0, 4) + "/" + raw.slice(4);
-                          else v = raw.slice(0, 4) + "/" + raw.slice(4, 12) + "/" + raw.slice(12, 13);
-                          setKwNumber(v);
-                        }}
-                        placeholder="WA1M/00012345/6"
-                        maxLength={15}
-                        style={{ fontFamily: "monospace", letterSpacing: "1px" }}
-                      />
-                    </div>
-
-                    {/* Checkboxy */}
-                    <div style={{ flex: 1 }}>
-                      <div className="ksws-form-label" style={{ marginBottom: 10 }}>
-                        Status sprawy
-                      </div>
-                      <div className="ksws-checks-grid">
-                        {[
-                          { key: "pismoStarosty",  label: "Pismo od starosty" },
-                          { key: "wnioskowanieWZ", label: "Wnioskowane o WZ" },
-                          { key: "odmowaWZ",       label: "Odmowa WZ" },
-                          { key: "pismoOperatora", label: "Pismo od operatora" },
-                        ].map(({ key, label }) => (
-                          <label key={key} className="ksws-check-item">
-                            <input
-                              type="checkbox"
-                              className="ksws-check-input"
-                              checked={checks[key]}
-                              onChange={(e) => setChecks((prev) => ({ ...prev, [key]: e.target.checked }))}
-                            />
-                            <span className="ksws-check-label">{label}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+              {/* ── BOX: Rolnik (wpływa na wycenę R5) ── */}
+              <div className="ksws-form-box" style={{ borderLeft: "4px solid #27ae60" }}>
+                <div className="ksws-form-box-label">
+                  <span style={{ marginRight: 6 }}>🌾</span>
+                  Rolnik
+                  <span style={{ marginLeft: 8, fontSize: "0.75em", color: "#1a7a2e", fontWeight: 600 }}>
+                    — zmienia wycenę (R5: szkoda rolna, fundamenty słupów, wyspy)
+                  </span>
                 </div>
-
-                {/* ── PRZYCISK ── */}
-                <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap", position: "relative", zIndex: 5 }}>
-                  <button
-                    type="submit"
-                    className="ksws-btn ksws-btn-primary"
-                    disabled={loading}
-                    style={{ minWidth: 200 }}
-                  >
-                    {loading ? (
-                      <>
-                        <span className="ksws-spinner-inline" />
-                        Analizuję…
-                      </>
-                    ) : (
-                      <>⚡ Generuj raport KSWS</>
-                    )}
-                  </button>
-                  {(checks.pismoStarosty || checks.wnioskowanieWZ || checks.odmowaWZ || checks.pismoOperatora) && (
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {checks.pismoStarosty  && <span className="ksws-badge ksws-badge-blue">📄 Pismo starosty</span>}
-                      {checks.wnioskowanieWZ && <span className="ksws-badge ksws-badge-blue">📋 WZ złożone</span>}
-                      {checks.odmowaWZ       && <span className="ksws-badge" style={{ background: "#ff595e", color: "#fff" }}>❌ Odmowa WZ</span>}
-                      {checks.pismoOperatora && <span className="ksws-badge ksws-badge-blue">📧 Pismo operatora</span>}
-                    </div>
-                  )}
-                </div>
-
-                {/* ── Typ klienta: Rolnik ── */}
                 <label
                   style={{
-                    display: "flex", alignItems: "center", gap: "8px",
-                    marginTop: "10px", marginBottom: "2px",
-                    cursor: "pointer", fontWeight: isFarmer ? "600" : "400",
+                    display: "flex", alignItems: "center", gap: "10px",
+                    cursor: "pointer", fontWeight: isFarmer ? "600" : "500",
                     color: isFarmer ? "#1a7a2e" : "#444",
-                    background: isFarmer ? "#eafaf1" : "transparent",
-                    border: isFarmer ? "1px solid #27ae60" : "1px solid transparent",
-                    borderRadius: "6px", padding: "6px 10px",
+                    background: isFarmer ? "#eafaf1" : "#f8f9fa",
+                    border: isFarmer ? "1px solid #27ae60" : "1px solid #dee2e6",
+                    borderRadius: "8px", padding: "10px 14px",
                   }}
                 >
                   <input
                     type="checkbox"
                     checked={isFarmer}
                     onChange={(e) => setIsFarmer(e.target.checked)}
-                    style={{ width: "16px", height: "16px", accentColor: "#27ae60" }}
+                    style={{ width: "18px", height: "18px", accentColor: "#27ae60" }}
                   />
-                  <span>🌾 Rolnik — aktywuje R5 (szkoda rolna: fundamenty + wyspy sprzętowe)</span>
+                  <span>Działka w użytkowaniu rolnym — uwzględnij R5 (fundamenty słupów + wyspy niedostępne sprzętowi)</span>
                 </label>
+              </div>
 
-                <div style={{ marginTop: "6px" }}></div>
-
-                {/* ── Korekta ręczna accordion ── */}
+              {/* ── Korekta ręczna (zwykle niepotrzebna) ── */}
                 <button
                   type="button"
                   className="ksws-accordion-toggle"
                   onClick={() => setShowManual((v) => !v)}
                 >
                   <span>{showManual ? "▲" : "▼"}</span>
-                  {showManual ? "Ukryj korektę ręczną" : "Korekta ręczna — nadpisz dane API"}
+                  {showManual ? "Ukryj korektę ręczną" : "Korekta ręczna — tylko gdy API zwraca błędne dane"}
                 </button>
 
                 {showManual && (
@@ -2496,8 +2375,8 @@ export default function KalkulatorPage() {
                         fontWeight: 500,
                       }}
                     >
-                      Pola poniżej są automatycznie uzupełniane danymi z API po analizie.
-                      Nadpisz tylko gdy API zwraca błędne dane (np. rolna zamiast budowlanej, brak wykrytej linii).
+                      Zwykle niepotrzebne — dane (linia, słupy, cena, typ gruntu) pobierają się automatycznie z API.
+                      Użyj tylko gdy API zwraca błędne dane (np. zły typ gruntu, brak wykrytej linii, inna długość).
                     </div>
                     <div className="ksws-manual-grid">
                       <div className="ksws-form-group">
@@ -3055,11 +2934,26 @@ export default function KalkulatorPage() {
                           style={{ height: "100%", width: "100%" }}
                           scrollWheelZoom
                         >
-                          {/* ESRI World Imagery — satelita jak Geoportal (darmowe, bez klucza) */}
-                          <TileLayer
-                            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                            attribution='Satelita: © ESRI World Imagery | Linie: OSM Overpass'
-                            maxZoom={19}
+                          {/* Geoportal Orto (WMS) — oficjalny podkład */}
+                          <WMSTileLayer
+                            url="https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution"
+                            layers="Raster"
+                            format="image/png"
+                            transparent={false}
+                            version="1.1.1"
+                            srs="EPSG:3857"
+                            attribution="Geoportal Orto"
+                          />
+
+                          {/* KIEG GUGiK — działki + numery (WMS) */}
+                          <WMSTileLayer
+                            url="https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow"
+                            layers="dzialki,numery_dzialek"
+                            format="image/png"
+                            transparent
+                            opacity={0.75}
+                            version="1.1.1"
+                            srs="EPSG:3857"
                           />
 
                           {/* KIUT GUGiK — uzbrojenie terenu (WMS) */}
@@ -3112,11 +3006,15 @@ export default function KalkulatorPage() {
                           style={{ height: "100%", width: "100%" }}
                           scrollWheelZoom
                         >
-                          {/* OpenTopoMap — widoczne linie HV, drogi, rzeki */}
-                          <TileLayer
-                            url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
-                            attribution='© <a href="https://opentopomap.org">OpenTopoMap</a> · <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
-                            maxZoom={17}
+                          {/* Geoportal Orto (WMS) — oficjalny podkład */}
+                          <WMSTileLayer
+                            url="https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution"
+                            layers="Raster"
+                            format="image/png"
+                            transparent={false}
+                            version="1.1.1"
+                            srs="EPSG:3857"
+                            attribution="Geoportal Orto"
                           />
                           {/* Granica działki */}
                           <GeoJSONLayers
@@ -3223,6 +3121,12 @@ export default function KalkulatorPage() {
                         Gaz: {utils.gaz ? "✓" : "—"} · Woda:{" "}
                         {utils.woda ? "✓" : "—"} · Kanal.:{" "}
                         {utils.kanal ? "✓" : "—"}
+                        {" · Telekom/światł.: "}
+                        {infra.telecom?.detected ? (
+                          <span style={{ color: "#d4a012", fontWeight: 700 }}>✓ Wykryto (GESUT)</span>
+                        ) : (
+                          "—"
+                        )}
                       </div>
                     </div>
                   </div>
@@ -3411,17 +3315,35 @@ export default function KalkulatorPage() {
                             <td>{ksws.label || ksws.infra_type}</td>
                           </tr>
                           <tr>
+                            <td>Rodzaj użytku (EGiB)</td>
+                            <td>{egib.land_type === "building" ? "budowlany" : "rolny"}</td>
+                          </tr>
+                          <tr>
                             <td>Szerokość pasa ochronnego</td>
                             <td>{ksws.band_width_m} m</td>
                           </tr>
                           <tr>
                             <td>Powierzchnia pasa</td>
-                            <td>{fmt(ksws.band_area_m2)} m²</td>
+                            <td>
+                              {fmt(ksws.band_area_m2)} m²
+                              {hasLine && (ksws.band_area_m2 || 0) === 0 && (
+                                <span style={{ display: "block", fontSize: "0.7rem", color: "#c0392b", marginTop: 4 }}>
+                                  Brak pow. pasa — uzupełnij Długość linii w Korekcie ręcznej i ponów analizę.
+                                </span>
+                              )}
+                            </td>
                           </tr>
                           <tr>
                             <td>Wartość nieruchomości</td>
                             <td>{fmtPLN(ksws.property_value_total)}</td>
                           </tr>
+                          {egib.land_type === "agricultural" && (
+                            <tr style={{ background: "#fff8e1" }}>
+                              <td colSpan={2} style={{ padding: "10px 12px", fontSize: "0.75rem", color: "#b45309", borderLeft: "4px solid #f59e0b" }}>
+                                <strong>⚠️ Wartość naliczona dla gruntu rolnego.</strong> Jeśli działka jest budowlana, ustaw w <strong>Korekcie ręcznej</strong> pole <strong>Rodzaj użytku</strong> = <em>budowlana</em> i kliknij <strong>Analizuj</strong> — wartość i Track A/B zostaną przeliczone.
+                              </td>
+                            </tr>
+                          )}
                           <tr>
                             <td>Cena bazowa</td>
                             <td>{fmtM2(ksws.price_per_m2)}</td>

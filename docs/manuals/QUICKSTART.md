@@ -78,6 +78,38 @@ curl -X POST http://localhost:8080/api/valuation \
 
 ---
 
+## 📦 Jak przetestować analizę zbiorczo (batch)
+
+1. **Uruchom backend i frontend** (jak wyżej: backend na 8080, frontend na 3001).
+
+2. **Wejdź w Analizę hurtową:**  
+   Menu → **Analiza hurtowa** (lub `http://localhost:3001/kalkulator/batch`).
+
+3. **Wgraj plik CSV lub wklej listę działek:**
+   - **Plik:** minimum kolumna `parcel_id` (pełny identyfikator, np. `142003_2.0002.81/5`). Opcjonalnie: `obreb`, `county`, `municipality`.
+   - **Szybki test (3 działki):** wgraj plik  
+     `data/samples/test_batch_3parcele.csv`  
+     albo wklej w pole „wklej listę identyfikatorów”:
+     ```
+     142003_2.0002.81/5
+     142003_2.0002.81/8
+     142003_2.0003.101/1
+     ```
+
+4. **Kliknij „Analizuj”** — backend pobierze geometrie z ULDK, Overpass/BDOT dla linii i słupów, GUS dla cen, i zwróci wyniki.
+
+5. **Po zakończeniu zobaczysz:**
+   - **Mapę zbiorczą** — kolorowe działki, warstwy OIM/KIUT (linie), słupy (jeśli backend je zwrócił).
+   - **Szczegółowe zestawienie** — tabela z kolizją, KV, pow., PLN/m², długość linii, pas, Track A/B.
+   - **Log** — kroki batcha (ULDK, OSM, analiza).
+
+6. **Raport zbiorczy:**  
+   **Historia raportów** → wybierz ostatni batch → **Otwórz ostatni raport zbiorczy** (HTML do druku/zapisu).
+
+**Format CSV:** nagłówek z `parcel_id` (wymagane); opcjonalnie `obreb`, `county`, `municipality`. Przykładowe pliki: `data/samples/test_batch_3parcele.csv` (3 działki), `frontend-react/public/sample_parcels_99.csv` (większy zestaw).
+
+---
+
 ## ⚠️ Local nie działa?
 
 - **Backend musi działać pierwszy** — frontend (3001) przekierowuje `/api` na `localhost:8080`. Bez backendu na 8080 formularz i analiza się nie połączą.

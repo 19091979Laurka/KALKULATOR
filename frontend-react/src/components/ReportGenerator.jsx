@@ -1,19 +1,34 @@
 import React, { useState } from 'react';
+import { toast } from 'react-toastify';
+import { buildSingleHtml } from '../DemoPages/Kalkulator/HistoriaAnalizPage';
 
 /**
- * ReportGenerator - Generuje piękny raport HTML z danymi działki
- * Obsługuje: Generowanie PDF, HTML, eksport danych
- * Design: Kolorowe boxy inspirowane Dashboard template
+ * ReportGenerator - Generuje raport HTML (ten sam szablon co w Historii analiz).
+ * Obsługuje: PDF (podgląd), HTML (pobierz), JSON (eksport danych).
  *
  * Props:
- * - parcelData: Object with complete parcel analysis data
- * - onDownload: Callback function when report is generated
+ * - parcelData: { parcel_id, master_record } — wynik z Analizy działki (API)
+ * - onDownload: Callback po wygenerowaniu
  */
 
 const ReportGenerator = ({ parcelData, onDownload = null }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportFormat, setReportFormat] = useState('pdf');
   const [darkMode, setDarkMode] = useState(false);
+
+  const safeParcelId = (parcelData?.parcel_id || 'raport').replace(/[/\\?*:|"]/g, '_');
+
+  /** Ten sam raport co w Historii — ujednolicone wyświetlanie. */
+  const buildReportHtml = () => {
+    if (!parcelData) return '<html><body><h1>Brak danych</h1></body></html>';
+    const master = parcelData.master_record || parcelData.data || {};
+    const item = {
+      parcel_id: parcelData.parcel_id || '—',
+      full_master_record: master,
+      date: new Date().toLocaleString('pl-PL'),
+    };
+    return buildSingleHtml(item);
+  };
 
   const generateHTMLReport = (data, isDark = false) => {
     if (!data) {
@@ -492,31 +507,40 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
     return html;
   };
 
+  const triggerDownload = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 200);
+  };
+
   const handleGenerateReport = async () => {
+    if (!parcelData) {
+      toast.error('Brak danych — najpierw uruchom analizę działki (Analizuj).');
+      return;
+    }
+
     setIsGenerating(true);
+    const dateStr = new Date().toISOString().split('T')[0];
 
     try {
-      // Zawsze generuj z jasnym motywem dla lepszego wyglądu raportów
-      const htmlContent = generateHTMLReport(parcelData, false);
+      const htmlContent = buildReportHtml();
 
       if (reportFormat === 'html') {
-        // Pobierz HTML
         const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `raport-${parcelData.parcel_id}-${new Date().toISOString().split('T')[0]}.html`;
-        link.click();
-        URL.revokeObjectURL(url);
+        triggerDownload(blob, `raport-${safeParcelId}-${dateStr}.html`);
+        toast.success('Raport HTML pobrany — otwórz plik w przeglądarce.');
       } else if (reportFormat === 'pdf') {
-        // Otwórz w nowej karcie (user może wydrukować jako PDF)
-        // Użyj Blob URL zamiast document.write() - bardziej niezawodne w nowoczesnych przeglądarkach
         const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
         const blobUrl = URL.createObjectURL(blob);
         const pdfWindow = window.open(blobUrl, '_blank');
         if (pdfWindow) {
           pdfWindow.onload = function() {
-            // Add a print button to the generated HTML
             const printBtn = pdfWindow.document.createElement('button');
             printBtn.innerHTML = '🖨️ Drukuj / Zapisz PDF';
             printBtn.style.cssText = 'position: fixed; top: 20px; right: 20px; background: linear-gradient(135deg, #b8963e, #d4af62); color: white; border: none; padding: 10px 28px; border-radius: 50px; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 14px rgba(184,150,62,0.4); z-index: 9999;';
@@ -525,37 +549,30 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
             pdfWindow.document.body.appendChild(printBtn);
           };
           pdfWindow.focus();
-          // Wyczyść URL po krótkim opóźnieniu
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 500);
+          toast.success('Podgląd raportu otwarty — użyj przycisku „Drukuj / Zapisz PDF” lub Ctrl+P.');
         } else {
-          console.error('Nie udało się otworzyć okna podglądu PDF. Sprawdź blokady pop-upów.');
-          alert('Nie udało się otworzyć podglądu PDF. Sprawdź ustawienia blokady pop-upów w przeglądarce.');
+          toast.error('Zablokowano okno — zezwól na wyskakujące okna dla tej strony.');
         }
       } else if (reportFormat === 'json') {
-        // Pobierz dane jako JSON
         const json = JSON.stringify(parcelData, null, 2);
         const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `raport-${parcelData.parcel_id}-${new Date().toISOString().split('T')[0]}.json`;
-        link.click();
-        URL.revokeObjectURL(url);
+        triggerDownload(blob, `raport-${safeParcelId}-${dateStr}.json`);
+        toast.success('Dane JSON pobrane.');
       }
 
       if (onDownload) {
-        onDownload({
-          format: reportFormat,
-          parcelId: parcelData.parcel_id,
-          timestamp: new Date().toISOString()
-        });
+        onDownload({ format: reportFormat, parcelId: parcelData.parcel_id, timestamp: new Date().toISOString() });
       }
     } catch (error) {
       console.error('Error generating report:', error);
+      toast.error('Błąd generowania raportu: ' + (error?.message || 'nieznany'));
     } finally {
       setIsGenerating(false);
     }
   };
+
+  const hasData = !!parcelData;
 
   return (
     <div style={{
@@ -567,7 +584,11 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
         <h3 style={{ margin: 0, color: '#2c3e50' }}>📄 Generuj Raport</h3>
-        <div style={{ fontSize: '0.85rem', color: '#27ae60', fontWeight: '600' }}>✅ Jasny motyw z kolorowymi boxami</div>
+        {hasData ? (
+          <div style={{ fontSize: '0.85rem', color: '#27ae60', fontWeight: '600' }}>✅ Ten sam raport co w Historii</div>
+        ) : (
+          <div style={{ fontSize: '0.85rem', color: '#e67e22', fontWeight: '600' }}>Uruchom analizę działki, aby pobrać raport</div>
+        )}
       </div>
 
       <div style={{
@@ -588,8 +609,9 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
             padding: '12px',
             border: `2px solid ${reportFormat === format.value ? '#667eea' : '#ecf0f1'}`,
             borderRadius: '8px',
-            cursor: 'pointer',
+            cursor: hasData ? 'pointer' : 'not-allowed',
             background: reportFormat === format.value ? '#f0f4ff' : '#fff',
+            opacity: hasData ? 1 : 0.7,
             transition: 'all 0.3s ease'
           }}>
             <input
@@ -597,7 +619,8 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
               value={format.value}
               checked={reportFormat === format.value}
               onChange={(e) => setReportFormat(e.target.value)}
-              style={{ cursor: 'pointer' }}
+              disabled={!hasData}
+              style={{ cursor: hasData ? 'pointer' : 'not-allowed' }}
             />
             <span style={{ fontWeight: '500', color: '#2c3e50' }}>{format.label}</span>
           </label>
@@ -606,7 +629,7 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
 
       <button
         onClick={handleGenerateReport}
-        disabled={isGenerating}
+        disabled={isGenerating || !hasData}
         style={{
           width: '100%',
           padding: '14px 30px',
@@ -616,7 +639,7 @@ const ReportGenerator = ({ parcelData, onDownload = null }) => {
           borderRadius: '8px',
           fontSize: '1rem',
           fontWeight: '600',
-          cursor: isGenerating ? 'not-allowed' : 'pointer',
+          cursor: isGenerating || !hasData ? 'not-allowed' : 'pointer',
           opacity: isGenerating ? 0.7 : 1,
           transition: 'all 0.3s ease',
           boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)'

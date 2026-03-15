@@ -15,20 +15,27 @@ export function buildSingleHtml(item) {
   const meta = mr.parcel_metadata || {};
 
   const area = geom.area_m2 || 0;
-  const price = market.average_price_m2 || 0;
-  const trackA = comp.track_a?.total || 0;
-  const trackB = comp.track_b?.total || 0;
+  // Cena: average (z backendu) lub fallback na RCN/GUS gdy API zwróciło 0 (np. timeout GUS BDL)
+  const price = market.average_price_m2 ?? market.rcn_price_m2 ?? market.gus_price_m2 ?? 0;
+  const trackA = comp.track_a?.total ?? 0;
+  const trackB = comp.track_b?.total ?? 0;
   const total = trackA + trackB;
   const collision = !!pl.detected;
+  const missingLength = collision && !(mr.ksws?.line_length_m > 0);
+  const telecom = infra.telecom || {};
+  const telecomDetected = !!telecom.detected;
   const dateStr = item.date || new Date().toLocaleString("pl-PL");
   const cq = mr.claims_qualification || {};
   const totalActive = cq.total_active_claims ?? total;
   const priceStatus = market.status || "";
   const integrationErrorPrice = (price == null || price === 0) && priceStatus !== "Korekta ręczna";
+  const egib = mr.egib || {};
+  const landType = egib.land_type || "agricultural";
+  const isAgricultural = landType === "agricultural";
 
   const fmtI = (v) => Math.round(v || 0).toLocaleString("pl-PL");
   const fmtN = (v) => (v || 0).toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const priceSub = integrationErrorPrice ? "Cena nie została pobrana z GUS BDL — sprawdź połączenie z API." : ("GUS BDL · " + (market.price_source || "GUS"));
+  const priceSub = integrationErrorPrice ? "Brak ceny z GUS BDL — uzupełnij Cenę rynkową w Korekcie ręcznej i uruchom Analizuj ponownie." : ("GUS BDL · " + (market.price_source || "GUS"));
 
   const parcelGeo = geom.geojson_ll || geom.geojson || null;
   const centroid = geom.centroid_ll || null;
@@ -36,6 +43,7 @@ export function buildSingleHtml(item) {
   const plFeatures = (plGeojson && plGeojson.features && Array.isArray(plGeojson.features)) ? plGeojson.features : (pl.features && Array.isArray(pl.features)) ? pl.features : [];
   const powerLinesGeojson = (plGeojson && (plGeojson.features?.length || plGeojson.type === "LineString" || plGeojson.type === "MultiLineString" || plGeojson.coordinates)) ? plGeojson : (plFeatures.length > 0) ? { type: "FeatureCollection", features: plFeatures } : null;
   const powerLinesVoltage = pl.voltage || null;
+  const polesGeojson = infra.power?.poles_geojson || null;
 
   return `<!DOCTYPE html>
 <html lang="pl">
@@ -44,7 +52,6 @@ export function buildSingleHtml(item) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Raport KSWS — ${item.parcel_id}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #f4f6f8; color: #2c3e50; font-size: 13px; line-height: 1.4; }
@@ -71,9 +78,13 @@ export function buildSingleHtml(item) {
     
     /* Middle Section: Map + Info Cards */
     .mid-section { display: grid; grid-template-columns: 1fr 300px; gap: 20px; margin-bottom: 20px; }
-    .map-container { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+    .map-container { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; flex-direction: column; min-height: 450px; }
     .map-header { font-size: 14px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-    #map { width: 100%; flex: 1; min-height: 400px; border-radius: 8px; background: #eee; }
+    #map-wrap { position: relative; width: 100%; height: 420px; min-height: 420px; border-radius: 8px; background: #e8ecf0; overflow: hidden; }
+    #map { position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; z-index: 0; }
+    #map-fallback { position: absolute; inset: 0; z-index: 1; display: none; }
+    #map-fallback img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    #map-kiut { mix-blend-mode: normal; }
     
     .info-cards { display: flex; flex-direction: column; gap: 12px; }
     .i-card { background: white; border-radius: 12px; padding: 14px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: flex-start; gap: 12px; }
@@ -179,13 +190,20 @@ export function buildSingleHtml(item) {
         <div class="t-card-title">Cena Rynkowa</div>
         <div class="t-card-val">${integrationErrorPrice ? "—" : fmtN(price) + " zł/m²"}</div>
         <div class="t-card-sub">${priceSub}</div>
+        ${integrationErrorPrice ? `<div style="margin-top:6px;font-size:0.75rem;color:#c0392b;font-weight:600;">Uzupełnij Cenę rynkową w Korekcie ręcznej (Analiza działki) i uruchom Analizuj ponownie.</div>` : ""}
       </div>
     </div>
     
     <div class="mid-section">
       <div class="map-container">
         <div class="map-header">🗺️ Wizualizacja działki</div>
-        <div id="map"></div>
+        <div id="map-wrap">
+          <div id="map"></div>
+          <div id="map-fallback">
+            <img id="map-orto" alt="Orto Geoportal">
+            <img id="map-kiut" alt="KIUT GUGiK">
+          </div>
+        </div>
       </div>
       
       <div class="info-cards">
@@ -209,8 +227,8 @@ export function buildSingleHtml(item) {
           <div class="i-icon red">⚡</div>
           <div class="i-content">
             <div class="i-title">Sieci Przesyłowe (KIUT GUGiK)</div>
-            <div class="i-val">${collision ? 'Wykryto' : 'Brak'} — ${pl.voltage || ""} — strefa ${mr.ksws?.band_width_m || 0} m · dł. ${fmtI(mr.ksws?.line_length_m || 0)} m</div>
-            <div class="i-sub">Gaz: — Woda: — Kanal: —</div>
+            <div class="i-val">${collision ? 'Wykryto' : 'Brak'} — ${pl.voltage || ""} — strefa ${mr.ksws?.band_width_m || 0} m · dł. ${missingLength ? '<span style="color:#e67e22;font-weight:700;">brak wektora — wpisz w Korekcie ręcznej (Analiza działki)</span>' : fmtI(mr.ksws?.line_length_m || 0) + ' m'}</div>
+            <div class="i-sub">${missingLength ? 'Analiza działki → Korekta ręczna → Długość linii [m] → Analizuj ponownie' : `Gaz: — Woda: — Kanal: —${telecomDetected ? ' · <span style="color:#d4a012;font-weight:700;">Telekom/światłowód: Wykryto (GESUT)</span>' : ' · Telekom: —'}`}</div>
           </div>
         </div>
         <div class="i-card">
@@ -277,6 +295,13 @@ export function buildSingleHtml(item) {
     
     <div class="table-card">
       <div class="table-header">📊 Podstawa wyceny KSWS</div>
+      ${missingLength ? `
+      <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:12px;color:#856404;font-size:12px;line-height:1.5;">
+        <strong>⚠️ Brak długości linii — wyliczenia KSWS wynoszą 0,00 PLN</strong><br>
+        Infrastruktura wykryta (${pl.voltage || "nieznane napięcie"}), ale brak geometrii wektorowej z OpenStreetMap / BDOT10k.<br>
+        <strong>Co zrobić:</strong> Wróć do analizy działki → <em>Korekta ręczna</em> → wpisz długość linii przez działkę (zmierz w <a href="https://mapy.geoportal.gov.pl" target="_blank" style="color:#856404;">Geoportalu</a>) i uruchom analizę ponownie.
+      </div>
+      ` : ""}
       <table style="table-layout:fixed;width:100%;">
         <thead>
           <tr>
@@ -296,26 +321,38 @@ export function buildSingleHtml(item) {
             <td>obniżenie wartości pasa</td>
           </tr>
           <tr>
+            <td>Rodzaj użytku (EGiB)</td>
+            <td class="td-val">${isAgricultural ? "rolny" : "budowlany"}</td>
+            <td colspan="3" style="font-size:11px;color:#7f8c8d;">${isAgricultural ? "Cena i wartość z GUS dla gruntu rolnego. Jeśli działka jest budowlana → Korekta ręczna." : ""}</td>
+          </tr>
+          <tr>
             <td>Szerokość pasa ochronnego</td>
             <td class="td-val">${mr.ksws?.band_width_m || "—"} m</td>
             <td class="td-center" style="color:#e74c3c;">k</td>
             <td class="td-center">${(comp.basis && comp.basis.k != null) ? comp.basis.k : "0,5"}</td>
             <td>współczynnik korzystania</td>
           </tr>
-          <tr>
+          <tr${missingLength ? ' style="background:#fff8e1;"' : ''}>
             <td>Powierzchnia pasa</td>
-            <td class="td-val">${fmtI(mr.ksws?.band_area_m2 || 0)} m²</td>
+            <td class="td-val">${missingLength ? '<span style="color:#e67e22;font-weight:700;">0 m² ⚠️ brak dł.</span>' : fmtI(mr.ksws?.band_area_m2 || 0) + ' m²'}</td>
             <td class="td-center" style="color:#e74c3c;">R</td>
             <td class="td-center">${(comp.basis && comp.basis.R != null) ? comp.basis.R : "0,06"}</td>
             <td>stopa kapitalizacji</td>
           </tr>
           <tr>
             <td>Wartość nieruchomości</td>
-            <td class="td-val">${fmtN(area * price)} PLN</td>
+            <td class="td-val">${fmtN(mr.ksws?.property_value_total ?? area * price)} PLN</td>
             <td class="td-center" style="color:#e74c3c;">impact</td>
             <td class="td-center">${(comp.basis && comp.basis.impact_judicial != null) ? comp.basis.impact_judicial : "0,05"}</td>
             <td>wpływ sądowy (OBN)</td>
           </tr>
+          ${isAgricultural ? `
+          <tr style="background:#fff8e1;">
+            <td colspan="5" style="padding:10px 12px;font-size:12px;color:#b45309;border-left:4px solid #f59e0b;">
+              <strong>⚠️ Wartość naliczona dla gruntu rolnego.</strong> Jeśli działka jest budowlana, ustaw w <strong>Korekcie ręcznej</strong> (Analiza działki) pole <strong>Rodzaj użytku</strong> = <em>budowlana</em> i ponów analizę — wartość nieruchomości i kwoty Track A/B zostaną przeliczone (cena budowlana ~200–500 zł/m²).
+            </td>
+          </tr>
+          ` : ""}
           <tr>
             <td>Cena bazowa</td>
             <td class="td-val">${integrationErrorPrice ? "Błąd integracji (GUS)" : fmtN(price) + " zł/m²"}</td>
@@ -429,12 +466,16 @@ export function buildSingleHtml(item) {
     <button class="print-btn no-print" onclick="window.print()">🖨️ Drukuj Raport PDF</button>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script>
     (function() {
       var centroid = ${JSON.stringify(centroid || null)};
       var geojson = ${JSON.stringify(parcelGeo || null)};
       var powerLinesGeojson = ${JSON.stringify(powerLinesGeojson || null)};
+      var polesGeojson = ${JSON.stringify(polesGeojson || null)};
       var defaultVoltage = ${JSON.stringify(powerLinesVoltage || null)};
+      var initAttempts = 0;
+      var maxInitAttempts = 25;
       function styleByVoltage(voltage) {
         var v = (voltage || '').toUpperCase();
         var base = { opacity: 0.9, lineCap: 'round', lineJoin: 'round' };
@@ -462,25 +503,78 @@ export function buildSingleHtml(item) {
           }).addTo(map);
         } catch (e) {}
       }
+      function addPolesToMap(map, g) {
+        if (!g || !g.features || !g.features.length) return;
+        try {
+          g.features.forEach(function(feat) {
+            var geom = feat.geometry || feat;
+            if (geom.type !== 'Point' || !Array.isArray(geom.coordinates) || geom.coordinates.length < 2) return;
+            var lat = geom.coordinates[1], lng = geom.coordinates[0];
+            L.circleMarker([lat, lng], { radius: 6, fillColor: '#1a1a1a', color: '#fff', weight: 1.5, fillOpacity: 0.95 })
+              .bindTooltip('Słup energetyczny', { direction: 'top', className: 'no-bg-tooltip' }).addTo(map);
+          });
+        } catch (e) {}
+      }
+      function buildFallbackImages() {
+        if (!geojson || !geojson.coordinates) return;
+        try {
+          var ring = geojson.type === 'Polygon' ? geojson.coordinates[0]
+                   : geojson.type === 'MultiPolygon' ? geojson.coordinates[0][0] : null;
+          if (!ring || !ring.length) return;
+          var minLon = ring[0][0], maxLon = ring[0][0], minLat = ring[0][1], maxLat = ring[0][1];
+          ring.forEach(function(c){
+            minLon = Math.min(minLon, c[0]); maxLon = Math.max(maxLon, c[0]);
+            minLat = Math.min(minLat, c[1]); maxLat = Math.max(maxLat, c[1]);
+          });
+          var padLon = Math.max((maxLon - minLon) * 0.2, 0.0008);
+          var padLat = Math.max((maxLat - minLat) * 0.2, 0.0008);
+          var bbox = [minLon - padLon, minLat - padLat, maxLon + padLon, maxLat + padLat].join(',');
+          var ortoUrl = '${GUGIK_WMS.ORTO.baseUrl}?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=${GUGIK_WMS.ORTO.layers}&STYLES=&FORMAT=image/png&SRS=EPSG:4326&BBOX='+bbox+'&WIDTH=900&HEIGHT=900';
+          var kiutUrl = '${GUGIK_WMS.KIUT.baseUrl}?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=${GUGIK_WMS.KIUT.layers.uzbrojenie_full || GUGIK_WMS.KIUT.layers.uzbrojenie}&STYLES=&FORMAT=image/png&TRANSPARENT=TRUE&SRS=EPSG:4326&BBOX='+bbox+'&WIDTH=900&HEIGHT=900';
+          var ortoImg = document.getElementById('map-orto');
+          var kiutImg = document.getElementById('map-kiut');
+          if (ortoImg) ortoImg.src = ortoUrl;
+          if (kiutImg) kiutImg.src = kiutUrl;
+        } catch (_) {}
+      }
+
       function init() {
-        if (typeof L === 'undefined') { setTimeout(init, 300); return; }
+        initAttempts++;
+        if (typeof L === 'undefined') {
+          if (initAttempts < maxInitAttempts) setTimeout(init, 250);
+          else buildFallbackImages(); var fb = document.getElementById('map-fallback'); if (fb) fb.style.display = 'block';
+          return;
+        }
         var el = document.getElementById('map');
-        if (!el) return;
+        if (!el) { if (initAttempts < maxInitAttempts) setTimeout(init, 150); return; }
+        var wrap = document.getElementById('map-wrap');
+        if (wrap && (wrap.offsetHeight < 100 || wrap.offsetWidth < 100)) {
+          if (initAttempts < maxInitAttempts) setTimeout(init, 200);
+          return;
+        }
         var center = [52.069, 19.48];
         if (Array.isArray(centroid) && centroid.length >= 2 && centroid[0] != null) {
           center = [Number(centroid[1]), Number(centroid[0])];
         }
         var map = L.map(el, { zoomControl: true, attributionControl: false, scrollWheelZoom: true, dragging: true, doubleClickZoom: true });
         
-        var satLayer = L.tileLayer('${BASE_LAYERS.esriSatellite.url}', { maxZoom: ${BASE_LAYERS.esriSatellite.maxZoom}, attribution: '${BASE_LAYERS.esriSatellite.attribution}' }).addTo(map);
-        var kiutLayer = L.tileLayer.wms('${GUGIK_WMS.KIUT.baseUrl}', { layers:'${GUGIK_WMS.KIUT.layers.uzbrojenie}', format:'image/png', transparent:true, opacity:1.0 }).addTo(map);
-        var egibLayer = L.tileLayer.wms('${GUGIK_WMS.KIEG.baseUrl}', { layers:'${GUGIK_WMS.KIEG.layers}', format:'image/png', transparent:true, opacity:0.8 }).addTo(map);
-        var powerLayer = L.tileLayer('${OIM_TILES.power}', { maxZoom:19, opacity:1.0, attribution:'© OpenInfra' }).addTo(map);
+        var ortoLayer = L.tileLayer.wms('${GUGIK_WMS.ORTO.baseUrl}', { layers:'${GUGIK_WMS.ORTO.layers}', format:'image/png', transparent:false, version:'1.1.1', crs:L.CRS.EPSG4326, opacity:1.0, attribution:'${GUGIK_WMS.ORTO.attribution}' }).addTo(map);
+        var kiutLayer = L.tileLayer.wms('${GUGIK_WMS.KIUT.baseUrl}', { layers:'${GUGIK_WMS.KIUT.layers.uzbrojenie}', format:'image/png', transparent:true, opacity:0.98, version:'1.1.1', crs:L.CRS.EPSG4326, zIndex:950 }).addTo(map);
+        var kiutFullLayer = L.tileLayer.wms('${GUGIK_WMS.KIUT.baseUrl}', { layers:'${GUGIK_WMS.KIUT.layers.uzbrojenie_full}', format:'image/png', transparent:true, opacity:0.85, version:'1.1.1', crs:L.CRS.EPSG4326, zIndex:940 }).addTo(map);
+        var egibLayer = L.tileLayer.wms('${GUGIK_WMS.KIEG.baseUrl}', { layers:'${GUGIK_WMS.KIEG.layers}', format:'image/png', transparent:true, opacity:0.8, version:'1.1.1', crs:L.CRS.EPSG4326, zIndex:400 }).addTo(map);
+        var powerLayer = L.tileLayer('${OIM_TILES.power}', { maxZoom:19, opacity:1.0, attribution:'© OpenInfra', zIndex:1000 }).addTo(map);
+        try { egibLayer.setZIndex(400); } catch(e) {}
+        try { kiutLayer.setZIndex(950); } catch(e) {}
+        try { kiutFullLayer.setZIndex(940); } catch(e) {}
+        try { powerLayer.setZIndex(1000); } catch(e) {}
+        try { kiutLayer.bringToFront(); } catch(e) {}
+        try { powerLayer.bringToFront(); } catch(e) {}
 
         L.control.layers(
-          { 'Satelita (Esri)': satLayer },
+          { 'Geoportal Orto (WMS)': ortoLayer },
           {
             '⚡ Raster z KIUT (GUGiK)': kiutLayer,
+            '🧭 KIUT pełne (wszystkie przewody)': kiutFullLayer,
             '⚡ Vektory OSM (Power)': powerLayer,
             '🗺️ Granice EGiB': egibLayer
           },
@@ -496,14 +590,39 @@ export function buildSingleHtml(item) {
             style: { color: collision ? '#ff0055' : '#00ffff', weight: 4, fillOpacity: 0.15 }
           }).addTo(map);
           addPowerLinesToMap(map, powerLinesGeojson, defaultVoltage);
-          try { map.fitBounds(layer.getBounds(), { padding: [16, 16] }); } catch(e) { map.setView(center, 15); }
+          addPolesToMap(map, polesGeojson);
+          try {
+            var b = layer.getBounds();
+            if (b.isValid()) map.fitBounds(b, { padding: [20, 20], maxZoom: 18 });
+            else map.setView(center, 15);
+          } catch(e) { map.setView(center, 15); }
         } else {
           addPowerLinesToMap(map, powerLinesGeojson, defaultVoltage);
+          addPolesToMap(map, polesGeojson);
           map.setView(center, 15);
         }
+        // Wielokrotne invalidateSize — mapa w nowej karcie/oknie potrzebuje tego po wyrenderowaniu DOM
+        [50, 150, 300, 500, 800, 1200].forEach(function(t) {
+          setTimeout(function() {
+            try { map.invalidateSize(); } catch(_) {}
+          }, t);
+        });
+
+        // Jeśli mapa nie zrenderuje warstw, pokaż fallback z WMS obrazów
+        setTimeout(function(){
+          var tiles = el.querySelectorAll('img.leaflet-tile');
+          if (!tiles || tiles.length === 0) {
+            buildFallbackImages();
+            var fb = document.getElementById('map-fallback');
+            if (fb) fb.style.display = 'block';
+          }
+        }, 2000);
       }
-      if (document.readyState === 'complete') init();
-      else window.addEventListener('load', init);
+      function runInit() {
+        if (document.readyState === 'complete') setTimeout(init, 150);
+        else window.addEventListener('load', function() { setTimeout(init, 150); });
+      }
+      runInit();
     })();
   </script>
 </body>

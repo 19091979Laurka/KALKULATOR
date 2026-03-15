@@ -65,6 +65,12 @@ export default function BatchHistoryPage() {
     const fmtI = (v) => Math.round(v || 0).toLocaleString("pl-PL");
     const VOLT_LABEL = { WN: "WN >110 kV", SN: "SN 1–110 kV", nN: "nN <1 kV" };
 
+    const successfulResults = results.filter(p => {
+      const d = p.master_record || p.data || {};
+      return d.status !== "ERROR" && p.status !== "ERROR";
+    });
+    const successfulCount = successfulResults.length;
+    const failedCount = results.length - successfulCount;
     const totalA = results.reduce((s, p) => {
       const d = p.master_record || p.data || {};
       return s + (d.compensation?.track_a?.total || 0);
@@ -73,10 +79,11 @@ export default function BatchHistoryPage() {
       const d = p.master_record || p.data || {};
       return s + (d.compensation?.track_b?.total || 0);
     }, 0);
-    const collisionCount = results.filter(p => {
+    const collisionCount = successfulResults.filter(p => {
       const d = p.master_record || p.data || {};
       return !!d.infrastructure?.power_lines?.detected;
     }).length;
+    const withoutCollisionCount = successfulCount - collisionCount;
 
     const parcelCards = results.map((p, i) => {
       const d = p.master_record || p.data || {};
@@ -115,6 +122,8 @@ export default function BatchHistoryPage() {
       const volt = VOLT_LABEL[pl.voltage] || pl.voltage || "—";
       const accentColor = collision ? "#e74c3c" : "#27ae60";
       const bgLight = collision ? "#fff5f5" : "#f5fff8";
+      const areaM2 = Number(geom.area_m2) || 0;
+      const bandAreaM2 = Number(ksws.band_area_m2) || 0;
 
       return `
       <div class="parcel-card" style="page-break-inside:avoid;break-inside:avoid;">
@@ -143,7 +152,7 @@ export default function BatchHistoryPage() {
             <div style="padding:16px 20px 12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;flex:1;">
               <div class="data-box-v2" style="border-left:3px solid #3498db;">
                 <div class="db-label">📐 Pow. działki</div>
-                <div class="db-value">${fmtI(geom.area_m2)} m²</div>
+                <div class="db-value">${fmtI(areaM2)} m²</div>
               </div>
               <div class="data-box-v2" style="border-left:3px solid #8e44ad;">
                 <div class="db-label">💰 Cena gruntu</div>
@@ -162,21 +171,25 @@ export default function BatchHistoryPage() {
                 <div class="db-value">${(ksws.line_length_m || pl.length_m || 0) > 0 ? fmtI(ksws.line_length_m || pl.length_m) + " m" : "—"}</div>
                 ${ksws.measurement_source && ksws.measurement_source !== "geodezyjne" ? `<span class="db-hint">⚠ ${ksws.measurement_source}</span>` : ""}
               </div>
+              <div class="data-box-v2" style="border-left:3px solid #8d6e63;">
+                <div class="db-label">🗼 Słupy</div>
+                <div class="db-value">${pl.poles_count ?? "—"}</div>
+              </div>
               <div class="data-box-v2" style="border-left:3px solid #27ae60;">
                 <div class="db-label">↔️ Szer. pasa</div>
                 <div class="db-value">${ksws.band_width_m || "—"} m</div>
               </div>
               <div class="data-box-v2" style="border-left:3px solid #f39c12;">
                 <div class="db-label">🔲 Pow. pasa</div>
-                <div class="db-value">${(ksws.band_area_m2 || 0) > 0 ? fmtI(ksws.band_area_m2) + " m²" : "—"}</div>
+                <div class="db-value">${bandAreaM2 > 0 ? fmtI(bandAreaM2) + " m²" : "—"}</div>
               </div>
               <div class="data-box-v2" style="border-left:3px solid #e67e22;">
                 <div class="db-label">📊 % w pasie</div>
-                <div class="db-value">${geom.area_m2 > 0 && ksws.band_area_m2 > 0 ? Math.min(100, Math.round(ksws.band_area_m2 / geom.area_m2 * 100)) + "%" : "—"}</div>
+                <div class="db-value">${areaM2 > 0 && bandAreaM2 > 0 ? Math.min(100, Math.round(bandAreaM2 / areaM2 * 100)) + "%" : "—"}</div>
               </div>
             </div>
 
-            <!-- Track A / B / RAZEM -->
+            <!-- Track A / B / Przedział -->
             <div style="padding:4px 20px 18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
               <!-- Track A -->
               <div class="track-box-a">
@@ -364,14 +377,15 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
   <!-- KPI -->
   <div class="kpi-row">
     <div class="kpi-card gold"><div><div class="kpi-label">Działek razem</div><div class="kpi-value">${results.length}</div><div class="kpi-sub">załadowanych z CSV</div></div><div class="kpi-icon">📦</div></div>
-    <div class="kpi-card red"><div><div class="kpi-label">Z kolizją</div><div class="kpi-value">${collisionCount}</div><div class="kpi-sub">wykryta infrastr.</div></div><div class="kpi-icon">⚡</div></div>
-    <div class="kpi-card green"><div><div class="kpi-label">Bez kolizji</div><div class="kpi-value">${results.length - collisionCount}</div><div class="kpi-sub">brak infrastruktury</div></div><div class="kpi-icon">✅</div></div>
-    <div class="kpi-card blue"><div><div class="kpi-label">Track A · Sąd</div><div class="kpi-value sm">${fmtN(totalA)} PLN</div><div class="kpi-sub">ścieżka sądowa</div></div><div class="kpi-icon">⚖️</div></div>
-    <div class="kpi-card purple"><div><div class="kpi-label">Track B · Neg.</div><div class="kpi-value sm">${fmtN(totalB)} PLN</div><div class="kpi-sub">negocjacje</div></div><div class="kpi-icon">🤝</div></div>
+    <div class="kpi-card green"><div><div class="kpi-label">Przetworzone</div><div class="kpi-value">${successfulCount}</div><div class="kpi-sub">OK · z danymi</div></div><div class="kpi-icon">✅</div></div>
+    <div class="kpi-card red"><div><div class="kpi-label">Błędów</div><div class="kpi-value">${failedCount}</div><div class="kpi-sub">nie pobrano</div></div><div class="kpi-icon">❌</div></div>
+    <div class="kpi-card blue"><div><div class="kpi-label">Z kolizją</div><div class="kpi-value">${collisionCount}</div><div class="kpi-sub">wśród OK</div></div><div class="kpi-icon">⚡</div></div>
+    <div class="kpi-card purple"><div><div class="kpi-label">Bez kolizji</div><div class="kpi-value">${withoutCollisionCount}</div><div class="kpi-sub">wśród OK</div></div><div class="kpi-icon">✓</div></div>
   </div>
   <div class="razem-banner">
     <div class="razem-banner-label">💰 Przedział roszczenia (wybór Track A lub B — nie sumować)</div>
     <div class="razem-banner-amount">${fmtN(totalA)} – ${fmtN(totalB)} PLN</div>
+    ${successfulCount === 0 ? '<div style="margin-top:10px;font-size:12px;opacity:0.9;">Żadna działka nie została poprawnie przetworzona — sprawdź format CSV lub logi w zakładce Info.</div>' : ''}
   </div>
 
   <!-- COLLECTIVE MAP VISUALIZATION -->
@@ -423,10 +437,19 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
 (function() {
   var PARCEL_MAPS = ${JSON.stringify(results.map(p => {
     const d = p.master_record || p.data || {};
+    const pl = d.infrastructure?.power_lines || {};
+    const plGeo = pl.geojson;
+    const lineFeatures = (plGeo?.features && Array.isArray(plGeo.features) && plGeo.features.length > 0)
+      ? plGeo.features
+      : (pl.features && Array.isArray(pl.features)) ? pl.features : [];
+    const polesGeo = d.infrastructure?.power?.poles_geojson;
+    const polesFeatures = polesGeo?.features && Array.isArray(polesGeo.features) ? polesGeo.features : [];
     return {
       centroid: d.geometry?.centroid_ll,
       geojson: d.geometry?.geojson_ll || d.geometry?.geojson,
       collision: !!d.infrastructure?.power_lines?.detected,
+      powerLineFeatures: lineFeatures,
+      polesFeatures: polesFeatures,
     };
   }))};
 
@@ -434,33 +457,39 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
     if (typeof L === 'undefined') { setTimeout(initMaps, 300); return; }
     console.log('initMaps called, Leaflet version:', L.version, 'Maps to render:', PARCEL_MAPS.length);
     PARCEL_MAPS.forEach(function(parcel, i) {
-      var el = document.getElementById('parcel-map-' + i);
-      console.log('Parcel', i, '- Element found:', !!el, 'Data:', { centroid: parcel.centroid, hasGeoJSON: !!parcel.geojson, collision: parcel.collision });
-      if (!el || el._leaflet_id) return;
-      var center = [52.069, 19.480];
-      if (Array.isArray(parcel.centroid) && parcel.centroid.length >= 2 && parcel.centroid[0] != null) {
-        center = [Number(parcel.centroid[1]), Number(parcel.centroid[0])];
-      } else if (parcel.geojson && parcel.geojson.coordinates) {
-        try {
+      try {
+        var el = document.getElementById('parcel-map-' + i);
+        if (!el || el._leaflet_id) return;
+        var center = [52.069, 19.480];
+        if (Array.isArray(parcel.centroid) && parcel.centroid.length >= 2 && parcel.centroid[0] != null) {
+          center = [Number(parcel.centroid[1]), Number(parcel.centroid[0])];
+        } else if (parcel.geojson && parcel.geojson.coordinates) {
           var ring = parcel.geojson.type === 'Polygon' ? parcel.geojson.coordinates[0]
                    : parcel.geojson.type === 'MultiPolygon' ? parcel.geojson.coordinates[0][0] : null;
           if (ring && ring.length) {
             center = [ring.reduce(function(s,c){return s+c[1]},0)/ring.length,
                       ring.reduce(function(s,c){return s+c[0]},0)/ring.length];
           }
-        } catch(e) {}
-      }
-      var map = L.map(el, { zoomControl: false, attributionControl: false, scrollWheelZoom: false, dragging: false, doubleClickZoom: false });
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { subdomains:'abcd', maxZoom:19 }).addTo(map);
-      L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.75 }).addTo(map);
-      // Warstwa uzbrojenia terenu - Open Infrastructure Map (stabilne, zawsze dostępne)
-      L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png', { maxZoom:19, opacity:0.8, attribution:'© OpenStreetMap contributors' }).addTo(map);
-      if (parcel.geojson && parcel.geojson.coordinates) {
-        var color = parcel.collision ? '#e53935' : '#1e88e5';
-        var layer = L.geoJSON(parcel.geojson, { style: { color: color, weight: 3, fillColor: color, fillOpacity: 0.12 } }).addTo(map);
-        try { map.fitBounds(layer.getBounds(), { padding: [8, 8] }); } catch(e) { map.setView(center, 14); }
-      } else {
-        map.setView(center, 14);
+        }
+        var map = L.map(el, { zoomControl: false, attributionControl: false, scrollWheelZoom: false, dragging: false, doubleClickZoom: false });
+        L.tileLayer.wms('https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution', { layers:'Raster', format:'image/png', transparent:false, version:'1.1.1', srs:'EPSG:3857', opacity:1.0 }).addTo(map);
+        var egib = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.75, crossOrigin:true, version:'1.1.1', srs:'EPSG:3857' }).addTo(map);
+        var kiut = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu', { layers:'przewod_elektroenergetyczny', format:'image/png', transparent:true, opacity:0.98, crossOrigin:true, version:'1.1.1', srs:'EPSG:3857' }).addTo(map);
+        var kiutFull = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu', { layers:'przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny,przewod_cieplowniczy,przewod_telekomunikacyjny,przewod_specjalny,przewod_niezidentyfikowany,przewod_urzadzenia', format:'image/png', transparent:true, opacity:0.9, crossOrigin:true, version:'1.1.1', srs:'EPSG:3857' }).addTo(map);
+        var oim = L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png', { maxZoom:19, opacity:1.0, attribution:'© OpenInfraMap' }).addTo(map);
+        try { egib.setZIndex(400); } catch(e) {}
+        try { kiut.setZIndex(950); } catch(e) {}
+        try { kiutFull.setZIndex(940); } catch(e) {}
+        try { oim.setZIndex(1000); } catch(e) {}
+        if (parcel.geojson && parcel.geojson.coordinates) {
+          var color = parcel.collision ? '#e53935' : '#1e88e5';
+          var layer = L.geoJSON(parcel.geojson, { style: { color: color, weight: 3, fillColor: color, fillOpacity: 0.12 } }).addTo(map);
+          try { map.fitBounds(layer.getBounds(), { padding: [8, 8] }); } catch(e) { map.setView(center, 14); }
+        } else {
+          map.setView(center, 14);
+        }
+      } catch (err) {
+        console.warn('initMaps parcel ' + i + ' failed:', err);
       }
     });
   }
@@ -480,14 +509,21 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
     });
 
     // Base layers
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-      { subdomains:'abcd', maxZoom:19, attribution:'© Carto' }).addTo(map);
-    L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow',
-      { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.75 }).addTo(map);
+    L.tileLayer.wms('https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution',
+      { layers:'Raster', format:'image/png', transparent:false, version:'1.1.1', srs:'EPSG:3857', opacity:1.0, attribution:'Geoportal Orto' }).addTo(map);
+    var egib = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow',
+      { layers:'dzialki,numery_dzialek', format:'image/png', transparent:true, opacity:0.75, crossOrigin:true, version:'1.1.1', srs:'EPSG:3857' }).addTo(map);
+    var kiut = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu',
+      { layers:'przewod_elektroenergetyczny', format:'image/png', transparent:true, opacity:0.98, crossOrigin:true, version:'1.1.1', srs:'EPSG:3857' }).addTo(map);
+    var kiutFull = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu',
+      { layers:'przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny,przewod_cieplowniczy,przewod_telekomunikacyjny,przewod_specjalny,przewod_niezidentyfikowany,przewod_urzadzenia', format:'image/png', transparent:true, opacity:0.9, crossOrigin:true, version:'1.1.1', srs:'EPSG:3857' }).addTo(map);
+    try { egib.setZIndex(400); } catch(e) {}
+    try { kiut.setZIndex(950); } catch(e) {}
+    try { kiutFull.setZIndex(940); } catch(e) {}
 
     // Infrastructure layers
     var powerLayer = L.tileLayer('https://tiles.openinframap.org/power/{z}/{x}/{y}.png',
-      { maxZoom:19, opacity:0.8, attribution:'© OpenInfra' });
+      { maxZoom:19, opacity:1.0, attribution:'© OpenInfra' });
     var gasLayer = L.tileLayer('https://tiles.openinframap.org/gas/{z}/{x}/{y}.png',
       { maxZoom:19, opacity:0.7, attribution:'© OpenInfra' });
     var waterLayer = L.tileLayer('https://tiles.openinframap.org/water/{z}/{x}/{y}.png',
@@ -502,7 +538,8 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
     var allBounds = [];
 
     PARCEL_MAPS.forEach(function(parcel, i) {
-      if (parcel.geojson && parcel.geojson.coordinates) {
+      if (!parcel.geojson || !parcel.geojson.coordinates) return;
+      try {
         var color = parcel.collision ? '#e53935' : '#1e88e5';
         var layer = L.geoJSON(parcel.geojson, {
           style: {
@@ -514,31 +551,59 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
           }
         });
         parcelGroup.addLayer(layer);
-        try {
-          var bounds = layer.getBounds();
-          allBounds.push([bounds.getNorthWest(), bounds.getSouthEast()]);
-        } catch(e) {}
-      }
+        var bounds = layer.getBounds();
+        allBounds.push([bounds.getNorthWest(), bounds.getSouthEast()]);
+      } catch (e) { console.warn('Collective map parcel ' + i + ' skip:', e); }
     });
 
     parcelGroup.addTo(map);
 
-    // Fit all parcels in view
-    if (allBounds.length > 0) {
-      var group = L.featureGroup(PARCEL_MAPS.filter(p => p.geojson).map(p =>
-        L.geoJSON(p.geojson)
-      ));
-      try { map.fitBounds(group.getBounds(), { padding: [50, 50] }); }
-      catch(e) { map.setView([52.069, 19.480], 8); }
+    // Linie energetyczne (grube czarne) i słupy — jak na Geoportalu, na wierzchu
+    var infraGroup = L.featureGroup();
+    PARCEL_MAPS.forEach(function(parcel) {
+      (parcel.powerLineFeatures || []).forEach(function(feat) {
+        try {
+          var geom = feat.geometry || feat;
+          if (!geom || !geom.coordinates) return;
+          var layer = L.geoJSON(geom.type ? geom : { type: 'Feature', geometry: geom, properties: {} }, {
+            style: { color: '#1a1a1a', weight: 6, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }
+          });
+          layer.eachLayer(function(l) { infraGroup.addLayer(l); });
+        } catch (e) {}
+      });
+      (parcel.polesFeatures || []).forEach(function(feat) {
+        try {
+          var geom = feat.geometry || feat;
+          if (geom.type !== 'Point' || !Array.isArray(geom.coordinates) || geom.coordinates.length < 2) return;
+          var lat = geom.coordinates[1], lng = geom.coordinates[0];
+          L.circleMarker([lat, lng], { radius: 7, fillColor: '#1a1a1a', color: '#fff', weight: 2, fillOpacity: 0.95 })
+            .bindTooltip('Słup energetyczny', { direction: 'top' }).addTo(infraGroup);
+        } catch (e) {}
+      });
+    });
+    infraGroup.addTo(map);
+    try { infraGroup.setZIndex(650); } catch (e) {}
+
+    // Fit all parcels in view (tylko działki z poprawnym geojson)
+    var validForBounds = PARCEL_MAPS.filter(function(p) { return p.geojson && p.geojson.coordinates; });
+    if (validForBounds.length > 0) {
+      try {
+        var group = L.featureGroup(validForBounds.map(function(p) { return L.geoJSON(p.geojson); }));
+        map.fitBounds(group.getBounds(), { padding: [50, 50] });
+      } catch(e) { map.setView([52.069, 19.480], 8); }
     } else {
       map.setView([52.069, 19.480], 8);
     }
 
     // Layer controls
     L.control.layers(
-      { 'Mapa': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-        { subdomains:'abcd', maxZoom:19 }) },
+      { 'Geoportal Orto (WMS)': L.tileLayer.wms('https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution',
+        { layers:'Raster', format:'image/png', transparent:false, version:'1.1.1', srs:'EPSG:3857', opacity:1.0 }) },
       {
+        '⚡ KIUT elektro (WMS)': L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu',
+          { layers:'przewod_elektroenergetyczny', format:'image/png', transparent:true, opacity:0.7, crossOrigin:true, version:'1.1.1', srs:'EPSG:3857' }),
+        '🧭 KIUT pełne (wszystkie przewody)': L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu',
+          { layers:'przewod_elektroenergetyczny,przewod_gazowy,przewod_wodociagowy,przewod_kanalizacyjny,przewod_cieplowniczy,przewod_telekomunikacyjny,przewod_specjalny,przewod_niezidentyfikowany,przewod_urzadzenia', format:'image/png', transparent:true, opacity:0.65, crossOrigin:true, version:'1.1.1', srs:'EPSG:3857' }),
         '⚡ Linie energetyczne (Power)': powerLayer,
         '🔥 Gaz (Gas)': gasLayer,
         '💧 Woda (Water)': waterLayer,
@@ -558,7 +623,9 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
       div.style.boxShadow = '0 0 15px rgba(0,0,0,0.2)';
       div.innerHTML = '<strong>Legenda</strong><br>' +
         '<span style="color:#e53935;font-weight:bold;">— — —</span> Z kolizją (collision)<br>' +
-        '<span style="color:#1e88e5;font-weight:bold;">———</span> Bez kolizji (no collision)';
+        '<span style="color:#1e88e5;font-weight:bold;">———</span> Bez kolizji (no collision)<br>' +
+        '<span style="color:#1a1a1a;font-weight:bold;">━━━</span> Linia energetyczna (wektor)<br>' +
+        '<span style="color:#1a1a1a;">●</span> Słup energetyczny';
       return div;
     };
     legend.addTo(map);
@@ -595,6 +662,24 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
 
       <div className="history-content">
         {!loading && history.length > 0 && (
+          <>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center", marginBottom: "20px" }}>
+            <Button
+              color="primary"
+              size="md"
+              onClick={() => {
+                const sorted = [...history].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                const last = sorted[0];
+                if (last?.batch_id) loadBatchDetails(last.batch_id);
+              }}
+              style={{ fontWeight: 600 }}
+            >
+              📊 Otwórz ostatni raport zbiorczy
+            </Button>
+            <span style={{ fontSize: "0.9rem", color: "#6c757d" }}>
+              Otwiera najnowszy raport z listy w nowej karcie
+            </span>
+          </div>
           <div className="history-search-wrap" style={{ marginBottom: "24px", maxWidth: "480px" }}>
             <label htmlFor="history-search" className="visually-hidden">Szukaj po nazwie klienta lub pliku</label>
             <input
@@ -607,6 +692,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#EDEDE9;color:#3
               aria-label="Wyszukiwarka historii"
             />
           </div>
+          </>
         )}
 
         {loading ? (
